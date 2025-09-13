@@ -4,9 +4,9 @@ Update the ALLOWED_SQLITE_IN list in check_no_sqlite.py with all current violati
 This script runs the SQLite scan and automatically updates the allowed list.
 """
 
+import re
 import subprocess
 import sys
-import re
 from pathlib import Path
 
 
@@ -17,7 +17,7 @@ def run_sqlite_scan():
             [sys.executable, "scripts/check_no_sqlite.py"],
             capture_output=True,
             text=True,
-            cwd=Path(__file__).parent
+            cwd=Path(__file__).parent,
         )
         return result.stdout, result.stderr, result.returncode
     except Exception as e:
@@ -27,11 +27,11 @@ def run_sqlite_scan():
 def extract_violation_files(output):
     """Extract file paths from SQLite scan violations."""
     files = set()
-    lines = output.split('\n')
+    lines = output.split("\n")
 
     for line in lines:
         # Look for lines like: ❌ VIOLATIONS in app/care_store.py:
-        match = re.search(r'❌ VIOLATIONS in (.+):', line)
+        match = re.search(r"❌ VIOLATIONS in (.+):", line)
         if match:
             file_path = match.group(1).strip()
             files.add(file_path)
@@ -43,7 +43,7 @@ def update_allowed_list(files):
     """Update the ALLOWED_SQLITE_IN list in check_no_sqlite.py."""
     script_path = Path(__file__).parent / "scripts" / "check_no_sqlite.py"
 
-    with open(script_path, 'r') as f:
+    with open(script_path) as f:
         content = f.read()
 
     # Create the new allowed list
@@ -51,18 +51,22 @@ def update_allowed_list(files):
     for file in files:
         allowed_list.append(f'    "{file}",')
 
-    new_allowed_block = "# Allowed SQLite usage (temporary during migration to PostgreSQL)\nALLOWED_SQLITE_IN = [\n" + "\n".join(allowed_list) + "\n]"
+    new_allowed_block = (
+        "# Allowed SQLite usage (temporary during migration to PostgreSQL)\nALLOWED_SQLITE_IN = [\n"
+        + "\n".join(allowed_list)
+        + "\n]"
+    )
 
     # Replace the old allowed list (look for the pattern)
-    pattern = r'# Allowed SQLite usage.*?\nALLOWED_SQLITE_IN = \[.*?\]'
+    pattern = r"# Allowed SQLite usage.*?\nALLOWED_SQLITE_IN = \[.*?\]"
     if re.search(pattern, content, re.DOTALL):
         content = re.sub(pattern, new_allowed_block, content, flags=re.DOTALL)
     else:
         # Fallback: look for just ALLOWED_SQLITE_IN
-        pattern = r'ALLOWED_SQLITE_IN = \[.*?\]'
+        pattern = r"ALLOWED_SQLITE_IN = \[.*?\]"
         content = re.sub(pattern, new_allowed_block, content, flags=re.DOTALL)
 
-    with open(script_path, 'w') as f:
+    with open(script_path, "w") as f:
         f.write(content)
 
     print(f"Updated {script_path} with {len(files)} allowed files")

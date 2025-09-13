@@ -1,8 +1,9 @@
 """Tests for chat schema validation and coercion."""
+
 import pytest
 from pydantic import ValidationError
 
-from app.schemas.chat import Message, AskRequest
+from app.schemas.chat import AskRequest, Message
 
 
 class TestMessageSchema:
@@ -27,7 +28,9 @@ class TestMessageSchema:
     def test_content_too_long(self):
         """Test that content exceeding max length raises error."""
         long_content = "a" * 8001
-        with pytest.raises(ValidationError, match="Content cannot exceed 8000 characters"):
+        with pytest.raises(
+            ValidationError, match="Content cannot exceed 8000 characters"
+        ):
             Message(role="user", content=long_content)
 
     def test_invalid_role(self):
@@ -54,7 +57,7 @@ class TestAskRequestSchema:
         """Test valid message array prompt."""
         messages = [
             Message(role="system", content="You are a helpful assistant"),
-            Message(role="user", content="Hello")
+            Message(role="user", content="Hello"),
         ]
         req = AskRequest(prompt=messages, model="gpt-4o")
         assert len(req.prompt) == 2
@@ -78,13 +81,17 @@ class TestAskRequestSchema:
     def test_prompt_too_long_string(self):
         """Test that string prompt exceeding max length raises error."""
         long_prompt = "a" * 8001
-        with pytest.raises(ValidationError, match="Prompt cannot exceed 8000 characters"):
+        with pytest.raises(
+            ValidationError, match="Prompt cannot exceed 8000 characters"
+        ):
             AskRequest(prompt=long_prompt, model="gpt-4o")
 
     def test_prompt_too_long_messages(self):
         """Test that message array exceeding total max length raises error."""
         messages = [Message(role="user", content="a" * 4001)]
-        with pytest.raises(ValidationError, match="Total prompt content cannot exceed 8000 characters"):
+        with pytest.raises(
+            ValidationError, match="Total prompt content cannot exceed 8000 characters"
+        ):
             AskRequest(prompt=messages, model="gpt-4o")
 
     def test_model_override_backward_compatibility(self):
@@ -98,8 +105,8 @@ class TestAskRequestSchema:
         """Test that model_override takes precedence over model when both provided."""
         req = AskRequest(
             prompt="Hello",
-            model="gpt-4o",           # Modern field
-            model_override="llama3"   # Legacy field (should win)
+            model="gpt-4o",  # Modern field
+            model_override="llama3",  # Legacy field (should win)
         )
         assert req.model == "llama3"
 
@@ -122,4 +129,3 @@ class TestAskRequestSchema:
         """Test that invalid prompt type raises error."""
         with pytest.raises(ValidationError, match="Prompt must be a string or list"):
             AskRequest(prompt=123, model="gpt-4o")
-

@@ -19,11 +19,12 @@ import os
 import sys
 from pathlib import Path
 
+
 def restore_postgres_core():
     """Restore the original PostgreSQL-only core.py"""
     repo_root = Path(__file__).parent.parent
     core_path = repo_root / "app" / "db" / "core.py"
-    backup_path = core_path.with_suffix('.py.backup')
+    backup_path = core_path.with_suffix(".py.backup")
 
     if not backup_path.exists():
         print("❌ No backup found. Cannot restore PostgreSQL mode.")
@@ -38,6 +39,7 @@ def restore_postgres_core():
     if backup_path.exists():
         backup_path.unlink()
         print("🗑️  Removed emergency backup file")
+
 
 def verify_postgres_connectivity():
     """Verify PostgreSQL connectivity"""
@@ -64,6 +66,7 @@ def verify_postgres_connectivity():
         print(f"❌ Error checking PostgreSQL connectivity: {e}")
         return False
 
+
 def ensure_postgres_env():
     """Ensure DATABASE_URL is set to PostgreSQL"""
     current_url = os.getenv("DATABASE_URL", "")
@@ -83,6 +86,7 @@ def ensure_postgres_env():
         postgres_url = "postgresql://app:app_pw@localhost:5432/gesahni"
         os.environ["DATABASE_URL"] = postgres_url
         print(f"🔧 Reset DATABASE_URL to {postgres_url}")
+
 
 def main():
     """Main restore function"""
@@ -108,6 +112,7 @@ def main():
     except Exception as e:
         print(f"❌ Restore failed: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

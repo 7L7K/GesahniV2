@@ -1,8 +1,9 @@
 """Chat message persistence repository."""
+
 from __future__ import annotations
 
 import datetime as dt
-from typing import Sequence
+from collections.abc import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -110,9 +111,8 @@ async def delete_old_messages(
     Returns:
         Number of messages deleted
     """
-    cutoff_date = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=days_old)
+    cutoff_date = dt.datetime.now(dt.UTC) - dt.timedelta(days=days_old)
 
     # For now, just return 0 as we don't want to implement deletion in the initial version
     # This can be implemented later if needed
     return 0
-

@@ -36,10 +36,14 @@ class RefreshConfig:
 
     def __init__(self) -> None:
         # Rotation window in seconds - tokens expiring within this window get rotated
-        self.rotation_window_s = int(os.getenv("JWT_ROTATION_WINDOW_S", "300"))  # 5 minutes
+        self.rotation_window_s = int(
+            os.getenv("JWT_ROTATION_WINDOW_S", "300")
+        )  # 5 minutes
 
         # Replay protection grace period for concurrent requests
-        self.concurrent_grace_s = int(os.getenv("JWT_CONCURRENT_GRACE_S", "5"))  # 5 seconds
+        self.concurrent_grace_s = int(
+            os.getenv("JWT_CONCURRENT_GRACE_S", "5")
+        )  # 5 seconds
 
         # Maximum retries for lock contention
         self.max_retries = int(os.getenv("JWT_MAX_RETRIES", "3"))
@@ -52,11 +56,16 @@ class RefreshConfig:
 
         # Enable strict replay protection (no fallback to access tokens)
         self.strict_replay_protection = os.getenv("JWT_STRICT_REPLAY", "1").lower() in {
-            "1", "true", "yes", "on"
+            "1",
+            "true",
+            "yes",
+            "on",
         }
 
         # Maximum concurrent refreshes per session
-        self.max_concurrent_refreshes = int(os.getenv("JWT_MAX_CONCURRENT_REFRESHES", "1"))
+        self.max_concurrent_refreshes = int(
+            os.getenv("JWT_MAX_CONCURRENT_REFRESHES", "1")
+        )
 
 
 CFG = RefreshConfig()
@@ -78,7 +87,9 @@ async def _acquire_refresh_lock(session_id: str) -> bool:
     active_count = _refresh_active_count.get(session_id, 0)
 
     if active_count >= CFG.max_concurrent_refreshes:
-        logger.warning(f"Concurrent refresh limit exceeded for session {session_id}: {active_count}/{CFG.max_concurrent_refreshes}")
+        logger.warning(
+            f"Concurrent refresh limit exceeded for session {session_id}: {active_count}/{CFG.max_concurrent_refreshes}"
+        )
         return False
 
     # Acquire lock
@@ -88,12 +99,16 @@ async def _acquire_refresh_lock(session_id: str) -> bool:
         current_count = _refresh_active_count.get(session_id, 0)
         if current_count >= CFG.max_concurrent_refreshes:
             lock.release()
-            logger.warning(f"Concurrent refresh limit exceeded for session {session_id} after lock acquisition: {current_count}/{CFG.max_concurrent_refreshes}")
+            logger.warning(
+                f"Concurrent refresh limit exceeded for session {session_id} after lock acquisition: {current_count}/{CFG.max_concurrent_refreshes}"
+            )
             return False
 
         # Increment active count
         _refresh_active_count[session_id] = current_count + 1
-        logger.debug(f"Acquired refresh lock for session {session_id}, active count: {_refresh_active_count[session_id]}")
+        logger.debug(
+            f"Acquired refresh lock for session {session_id}, active count: {_refresh_active_count[session_id]}"
+        )
         return True
     except Exception:
         # Release lock on error
@@ -112,7 +127,9 @@ async def _release_refresh_lock(session_id: str) -> None:
         current_count = _refresh_active_count.get(session_id, 0)
         if current_count > 0:
             _refresh_active_count[session_id] = current_count - 1
-            logger.debug(f"Released refresh lock for session {session_id}, active count: {_refresh_active_count[session_id]}")
+            logger.debug(
+                f"Released refresh lock for session {session_id}, active count: {_refresh_active_count[session_id]}"
+            )
 
         # Clean up if no more active operations
         if _refresh_active_count.get(session_id, 0) == 0:
@@ -142,8 +159,8 @@ def _jwt_secret() -> str:
 
 def _get_or_create_device_id(request: Request, response: Response) -> str:
     """Get existing device_id from cookie or create a new one."""
-    from .cookies import read_device_cookie, set_device_cookie
     from .cookie_config import get_token_ttls
+    from .cookies import read_device_cookie, set_device_cookie
 
     # Try to read existing device_id
     device_id = read_device_cookie(request)
@@ -152,6 +169,7 @@ def _get_or_create_device_id(request: Request, response: Response) -> str:
 
     # Create new device_id
     import secrets
+
     device_id = secrets.token_hex(16)  # 32-character hex string
 
     # Set device cookie with long TTL (7 days default for refresh tokens)
@@ -161,10 +179,10 @@ def _get_or_create_device_id(request: Request, response: Response) -> str:
         value=device_id,
         ttl=refresh_ttl,
         request=request,
-        cookie_name="device_id"
+        cookie_name="device_id",
     )
 
-    logger.info(f"Created new device_id for session")
+    logger.info("Created new device_id for session")
     return device_id
 
 
@@ -196,10 +214,7 @@ def _decode_refresh_token(token: str, leeway: int = None) -> dict[str, Any]:
 
 
 async def validate_refresh_token(
-    token: str,
-    request: Request,
-    user_id: str,
-    response: Response = None
+    token: str, request: Request, user_id: str, response: Response = None
 ) -> tuple[str, str, int]:
     """
     Validate a refresh token and extract key information.
@@ -224,16 +239,18 @@ async def validate_refresh_token(
     # Device binding validation for extra security
     # Skip device ID validation in test environments to avoid test interference
     skip_device_validation = (
-        os.getenv("PYTEST_RUNNING") == "1" or
-        os.getenv("DISABLE_DEVICE_ID_VALIDATION") == "1" or
-        os.getenv("ENV", "").lower() == "test"
+        os.getenv("PYTEST_RUNNING") == "1"
+        or os.getenv("DISABLE_DEVICE_ID_VALIDATION") == "1"
+        or os.getenv("ENV", "").lower() == "test"
     )
 
     token_device_id = payload.get("device_id")
     if token_device_id and not skip_device_validation:
         current_device_id = _get_or_create_device_id(request, response or Response())
         if token_device_id != current_device_id:
-            logger.warning(f"Device ID mismatch for user {user_id}: token={token_device_id}, current={current_device_id}")
+            logger.warning(
+                f"Device ID mismatch for user {user_id}: token={token_device_id}, current={current_device_id}"
+            )
             raise HTTPException(status_code=401, detail="device_id_mismatch")
 
     # Calculate TTL
@@ -248,10 +265,7 @@ async def validate_refresh_token(
 
 
 async def check_replay_protection(
-    sid: str,
-    jti: str,
-    ttl: int,
-    request: Request
+    sid: str, jti: str, ttl: int, request: Request
 ) -> bool:
     """
     Check if this refresh token has been replayed.
@@ -278,14 +292,18 @@ async def check_replay_protection(
                     use_count = int(use_count_str)
                     grace_period = 60  # 60 seconds for test compatibility
 
-                    if (time.time() - last_used_time) < grace_period and stored_jti == jti:
+                    if (
+                        time.time() - last_used_time
+                    ) < grace_period and stored_jti == jti:
                         if use_count < 2:  # Allow up to 2 uses
                             logger.info(
                                 f"Allowing reuse of JTI {jti} in session {sid} "
                                 f"(use {use_count + 1}/2) within grace period ({grace_period}s)"
                             )
                             # Update the last used time with incremented count
-                            await set_last_used_jti(sid, f"{jti}:{time.time()}:{use_count + 1}", ttl)
+                            await set_last_used_jti(
+                                sid, f"{jti}:{time.time()}:{use_count + 1}", ttl
+                            )
                             return True
                         else:
                             logger.warning(
@@ -301,7 +319,9 @@ async def check_replay_protection(
                     last_used_time = float(timestamp_str)
                     grace_period = 60
 
-                    if (time.time() - last_used_time) < grace_period and stored_jti == jti:
+                    if (
+                        time.time() - last_used_time
+                    ) < grace_period and stored_jti == jti:
                         logger.info(
                             f"Converting legacy JTI format and allowing reuse of JTI {jti} "
                             f"in session {sid} (use 2/2)"
@@ -323,7 +343,9 @@ async def check_replay_protection(
 
     if error_reason == "lock_timeout":
         # Lock contention - this is likely a concurrent request, allow it
-        logger.info(f"Lock timeout for JTI {jti} in session {sid}, allowing concurrent request")
+        logger.info(
+            f"Lock timeout for JTI {jti} in session {sid}, allowing concurrent request"
+        )
         return True
 
     # For backward compatibility with existing behavior, allow some grace
@@ -350,10 +372,7 @@ async def check_replay_protection(
     return False
 
 
-async def should_rotate_token(
-    payload: dict[str, Any],
-    request: Request
-) -> bool:
+async def should_rotate_token(payload: dict[str, Any], request: Request) -> bool:
     """
     Determine if a token should be rotated based on expiration time.
 
@@ -373,10 +392,7 @@ async def should_rotate_token(
 
 
 async def rotate_refresh_token(
-    user_id: str,
-    request: Request,
-    response: Response,
-    refresh_token: str = None
+    user_id: str, request: Request, response: Response, refresh_token: str = None
 ) -> dict[str, str] | None:
     """
     Perform refresh token rotation with replay protection and concurrency control.
@@ -422,12 +438,14 @@ async def rotate_refresh_token(
         device_id = _get_or_create_device_id(request, response)
 
         # Create new tokens with device binding
-        new_access = make_access({"user_id": user_id, "device_id": device_id}, ttl_s=access_ttl)
+        new_access = make_access(
+            {"user_id": user_id, "device_id": device_id}, ttl_s=access_ttl
+        )
 
         new_jti = jwt.api_jws.base64url_encode(os.urandom(16)).decode()
         new_refresh = make_refresh(
             {"user_id": user_id, "jti": new_jti, "device_id": device_id},
-            ttl_s=refresh_ttl
+            ttl_s=refresh_ttl,
         )
 
         # Set cookies
@@ -443,7 +461,14 @@ async def rotate_refresh_token(
         try:
             # Append legacy cookie headers for compatibility
             from app.api.auth import _append_legacy_auth_cookie_headers as _legacy
-            _legacy(response, access=new_access, refresh=new_refresh, session_id=sid, request=request)
+
+            _legacy(
+                response,
+                access=new_access,
+                refresh=new_refresh,
+                session_id=sid,
+                request=request,
+            )
         except Exception:
             pass
 
@@ -453,7 +478,9 @@ async def rotate_refresh_token(
         # Update last used JTI with use count
         await set_last_used_jti(sid, f"{new_jti}:{time.time()}:{1}", refresh_ttl)
 
-        logger.info(f"Rotated refresh token for session {sid}, old JTI: {jti}, new JTI: {new_jti}")
+        logger.info(
+            f"Rotated refresh token for session {sid}, old JTI: {jti}, new JTI: {new_jti}"
+        )
 
         return {
             "access_token": new_access,
@@ -467,10 +494,7 @@ async def rotate_refresh_token(
 
 
 async def perform_lazy_refresh(
-    request: Request,
-    response: Response,
-    user_id: str,
-    identity: dict[str, Any] = None
+    request: Request, response: Response, user_id: str, identity: dict[str, Any] = None
 ) -> bool:
     """
     Perform lazy refresh of tokens when access token is expiring.
@@ -489,7 +513,9 @@ async def perform_lazy_refresh(
         at = read_access_cookie(request)
 
         # Validation logging: start with booleans only
-        logger.debug(f"perform_lazy_refresh: start at={bool(at)} rt={bool(rt)} user_id={bool(user_id)}")
+        logger.debug(
+            f"perform_lazy_refresh: start at={bool(at)} rt={bool(rt)} user_id={bool(user_id)}"
+        )
 
         if not rt:
             logger.debug("perform_lazy_refresh: end=False (no refresh token)")
@@ -499,10 +525,14 @@ async def perform_lazy_refresh(
         try:
             rt_payload = _decode_refresh_token(rt, CFG.leeway_s)
             if str(rt_payload.get("type") or "") != "refresh":
-                logger.debug("perform_lazy_refresh: end=False (invalid refresh token type)")
+                logger.debug(
+                    "perform_lazy_refresh: end=False (invalid refresh token type)"
+                )
                 return False
         except Exception:
-            logger.debug("perform_lazy_refresh: end=False (refresh token decode failed)")
+            logger.debug(
+                "perform_lazy_refresh: end=False (refresh token decode failed)"
+            )
             return False
 
         # Check if access token needs refresh
@@ -512,6 +542,7 @@ async def perform_lazy_refresh(
         if at:
             try:
                 from .tokens import decode_jwt_token
+
                 at_payload = decode_jwt_token(at)
                 exp = int(at_payload.get("exp", 0))
                 needs_refresh = (exp - int(time.time())) < window
@@ -532,6 +563,7 @@ async def perform_lazy_refresh(
         sid = resolve_session_id(request=request, user_id=uid)
 
         from .web.cookies import set_auth_cookies
+
         set_auth_cookies(
             response,
             access=new_at,
@@ -544,7 +576,10 @@ async def perform_lazy_refresh(
         )
         try:
             from app.api.auth import _append_legacy_auth_cookie_headers as _legacy
-            _legacy(response, access=new_at, refresh=None, session_id=sid, request=request)
+
+            _legacy(
+                response, access=new_at, refresh=None, session_id=sid, request=request
+            )
         except Exception:
             pass
 
@@ -556,6 +591,7 @@ async def perform_lazy_refresh(
         # Record metrics
         try:
             from .metrics_auth import lazy_refresh_minted
+
             lazy_refresh_minted("auth_refresh")
         except Exception:
             pass
@@ -571,6 +607,7 @@ async def perform_lazy_refresh(
         # Record failure metrics
         try:
             from .metrics_auth import lazy_refresh_failed
+
             lazy_refresh_failed("auth_refresh")
         except Exception:
             pass

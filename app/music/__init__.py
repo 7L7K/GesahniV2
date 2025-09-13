@@ -16,22 +16,25 @@ def get_provider() -> MusicProvider:
 
     if provider_name == "fake":
         from .providers.fake import FakeProvider
+
         return FakeProvider()
     elif provider_name == "spotify":
         from .providers.spotify_provider import SpotifyProvider
+
         return SpotifyProvider()
     elif provider_name == "librespot":
         from .providers.librespot_provider import LibrespotProvider
+
         return LibrespotProvider()
     elif provider_name == "ha":
         from .providers.home_assistant_radio import HomeAssistantRadioProvider
+
         return HomeAssistantRadioProvider()
     else:
         # Default to fake provider
         from .providers.fake import FakeProvider
+
         return FakeProvider()
 
 
 __all__ = ["MusicOrchestrator", "get_provider"]
-
-

@@ -263,8 +263,16 @@ async def test_fake_provider_capabilities():
 
     capabilities = provider.capabilities()
     expected_caps = {
-        "play", "pause", "resume", "next", "previous", "seek",
-        "volume", "device_transfer", "queue", "search"
+        "play",
+        "pause",
+        "resume",
+        "next",
+        "previous",
+        "seek",
+        "volume",
+        "device_transfer",
+        "queue",
+        "search",
     }
     assert capabilities == expected_caps
 
@@ -281,6 +289,7 @@ async def test_fake_provider_progress_tracking():
 
     # Wait a bit and check progress advances when playing
     import asyncio
+
     await asyncio.sleep(0.1)
 
     mid_state = await provider.get_state()

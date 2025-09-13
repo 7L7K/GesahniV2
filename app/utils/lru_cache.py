@@ -26,7 +26,9 @@ class AsyncLRUCache:
         self.ttl_seconds = ttl_seconds
         self._cache: OrderedDict[str, tuple[float, Any]] = OrderedDict()
         self._lock = asyncio.Lock()
-        self._cleanup_interval = min(ttl_seconds // 2, 60)  # Cleanup every half TTL or 60s
+        self._cleanup_interval = min(
+            ttl_seconds // 2, 60
+        )  # Cleanup every half TTL or 60s
         self._cleanup_task: asyncio.Task | None = None
 
     async def start_cleanup_task(self):
@@ -97,8 +99,7 @@ class AsyncLRUCache:
         async with self._lock:
             now = time.time()
             expired_keys = [
-                key for key, (exp_time, _) in self._cache.items()
-                if now > exp_time
+                key for key, (exp_time, _) in self._cache.items() if now > exp_time
             ]
             for key in expired_keys:
                 del self._cache[key]

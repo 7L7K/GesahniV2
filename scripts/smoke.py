@@ -15,8 +15,11 @@ from app.db.models import (
     MusicPreferences,
 )
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni").replace("postgresql://", "postgresql+psycopg2://")
+DB_URL = os.getenv(
+    "DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni"
+).replace("postgresql://", "postgresql+psycopg2://")
 engine = create_engine(DB_URL, future=True)
+
 
 def run_database_smoke_tests():
     """Run Phase 5 database behavior smoke tests."""
@@ -24,11 +27,19 @@ def run_database_smoke_tests():
 
     try:
         # Run the pytest smoke tests for Phase 5
-        result = subprocess.run([
-            sys.executable, "-m", "pytest",
-            "tests/smoke/test_phase5_database_behavior.py",
-            "-v", "--tb=short"
-        ], capture_output=True, text=True, cwd=os.path.dirname(__file__))
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "tests/smoke/test_phase5_database_behavior.py",
+                "-v",
+                "--tb=short",
+            ],
+            capture_output=True,
+            text=True,
+            cwd=os.path.dirname(__file__),
+        )
 
         if result.returncode == 0:
             print("✅ Phase 5 Database Behavior Smoke Tests PASSED")
@@ -67,10 +78,18 @@ def main():
         s.add(d)
 
         # Create an alert and an event with JSONB meta
-        a = Alert(resident_id=r.id, kind="battery_low", severity="low", status="open", created_at=dt.datetime.now(dt.timezone.utc))
+        a = Alert(
+            resident_id=r.id,
+            kind="battery_low",
+            severity="low",
+            status="open",
+            created_at=dt.datetime.now(dt.timezone.utc),
+        )
         s.add(a)
         s.flush()
-        ev = AlertEvent(alert_id=a.id, type="notified", meta={"threshold": 20, "battery_pct": 18})
+        ev = AlertEvent(
+            alert_id=a.id, type="notified", meta={"threshold": 20, "battery_pct": 18}
+        )
         s.add(ev)
 
         s.commit()
@@ -78,8 +97,9 @@ def main():
     with Session(engine, future=True) as s:
         # Read back and join across schemas
         q = s.execute(
-            select(Resident.name, CareDevice.battery_pct)
-            .join(CareDevice, CareDevice.resident_id == Resident.id)
+            select(Resident.name, CareDevice.battery_pct).join(
+                CareDevice, CareDevice.resident_id == Resident.id
+            )
         ).all()
         print("✅ Resident + Device battery:", q)
 
@@ -98,6 +118,7 @@ def main():
     else:
         print("\n❌ SOME SMOKE TESTS FAILED!")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

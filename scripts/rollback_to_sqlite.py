@@ -21,6 +21,7 @@ import os
 import sys
 from pathlib import Path
 
+
 def create_emergency_sqlite_core():
     """Create emergency SQLite-enabled version of core.py"""
     core_content = '''"""
@@ -154,7 +155,7 @@ __all__ = [
 '''
 
     core_path = Path(__file__).parent.parent / "app" / "db" / "core.py"
-    backup_path = core_path.with_suffix('.py.backup')
+    backup_path = core_path.with_suffix(".py.backup")
 
     # Create backup of current core.py
     if core_path.exists():
@@ -165,10 +166,12 @@ __all__ = [
     core_path.write_text(core_content)
     print(f"🚨 EMERGENCY: Created SQLite-enabled core.py at {core_path}")
 
+
 def set_sqlite_env():
     """Set environment to use SQLite"""
     os.environ["DATABASE_URL"] = "sqlite:///./gesahni.db"
     print("🔧 Set DATABASE_URL to SQLite fallback")
+
 
 def main():
     """Main rollback function"""
@@ -189,6 +192,7 @@ def main():
     except Exception as e:
         print(f"❌ Rollback failed: {e}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

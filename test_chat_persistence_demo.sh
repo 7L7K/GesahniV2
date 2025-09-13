@@ -66,4 +66,3 @@ echo "Notes:"
 echo "- Make sure the backend is running: uvicorn app.main:app --reload"
 echo "- Make sure the database migration has been applied"
 echo "- The JWT token used is for demo purposes only"
-

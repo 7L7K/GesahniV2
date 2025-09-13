@@ -18,6 +18,7 @@ except Exception:
 # Import decode_jwt from security module
 try:
     import app.security as security_module
+
     decode_jwt = security_module.decode_jwt
 except AttributeError:
     # Fallback: define decode_jwt locally if not available in module
@@ -31,9 +32,13 @@ except AttributeError:
         try:
             if cfg.alg == "HS256":
                 return jwt.decode(
-                    token, cfg.secret, algorithms=["HS256"],
+                    token,
+                    cfg.secret,
+                    algorithms=["HS256"],
                     options={"verify_aud": bool(cfg.audience)},
-                    audience=cfg.audience, issuer=cfg.issuer)
+                    audience=cfg.audience,
+                    issuer=cfg.issuer,
+                )
             else:
                 headers = jwt.get_unverified_header(token)
                 kid = headers.get("kid")
@@ -42,19 +47,29 @@ except AttributeError:
                     for k in cfg.public_keys.values():
                         try:
                             return jwt.decode(
-                                token, k, algorithms=[cfg.alg],
+                                token,
+                                k,
+                                algorithms=[cfg.alg],
                                 options={"verify_aud": bool(cfg.audience)},
-                                audience=cfg.audience, issuer=cfg.issuer)
+                                audience=cfg.audience,
+                                issuer=cfg.issuer,
+                            )
                         except Exception:
                             continue
                     return None
                 key = cfg.public_keys[kid]
                 return jwt.decode(
-                    token, key, algorithms=[cfg.alg],
+                    token,
+                    key,
+                    algorithms=[cfg.alg],
                     options={"verify_aud": bool(cfg.audience)},
-                    audience=cfg.audience, issuer=cfg.issuer)
+                    audience=cfg.audience,
+                    issuer=cfg.issuer,
+                )
         except (ExpiredSignatureError, PyJWTError):
             return None
+
+
 from ..telemetry import LogRecord, hash_user_id, log_record_var
 
 JWT_SECRET: str | None = None  # overridden in tests; env used when None
@@ -141,7 +156,9 @@ def get_current_user_id(
                     token_source = "access_token_cookie"
                 elif src == "session":
                     token_source = (
-                        "websocket_session_cookie" if websocket is not None else "__session_cookie"
+                        "websocket_session_cookie"
+                        if websocket is not None
+                        else "__session_cookie"
                     )
         except Exception:
             pass
@@ -199,8 +216,18 @@ def get_current_user_id(
                         token = p.split("=", 1)[1]
                         token_source = "websocket_session_cookie"
                         try:
-                            if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "1").strip().lower() in {"1","true","yes","on"}:
-                                logger.debug("auth.legacy_cookie_used", extra={"meta": {"name": "__session"}})
+                            if os.getenv(
+                                "AUTH_LEGACY_COOKIE_NAMES", "1"
+                            ).strip().lower() in {
+                                "1",
+                                "true",
+                                "yes",
+                                "on",
+                            }:
+                                logger.debug(
+                                    "auth.legacy_cookie_used",
+                                    extra={"meta": {"name": "__session"}},
+                                )
                         except Exception:
                             pass
                         break
@@ -218,7 +245,7 @@ def get_current_user_id(
                 if hasattr(getattr(request, "url", {}), "path")
                 else "unknown" if request else "websocket"
             )
-            
+
             if token:
                 logger.info(
                     "auth.token_found",
@@ -229,9 +256,17 @@ def get_current_user_id(
                         "request_path": request_path,
                         "all_cookies": list(request.cookies.keys()) if request else [],
                         "cookie_count": len(request.cookies) if request else 0,
-                        "auth_header": bool(request.headers.get("Authorization")) if request else False,
+                        "auth_header": (
+                            bool(request.headers.get("Authorization"))
+                            if request
+                            else False
+                        ),
                         "origin": request.headers.get("origin") if request else None,
-                        "user_agent": request.headers.get("user-agent", "")[:50] if request else None
+                        "user_agent": (
+                            request.headers.get("user-agent", "")[:50]
+                            if request
+                            else None
+                        ),
                     },
                 )
             else:
@@ -241,9 +276,17 @@ def get_current_user_id(
                         "request_path": request_path,
                         "all_cookies": list(request.cookies.keys()) if request else [],
                         "cookie_count": len(request.cookies) if request else 0,
-                        "auth_header": bool(request.headers.get("Authorization")) if request else False,
+                        "auth_header": (
+                            bool(request.headers.get("Authorization"))
+                            if request
+                            else False
+                        ),
                         "origin": request.headers.get("origin") if request else None,
-                        "user_agent": request.headers.get("user-agent", "")[:50] if request else None
+                        "user_agent": (
+                            request.headers.get("user-agent", "")[:50]
+                            if request
+                            else None
+                        ),
                     },
                 )
             # mark as logged for this request to avoid duplicate logs
@@ -339,6 +382,7 @@ def get_current_user_id(
                 # Best-effort; do not block auth
                 try:
                     from ..metrics_auth import lazy_refresh_failed
+
                     lazy_refresh_failed("deps")
                 except Exception:
                     pass
@@ -354,6 +398,7 @@ def get_current_user_id(
                 if request is not None:
                     try:
                         from ..web.cookies import read_access_cookie
+
                         access_token = read_access_cookie(request)
                     except Exception:
                         access_token = None
@@ -383,7 +428,14 @@ def get_current_user_id(
                                 target.state.jwt_payload = payload
                                 target.state.auth_source = "session_backfill"
                             # Optionally write identity for future session-only auth
-                            if os.getenv("AUTH_IDENTITY_BACKFILL", "1").strip().lower() in {"1","true","yes","on"}:
+                            if os.getenv(
+                                "AUTH_IDENTITY_BACKFILL", "1"
+                            ).strip().lower() in {
+                                "1",
+                                "true",
+                                "yes",
+                                "on",
+                            }:
                                 try:
                                     exp_s = int(payload.get("exp"))
                                     store.set_session_identity(token, payload, exp_s)
@@ -410,7 +462,9 @@ def get_current_user_id(
             if request is not None:
                 ua = request.headers.get("user-agent", "-")
                 ip = request.client.host if request.client else "-"
-                log.info("auth.jwt_invalid: ip=%s ua=%s path=%s", ip, ua, request.url.path)
+                log.info(
+                    "auth.jwt_invalid: ip=%s ua=%s path=%s", ip, ua, request.url.path
+                )
 
                 # Clear auth cookies and return clean 401 on HTTP JWT failure
                 if response is not None:
@@ -438,7 +492,12 @@ def get_current_user_id(
     elif token and not secret and require_jwt:
         # Token provided but no secret configured while required → unauthorized, not 500
         from ..http_errors import unauthorized
-        raise unauthorized(code="missing_jwt_secret", message="authentication required", hint="missing JWT secret configuration")
+
+        raise unauthorized(
+            code="missing_jwt_secret",
+            message="authentication required",
+            hint="missing JWT secret configuration",
+        )
 
     # Clerk validation removed
 
@@ -447,41 +506,56 @@ def get_current_user_id(
         if request is not None and response is not None:
             try:
                 from ..cookies import read_refresh_cookie
+
                 refresh_token = read_refresh_cookie(request)
                 if refresh_token:
-                        from ..auth_refresh import perform_lazy_refresh
-                        from ..metrics_auth import (
-                            lazy_refresh_failed,
-                            lazy_refresh_minted,
-                            lazy_refresh_skipped,
+                    from ..auth_refresh import perform_lazy_refresh
+                    from ..metrics_auth import (
+                        lazy_refresh_failed,
+                        lazy_refresh_minted,
+                        lazy_refresh_skipped,
+                    )
+
+                    # Extract user_id from refresh token for lazy refresh
+                    try:
+                        rt_payload = decode_jwt(refresh_token)
+                        lazy_user_id = (
+                            str(
+                                rt_payload.get("sub") or rt_payload.get("user_id") or ""
+                            )
+                            if rt_payload
+                            else ""
                         )
+                    except Exception:
+                        lazy_user_id = ""
 
-                        # Extract user_id from refresh token for lazy refresh
+                    if lazy_user_id and perform_lazy_refresh(
+                        request, response, lazy_user_id, None
+                    ):
+                        lazy_refresh_minted("deps_fallback")
+                        # After lazy refresh, try to authenticate with the new access token
                         try:
-                            rt_payload = decode_jwt(refresh_token)
-                            lazy_user_id = str(rt_payload.get("sub") or rt_payload.get("user_id") or "") if rt_payload else ""
-                        except Exception:
-                            lazy_user_id = ""
+                            from ..cookies import read_access_cookie
 
-                        if lazy_user_id and perform_lazy_refresh(request, response, lazy_user_id, None):
-                            lazy_refresh_minted("deps_fallback")
-                            # After lazy refresh, try to authenticate with the new access token
-                            try:
-                                from ..cookies import read_access_cookie
-                                new_access_token = read_access_cookie(request)
-                                if new_access_token:
-                                    at_payload = decode_jwt(new_access_token)
-                                    if at_payload:
-                                        user_id = str(at_payload.get("user_id") or at_payload.get("sub") or "")
-                                        if target and isinstance(at_payload, dict):
-                                            target.state.jwt_payload = at_payload
-                            except Exception:
-                                pass
-                        else:
-                            lazy_refresh_skipped("deps_fallback")
+                            new_access_token = read_access_cookie(request)
+                            if new_access_token:
+                                at_payload = decode_jwt(new_access_token)
+                                if at_payload:
+                                    user_id = str(
+                                        at_payload.get("user_id")
+                                        or at_payload.get("sub")
+                                        or ""
+                                    )
+                                    if target and isinstance(at_payload, dict):
+                                        target.state.jwt_payload = at_payload
+                        except Exception:
+                            pass
+                    else:
+                        lazy_refresh_skipped("deps_fallback")
             except Exception:
                 try:
                     from ..metrics_auth import lazy_refresh_failed
+
                     lazy_refresh_failed("deps_fallback")
                 except Exception:
                     pass
@@ -509,7 +583,9 @@ def get_current_user_id(
     return user_id
 
 
-def resolve_user_id(request: Request | None = None, websocket: WebSocket | None = None) -> str:
+def resolve_user_id(
+    request: Request | None = None, websocket: WebSocket | None = None
+) -> str:
     """Safe wrapper to resolve a user id from a Request or WebSocket.
 
     This helper catches exceptions and returns "anon" on failure so callers
@@ -543,14 +619,20 @@ async def require_user(request: Request) -> str:
                 raise HTTPException(status_code=503, detail="session_store_unavailable")
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
 
         return user_id
     except HTTPException:
         # Re-raise with consistent error message
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
 
 
 def get_current_session_device(
@@ -600,6 +682,7 @@ def resolve_session_id(
     try:
         if isinstance(request, Request):
             from ..cookies import read_session_cookie
+
             session_id = read_session_cookie(request)
             if session_id:
                 # Validate that this is an opaque session ID (not a JWT)
@@ -702,6 +785,7 @@ def resolve_session_id_strict(
     try:
         if isinstance(request, Request):
             from ..web.cookies import read_session_cookie
+
             sid = read_session_cookie(request)
         elif websocket is not None:
             raw = websocket.headers.get("Cookie") or ""

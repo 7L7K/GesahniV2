@@ -24,11 +24,22 @@ class AuthConfig:
     """
 
     def __init__(self) -> None:
-        self.algs = [a.strip() for a in (os.getenv("JWT_ALGS") or "HS256").split(",") if a.strip()]
-        self.leeway = int(min(300, int(os.getenv("JWT_LEEWAY", os.getenv("JWT_CLOCK_SKEW_S", "60")))))
+        self.algs = [
+            a.strip()
+            for a in (os.getenv("JWT_ALGS") or "HS256").split(",")
+            if a.strip()
+        ]
+        self.leeway = int(
+            min(300, int(os.getenv("JWT_LEEWAY", os.getenv("JWT_CLOCK_SKEW_S", "60"))))
+        )
         self.issuer = os.getenv("JWT_ISSUER") or os.getenv("JWT_ISS")
         self.audience = os.getenv("JWT_AUDIENCE") or os.getenv("JWT_AUD")
-        self.strict = os.getenv("REQUIRE_JWT_STRICT", "0").lower() in {"1", "true", "yes", "on"}
+        self.strict = os.getenv("REQUIRE_JWT_STRICT", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         self.hs_secret = os.getenv("JWT_HS_SECRET") or os.getenv("JWT_SECRET")
         # Map kid->PEM; JSON string {"kid1": "-----BEGIN PUBLIC KEY-----..."}
         try:
@@ -36,7 +47,12 @@ class AuthConfig:
         except Exception:
             self.public_keys = {}
         # Phase 3 default: legacy cookie names OFF unless explicitly enabled
-        self.legacy_names = os.getenv("AUTH_LEGACY_COOKIE_NAMES", "0").lower() in {"1", "true", "yes", "on"}
+        self.legacy_names = os.getenv("AUTH_LEGACY_COOKIE_NAMES", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
 
 CFG = AuthConfig()
@@ -72,7 +88,9 @@ def _rs_decode(token: str, leeway: int) -> dict | None:
                 opts["issuer"] = CFG.issuer
             if CFG.audience:
                 opts["audience"] = CFG.audience
-            return jwt_decode(token, pem, algorithms=["RS256", "ES256"], leeway=leeway, **opts)
+            return jwt_decode(
+                token, pem, algorithms=["RS256", "ES256"], leeway=leeway, **opts
+            )
         except Exception:
             continue
     return None
@@ -140,6 +158,7 @@ def decode_with_leeway(token: str, operation: str = "default") -> dict:
         # Record leeway usage for monitoring
         try:
             from .metrics_auth import record_jwt_leeway_usage
+
             record_jwt_leeway_usage(operation, leeway)
         except Exception:
             pass
@@ -148,6 +167,7 @@ def decode_with_leeway(token: str, operation: str = "default") -> dict:
         # Record validation failure
         try:
             from .metrics_auth import record_token_validation
+
             record_token_validation("jwt", "failed")
         except Exception:
             pass
@@ -287,18 +307,22 @@ def extract_token(target: Request | WebSocket) -> tuple[str, str | None]:
     try:
         if isinstance(target, Request):
             # Check canonical names first, then legacy names
-            tok = (target.cookies.get(f"__Host-{NAMES.access}") or
-                   target.cookies.get(NAMES.access) or
-                   target.cookies.get("access_token"))
+            tok = (
+                target.cookies.get(f"__Host-{NAMES.access}")
+                or target.cookies.get(NAMES.access)
+                or target.cookies.get("access_token")
+            )
             if tok:
                 return ("access_cookie", tok)
         else:
             raw = target.headers.get("Cookie") or ""
             parts = [p.strip() for p in raw.split(";") if p.strip()]
             for p in parts:
-                if (p.startswith(f"__Host-{NAMES.access}=") or
-                    p.startswith(f"{NAMES.access}=") or
-                    p.startswith("access_token=")):
+                if (
+                    p.startswith(f"__Host-{NAMES.access}=")
+                    or p.startswith(f"{NAMES.access}=")
+                    or p.startswith("access_token=")
+                ):
                     return ("access_cookie", p.split("=", 1)[1])
     except Exception:
         pass
@@ -312,7 +336,9 @@ def extract_token(target: Request | WebSocket) -> tuple[str, str | None]:
     # 3) Session cookie (canonical first; legacy optional)
     try:
         if isinstance(target, Request):
-            sid = target.cookies.get(f"__Host-{NAMES.session}") or target.cookies.get(NAMES.session)
+            sid = target.cookies.get(f"__Host-{NAMES.session}") or target.cookies.get(
+                NAMES.session
+            )
             if not sid and CFG.legacy_names:
                 sid = target.cookies.get("__session") or target.cookies.get("session")
             if sid:
@@ -321,7 +347,9 @@ def extract_token(target: Request | WebSocket) -> tuple[str, str | None]:
             raw = target.headers.get("Cookie") or ""
             parts = [p.strip() for p in raw.split(";") if p.strip()]
             for p in parts:
-                if p.startswith(f"__Host-{NAMES.session}=") or p.startswith(f"{NAMES.session}="):
+                if p.startswith(f"__Host-{NAMES.session}=") or p.startswith(
+                    f"{NAMES.session}="
+                ):
                     return ("session", p.split("=", 1)[1])
             if CFG.legacy_names:
                 for p in parts:
@@ -385,7 +413,10 @@ def resolve_auth(target: Request | WebSocket) -> dict[str, Any]:
             AUTH_IDENTITY_RESOLVE.labels(source=source, result="ok").inc()
         else:
             # Distinguish outage vs miss
-            if getattr(target.state, "session_store_unavailable", False) and source == "session":
+            if (
+                getattr(target.state, "session_store_unavailable", False)
+                and source == "session"
+            ):
                 AUTH_IDENTITY_RESOLVE.labels(source=source, result="outage").inc()
             else:
                 AUTH_IDENTITY_RESOLVE.labels(source=source, result="miss").inc()
@@ -411,14 +442,15 @@ def has_scope(payload: dict | None, required: str) -> bool:
 
 
 def require_scope(required: str):
-    from fastapi import HTTPException
-
     def _dep(request: Request):
         payload = getattr(request.state, "jwt_payload", None)
         if not has_scope(payload, required):
             # Standardized error shape for UI consistency
             from app.error_envelope import raise_enveloped
-            raise_enveloped("missing_scope", f"Missing required scope: {required}", status=403)
+
+            raise_enveloped(
+                "missing_scope", f"Missing required scope: {required}", status=403
+            )
 
     return _dep
 
@@ -429,7 +461,6 @@ def require_spotify_scope(required_scope: str = "user-read-private"):
     This is a minimal hook for Spotify scope enforcement.
     Default scope is user-read-private which is commonly needed.
     """
-    from fastapi import HTTPException
 
     def _dep(request: Request):
         payload = getattr(request.state, "jwt_payload", None)
@@ -437,7 +468,12 @@ def require_spotify_scope(required_scope: str = "user-read-private"):
         # Check if user has the required Spotify scope
         if not has_scope(payload, f"spotify:{required_scope}"):
             from app.error_envelope import raise_enveloped
-            raise_enveloped("spotify_scope_required", f"Spotify scope '{required_scope}' required", status=403)
+
+            raise_enveloped(
+                "spotify_scope_required",
+                f"Spotify scope '{required_scope}' required",
+                status=403,
+            )
 
     return _dep
 
@@ -458,13 +494,16 @@ def csrf_validate(request: Request) -> None:
         cookie = request.cookies.get("csrf_token")
         if used_legacy and not allowed:
             from app.error_envelope import raise_enveloped
+
             raise_enveloped("csrf_required", "CSRF token required", status=403)
         if not tok or not cookie or tok != cookie:
             from app.error_envelope import raise_enveloped
+
             raise_enveloped("csrf_invalid", "Invalid CSRF token", status=403)
     except Exception:
         # Be explicit: fail-closed for enabled CSRF on mutation
         from app.error_envelope import raise_enveloped
+
         raise_enveloped("csrf_error", "CSRF validation failed", status=403)
 
 

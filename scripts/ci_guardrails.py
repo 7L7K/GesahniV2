@@ -22,16 +22,13 @@ import time
 from pathlib import Path
 
 
-def run_command(cmd: list[str], cwd: str = None, env: dict = None, timeout: int = 30) -> tuple[int, str, str]:
+def run_command(
+    cmd: list[str], cwd: str = None, env: dict = None, timeout: int = 30
+) -> tuple[int, str, str]:
     """Run a command with timeout and return (returncode, stdout, stderr)"""
     try:
         result = subprocess.run(
-            cmd,
-            cwd=cwd,
-            env=env,
-            capture_output=True,
-            text=True,
-            timeout=timeout
+            cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=timeout
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
@@ -66,11 +63,21 @@ def apply_migrations_sequence():
     env["DATABASE_URL"] = "postgresql://app:app_pw@localhost:5432/gesahni_test"
 
     # Clean up any existing test database first
-    cleanup_cmd = ["psql", "postgresql://app:app_pw@localhost:5432/postgres", "-c", "DROP DATABASE IF EXISTS gesahni_test;"]
+    cleanup_cmd = [
+        "psql",
+        "postgresql://app:app_pw@localhost:5432/postgres",
+        "-c",
+        "DROP DATABASE IF EXISTS gesahni_test;",
+    ]
     run_command(cleanup_cmd, timeout=10)
 
     # Create fresh test database
-    create_cmd = ["psql", "postgresql://app:app_pw@localhost:5432/postgres", "-c", "CREATE DATABASE gesahni_test OWNER app;"]
+    create_cmd = [
+        "psql",
+        "postgresql://app:app_pw@localhost:5432/postgres",
+        "-c",
+        "CREATE DATABASE gesahni_test OWNER app;",
+    ]
     returncode, stdout, stderr = run_command(create_cmd, timeout=10)
     if returncode != 0:
         print(f"❌ Failed to create test database: {stderr}")
@@ -97,7 +104,9 @@ def run_sqlite_scan():
         print(f"❌ SQLite scan script not found: {script_path}")
         return False
 
-    returncode, stdout, stderr = run_command([sys.executable, str(script_path)], timeout=60)
+    returncode, stdout, stderr = run_command(
+        [sys.executable, str(script_path)], timeout=60
+    )
 
     if returncode == 0:
         print("✅ No SQLite scan passed")
@@ -119,7 +128,9 @@ def check_pending_heads():
     env["DATABASE_URL"] = "postgresql://app:app_pw@localhost:5432/gesahni_test"
 
     # Check current migration status
-    returncode, stdout, stderr = run_command(["alembic", "current"], env=env, timeout=30)
+    returncode, stdout, stderr = run_command(
+        ["alembic", "current"], env=env, timeout=30
+    )
 
     if returncode != 0:
         print(f"❌ Failed to check current migration status: {stderr}")

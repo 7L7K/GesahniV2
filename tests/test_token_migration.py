@@ -32,9 +32,9 @@ async def test_token_upsert_with_postgresql():
 
     async with get_async_db() as session:
         from sqlalchemy import select
+
         stmt = select(DBToken).where(
-            DBToken.user_id == "testuser",
-            DBToken.provider == "google"
+            DBToken.user_id == "testuser", DBToken.provider == "google"
         )
         result = await session.execute(stmt)
         stored_token = result.scalar_one_or_none()

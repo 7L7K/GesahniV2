@@ -93,12 +93,22 @@ class PlaybackState:
 class MusicProvider(Protocol):
     name: str
 
-    def capabilities(self) -> set[str]:
-        ...  # e.g. {"play","queue","device_transfer","search","playlist"}
+    def capabilities(
+        self,
+    ) -> set[str]: ...  # e.g. {"play","queue","device_transfer","search","playlist"}
 
-    async def search(self, query: str, types: Iterable[str]) -> dict[str, list[Track | Artist | Album | Playlist]]: ...
+    async def search(
+        self, query: str, types: Iterable[str]
+    ) -> dict[str, list[Track | Artist | Album | Playlist]]: ...
 
-    async def play(self, entity_id: str, entity_type: str, *, device_id: str | None = None, position_ms: int | None = None) -> None: ...
+    async def play(
+        self,
+        entity_id: str,
+        entity_type: str,
+        *,
+        device_id: str | None = None,
+        position_ms: int | None = None,
+    ) -> None: ...
 
     async def pause(self) -> None: ...
 
@@ -114,16 +124,18 @@ class MusicProvider(Protocol):
 
     async def list_devices(self) -> list[Device]: ...
 
-    async def transfer_playback(self, device_id: str, force_play: bool = True) -> None: ...
+    async def transfer_playback(
+        self, device_id: str, force_play: bool = True
+    ) -> None: ...
 
     async def get_state(self) -> PlaybackState: ...
 
     async def add_to_queue(self, entity_id: str, entity_type: str) -> None: ...
 
-    async def create_playlist(self, name: str, track_ids: list[str]) -> Playlist | None: ...
+    async def create_playlist(
+        self, name: str, track_ids: list[str]
+    ) -> Playlist | None: ...
 
     async def like_track(self, track_id: str) -> None: ...
 
     async def recommendations(self, seeds: dict, params: dict) -> list[Track]: ...
-
-

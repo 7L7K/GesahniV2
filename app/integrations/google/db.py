@@ -17,7 +17,9 @@ class GoogleToken(Base):
     user_id = Column(String, primary_key=True)
     # provider (e.g. 'google') - allow unique tokens per (user_id, provider)
     provider = Column(String, nullable=False, default="google")
-    __table_args__ = (UniqueConstraint("user_id", "provider", name="uq_google_tokens_user_provider"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="uq_google_tokens_user_provider"),
+    )
     # At-rest encrypted tokens (application-level; envelope encryption recommended)
     access_token = Column(Text, nullable=False)
     refresh_token = Column(Text, nullable=True)
@@ -45,25 +47,41 @@ def init_db():
             # Use PostgreSQL-specific ALTER TABLE syntax
             try:
                 # Add rotated_at column if missing
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     ALTER TABLE google_tokens
                     ADD COLUMN IF NOT EXISTS rotated_at TIMESTAMP
-                """))
+                """
+                    )
+                )
                 # Add provider column if missing
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     ALTER TABLE google_tokens
                     ADD COLUMN IF NOT EXISTS provider VARCHAR DEFAULT 'google'
-                """))
+                """
+                    )
+                )
                 # Add provider_iss column if missing
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     ALTER TABLE google_tokens
                     ADD COLUMN IF NOT EXISTS provider_iss VARCHAR
-                """))
+                """
+                    )
+                )
                 # Add provider_sub column if missing
-                conn.execute(text("""
+                conn.execute(
+                    text(
+                        """
                     ALTER TABLE google_tokens
                     ADD COLUMN IF NOT EXISTS provider_sub VARCHAR
-                """))
+                """
+                    )
+                )
             except Exception:
                 # best-effort: ignore if individual ALTERs fail (columns may already exist)
                 pass

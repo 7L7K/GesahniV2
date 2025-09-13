@@ -22,10 +22,11 @@ def test_prompt_backend_dryrun_guardrails():
     import importlib
 
     import app.router.policy as router_policy
+
     importlib.reload(router_policy)
 
     # Test that PROMPT_BACKEND setting is properly loaded
-    assert hasattr(router_policy, 'PROMPT_BACKEND')
+    assert hasattr(router_policy, "PROMPT_BACKEND")
 
     # Test that dryrun mode is detected
     assert router_policy.PROMPT_BACKEND == "dryrun"
@@ -39,6 +40,7 @@ def test_prompt_backend_dryrun_guardrails():
     del os.environ["PROMPT_BACKEND"]
     importlib.reload(router_policy)
     assert router_policy.PROMPT_BACKEND == "live"  # default value
+
 
 # Setup sys.modules mocks for import isolation
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -144,7 +146,6 @@ def test_router_fallback_metrics_updated(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
     from app import analytics
-
 
     # Ensure auth is relaxed for this test by using dryrun backend
     os.environ["PROMPT_BACKEND"] = "dryrun"
@@ -567,7 +568,6 @@ def test_low_confidence_path_fallback_and_metrics(monkeypatch):
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
 
-
     from app import metrics, router
 
     # Mock LLaMA as healthy, OpenAI as healthy
@@ -609,7 +609,6 @@ def test_cache_trace_vendor_and_cache_hit(monkeypatch):
     os.environ["OLLAMA_MODEL"] = "llama3"
     os.environ["HOME_ASSISTANT_URL"] = "http://ha"
     os.environ["HOME_ASSISTANT_TOKEN"] = "token"
-
 
     from app import router
 

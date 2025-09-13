@@ -1,6 +1,4 @@
-import os
 import sys
-import tempfile
 from importlib import import_module
 from urllib.parse import parse_qs, urlparse
 
@@ -47,7 +45,9 @@ def _app(monkeypatch):
     monkeypatch.setenv("GOOGLE_CLIENT_SECRET", "y")
     monkeypatch.setenv("GOOGLE_REDIRECT_URI", "http://testserver/google/oauth/callback")
     # Use the main PostgreSQL test database instead of a separate SQLite DB
-    monkeypatch.setenv("GOOGLE_OAUTH_DB_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test")
+    monkeypatch.setenv(
+        "GOOGLE_OAUTH_DB_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test"
+    )
 
     # Import modules after env
     oauth = import_module("app.integrations.google.oauth")

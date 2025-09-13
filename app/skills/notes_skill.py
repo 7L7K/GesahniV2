@@ -4,14 +4,12 @@ import re
 import sys
 from datetime import UTC, datetime
 
-from sqlalchemy import select, delete, func, insert
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import delete, select
 
 from ..db.core import get_async_db
-from ..db.models import UserNote, AuthUser
+from ..db.models import AuthUser, UserNote
 from .base import Skill
 from .ledger import record_action
-
 
 # Default system user ID for notes (since current skill doesn't have user context)
 # This is a well-known UUID for the system user
@@ -35,7 +33,7 @@ class NotesDAO:
                     password_hash=None,  # No password for system user
                     name="System User",
                     created_at=datetime.now(UTC),
-                    verified_at=datetime.now(UTC)
+                    verified_at=datetime.now(UTC),
                 )
                 session.add(system_user)
                 await session.commit()
@@ -43,8 +41,7 @@ class NotesDAO:
     async def delete_id(self, idx: int) -> None:
         async with get_async_db() as session:
             stmt = delete(UserNote).where(
-                UserNote.user_id == SYSTEM_USER_ID,
-                UserNote.id == idx
+                UserNote.user_id == SYSTEM_USER_ID, UserNote.id == idx
             )
             await session.execute(stmt)
             await session.commit()
@@ -52,8 +49,7 @@ class NotesDAO:
     async def delete_text(self, text: str) -> None:
         async with get_async_db() as session:
             stmt = delete(UserNote).where(
-                UserNote.user_id == SYSTEM_USER_ID,
-                UserNote.text.ilike(f"%{text}%")
+                UserNote.user_id == SYSTEM_USER_ID, UserNote.text.ilike(f"%{text}%")
             )
             await session.execute(stmt)
             await session.commit()
@@ -61,8 +57,7 @@ class NotesDAO:
     async def get(self, idx: int) -> str | None:
         async with get_async_db() as session:
             stmt = select(UserNote.text).where(
-                UserNote.user_id == SYSTEM_USER_ID,
-                UserNote.id == idx
+                UserNote.user_id == SYSTEM_USER_ID, UserNote.id == idx
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
@@ -70,9 +65,11 @@ class NotesDAO:
 
     async def list(self) -> list[tuple[int, str]]:
         async with get_async_db() as session:
-            stmt = select(UserNote.id, UserNote.text).where(
-                UserNote.user_id == SYSTEM_USER_ID
-            ).order_by(UserNote.created_at)
+            stmt = (
+                select(UserNote.id, UserNote.text)
+                .where(UserNote.user_id == SYSTEM_USER_ID)
+                .order_by(UserNote.created_at)
+            )
             result = await session.execute(stmt)
             rows = result.fetchall()
             return [(r[0], r[1]) for r in rows]
@@ -81,18 +78,18 @@ class NotesDAO:
         await self._ensure_system_user()
         async with get_async_db() as session:
             note = UserNote(
-                user_id=SYSTEM_USER_ID,
-                text=text,
-                created_at=datetime.now(UTC)
+                user_id=SYSTEM_USER_ID, text=text, created_at=datetime.now(UTC)
             )
             session.add(note)
             await session.commit()
 
     async def all_texts(self) -> list[str]:
         async with get_async_db() as session:
-            stmt = select(UserNote.text).where(
-                UserNote.user_id == SYSTEM_USER_ID
-            ).order_by(UserNote.created_at)
+            stmt = (
+                select(UserNote.text)
+                .where(UserNote.user_id == SYSTEM_USER_ID)
+                .order_by(UserNote.created_at)
+            )
             result = await session.execute(stmt)
             rows = result.fetchall()
             return [r[0] for r in rows]
@@ -126,10 +123,14 @@ class NotesSkill(Skill):
             arg = match.group(1)
             if arg.isdigit():
                 await dao.delete_id(int(arg))
-                await record_action("notes.delete", idempotency_key=f"notes:delete:{arg}")
+                await record_action(
+                    "notes.delete", idempotency_key=f"notes:delete:{arg}"
+                )
             else:
                 await dao.delete_text(arg)
-                await record_action("notes.delete", idempotency_key=f"notes:delete_text:{arg}")
+                await record_action(
+                    "notes.delete", idempotency_key=f"notes:delete_text:{arg}"
+                )
             return "Deleted."
 
         if pat.startswith("show note"):
@@ -148,7 +149,9 @@ class NotesSkill(Skill):
             # idempotency: dedupe within 10s window
             idemp = f"notes:add:{hash(text)}:{int(time.time()//10)}"
             await dao.add(text)
-            await record_action("notes.add", idempotency_key=idemp, metadata={"text_len": len(text)})
+            await record_action(
+                "notes.add", idempotency_key=idemp, metadata={"text_len": len(text)}
+            )
             return "Noted."
 
         rows = await dao.all_texts()

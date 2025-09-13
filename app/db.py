@@ -14,6 +14,7 @@ from .db.core import sync_engine
 
 logger = logging.getLogger(__name__)
 
+
 async def init_db_once() -> None:
     """
     Initialize all database schemas once during application startup.
@@ -22,7 +23,9 @@ async def init_db_once() -> None:
     modules to ensure schemas are created only once at startup rather
     than repeatedly during runtime operations.
     """
-    logger.info("PostgreSQL migrations are expected to manage schema; init_db_once is a no-op")
+    logger.info(
+        "PostgreSQL migrations are expected to manage schema; init_db_once is a no-op"
+    )
     try:
         # Lightweight connectivity check
         with sync_engine.connect() as conn:

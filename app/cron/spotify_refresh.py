@@ -5,14 +5,11 @@ import logging
 import os
 import random
 import time
-from datetime import datetime, timezone
-from typing import List, Tuple
+from datetime import UTC, datetime
 
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
-from ..auth_store import get_user_id_by_identity_id
-from ..db.core import async_engine, get_async_db
+from ..db.core import get_async_db
 from ..db.models import ThirdPartyToken
 from ..integrations.spotify.client import SpotifyAuthError
 from ..metrics import SPOTIFY_REFRESH, SPOTIFY_REFRESH_ERROR
@@ -23,20 +20,24 @@ logger = logging.getLogger(__name__)
 REFRESH_AHEAD_SECONDS = int(os.getenv("SPOTIFY_REFRESH_AHEAD_SECONDS", "300"))
 
 
-async def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
+async def _get_candidates(now: int) -> list[tuple[str, str, int]]:
     """Return list of (user_id, provider, expires_at) for tokens expiring within window."""
-    cutoff = datetime.fromtimestamp(now + REFRESH_AHEAD_SECONDS, tz=timezone.utc)
+    cutoff = datetime.fromtimestamp(now + REFRESH_AHEAD_SECONDS, tz=UTC)
 
     async with get_async_db() as session:
         # Query tokens that need refreshing
-        stmt = select(
-            ThirdPartyToken.user_id,
-            ThirdPartyToken.provider,
-            ThirdPartyToken.expires_at
-        ).where(
-            ThirdPartyToken.provider == "spotify",
-            ThirdPartyToken.expires_at <= cutoff
-        ).order_by(ThirdPartyToken.expires_at.asc())
+        stmt = (
+            select(
+                ThirdPartyToken.user_id,
+                ThirdPartyToken.provider,
+                ThirdPartyToken.expires_at,
+            )
+            .where(
+                ThirdPartyToken.provider == "spotify",
+                ThirdPartyToken.expires_at <= cutoff,
+            )
+            .order_by(ThirdPartyToken.expires_at.asc())
+        )
 
         result = await session.execute(stmt)
         rows = result.fetchall()
@@ -59,7 +60,10 @@ async def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
 
 async def _refresh_for_user(user_id: str, provider: str) -> None:
     """Refresh tokens for a user. Note: this now takes user_id directly instead of identity_id."""
-    logger.info("spotify_refresh: starting refresh", extra={"user_id": user_id, "provider": provider})
+    logger.info(
+        "spotify_refresh: starting refresh",
+        extra={"user_id": user_id, "provider": provider},
+    )
 
     # Prefer centralized token refresh service which handles upsert/validation
     from ..auth_store_tokens import get_valid_token_with_auto_refresh
@@ -71,10 +75,22 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
     while attempt < max_attempts:
         attempt += 1
         try:
-            logger.info("spotify_refresh: attempting token exchange via refresh service", extra={"user_id": user_id, "provider": provider, "attempt": attempt})
+            logger.info(
+                "spotify_refresh: attempting token exchange via refresh service",
+                extra={"user_id": user_id, "provider": provider, "attempt": attempt},
+            )
             # Force a refresh via the centralized service which will upsert refreshed tokens
-            new_tokens = await get_valid_token_with_auto_refresh(user_id, provider, force_refresh=True)
-            logger.info("spotify_refresh: refresh returned tokens", extra={"user_id": user_id, "provider": provider, "new_expires_at": getattr(new_tokens, 'expires_at', None)})
+            new_tokens = await get_valid_token_with_auto_refresh(
+                user_id, provider, force_refresh=True
+            )
+            logger.info(
+                "spotify_refresh: refresh returned tokens",
+                extra={
+                    "user_id": user_id,
+                    "provider": provider,
+                    "new_expires_at": getattr(new_tokens, "expires_at", None),
+                },
+            )
 
             # Mark metrics
             try:
@@ -83,13 +99,18 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
                 pass
 
             # Update updated_at timestamp for the token (the refresh service handles the actual token upsert)
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             async with get_async_db() as session:
                 # Find the most recent token for this user/provider combination
-                stmt = select(ThirdPartyToken).where(
-                    ThirdPartyToken.user_id == user_id,
-                    ThirdPartyToken.provider == provider
-                ).order_by(ThirdPartyToken.updated_at.desc()).limit(1)
+                stmt = (
+                    select(ThirdPartyToken)
+                    .where(
+                        ThirdPartyToken.user_id == user_id,
+                        ThirdPartyToken.provider == provider,
+                    )
+                    .order_by(ThirdPartyToken.updated_at.desc())
+                    .limit(1)
+                )
 
                 result = await session.execute(stmt)
                 token = result.scalar_one_or_none()
@@ -98,15 +119,36 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
                     # Update the updated_at timestamp
                     token.updated_at = now
                     await session.commit()
-                    logger.info("spotify_refresh: token updated successfully", extra={"user_id": user_id, "provider": provider, "updated_at": now})
+                    logger.info(
+                        "spotify_refresh: token updated successfully",
+                        extra={
+                            "user_id": user_id,
+                            "provider": provider,
+                            "updated_at": now,
+                        },
+                    )
                 else:
-                    logger.warning("spotify_refresh: no token found to update", extra={"user_id": user_id, "provider": provider})
+                    logger.warning(
+                        "spotify_refresh: no token found to update",
+                        extra={"user_id": user_id, "provider": provider},
+                    )
 
-            logger.info("spotify_refresh: exchange ok", extra={"user_id": user_id, "provider": provider})
+            logger.info(
+                "spotify_refresh: exchange ok",
+                extra={"user_id": user_id, "provider": provider},
+            )
             return
 
         except SpotifyAuthError as e:
-            logger.warning("spotify_refresh: exchange failed", extra={"user_id": user_id, "provider": provider, "error": str(e), "attempt": attempt})
+            logger.warning(
+                "spotify_refresh: exchange failed",
+                extra={
+                    "user_id": user_id,
+                    "provider": provider,
+                    "error": str(e),
+                    "attempt": attempt,
+                },
+            )
 
             try:
                 SPOTIFY_REFRESH_ERROR.inc()
@@ -120,7 +162,11 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             continue
 
         except Exception as e:
-            logger.exception("spotify_refresh: unexpected error", extra={"user_id": user_id, "provider": provider, "attempt": attempt}, exc_info=e)
+            logger.exception(
+                "spotify_refresh: unexpected error",
+                extra={"user_id": user_id, "provider": provider, "attempt": attempt},
+                exc_info=e,
+            )
             try:
                 SPOTIFY_REFRESH_ERROR.inc()
             except Exception:
@@ -129,7 +175,10 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             delay = delay + random.random()
             await asyncio.sleep(delay)
 
-    logger.error("spotify_refresh: failed after attempts", extra={"user_id": user_id, "provider": provider})
+    logger.error(
+        "spotify_refresh: failed after attempts",
+        extra={"user_id": user_id, "provider": provider},
+    )
 
 
 async def run_once() -> None:
@@ -160,4 +209,3 @@ def main_loop() -> None:
 
 if __name__ == "__main__":
     main_loop()
-

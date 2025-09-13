@@ -32,13 +32,15 @@ class DaySummarySkill(Skill):
             counts: dict[str, int] = {}
             with sync_engine.connect() as conn:
                 result = conn.execute(
-                    text("""
+                    text(
+                        """
                         SELECT operation as type, COUNT(*) as cnt
                         FROM storage.ledger
                         WHERE created_at >= :cutoff::timestamptz
                         GROUP BY operation
-                    """),
-                    {"cutoff": cutoff}
+                    """
+                    ),
+                    {"cutoff": cutoff},
                 )
                 for row in result.mappings():
                     typ = row["type"]
@@ -55,5 +57,3 @@ class DaySummarySkill(Skill):
 
 
 __all__ = ["DaySummarySkill"]
-
-

@@ -1,6 +1,4 @@
-import json
 import os
-import pytest
 
 
 def _auth():
@@ -38,10 +36,13 @@ def test_music_ws_subprotocol_negotiation(client):
 
         # Verify hello frame structure
         assert hello_msg.get("type") == "hello", f"Expected hello type, got {hello_msg}"
-        assert hello_msg.get("proto") == "json.realtime.v1", f"Expected json.realtime.v1 proto, got {hello_msg.get('proto')}"
+        assert (
+            hello_msg.get("proto") == "json.realtime.v1"
+        ), f"Expected json.realtime.v1 proto, got {hello_msg.get('proto')}"
 
         # Send a ping to test basic functionality
         import time
+
         ws.send_text("ping")
         # Give it a moment for the message to be processed
         time.sleep(0.1)

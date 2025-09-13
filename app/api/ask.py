@@ -12,7 +12,6 @@ from importlib import import_module
 import jwt
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
 
 from app.auth_core import csrf_validate
 from app.auth_core import require_scope as require_scope_core
@@ -20,7 +19,6 @@ from app.deps.user import get_current_user_id, require_user
 from app.errors import BackendUnavailableError
 from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
-from app.schemas.chat import Message, AskRequest
 
 # OPENAI/OLLAMA timeouts are provided by the legacy router module in some
 # configurations. Import them lazily with safe fallbacks to avoid hard
@@ -63,7 +61,12 @@ def _get_trace_id() -> str | None:
 
 def _should_log_verbose() -> bool:
     """Check if verbose payload logging is enabled for local dev."""
-    return os.getenv("DEBUG_VERBOSE_PAYLOADS", "0").strip() in {"1", "true", "yes", "on"}
+    return os.getenv("DEBUG_VERBOSE_PAYLOADS", "0").strip() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _redact_sensitive_data(data: dict) -> dict:
@@ -87,7 +90,9 @@ def _redact_sensitive_data(data: dict) -> dict:
                 msg["content"] = "<redacted-content>"
 
     # Redact original_messages if present
-    if "original_messages" in redacted and isinstance(redacted["original_messages"], list):
+    if "original_messages" in redacted and isinstance(
+        redacted["original_messages"], list
+    ):
         for msg in redacted["original_messages"]:
             if isinstance(msg, dict) and "content" in msg:
                 msg["content"] = "<redacted-content>"
@@ -122,7 +127,12 @@ def _get_trace_id() -> str | None:
 
 def _should_log_verbose() -> bool:
     """Check if verbose payload logging is enabled for local dev."""
-    return os.getenv("DEBUG_VERBOSE_PAYLOADS", "0").strip() in {"1", "true", "yes", "on"}
+    return os.getenv("DEBUG_VERBOSE_PAYLOADS", "0").strip() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def _redact_sensitive_data(data: dict) -> dict:
@@ -146,7 +156,9 @@ def _redact_sensitive_data(data: dict) -> dict:
                 msg["content"] = "<redacted-content>"
 
     # Redact original_messages if present
-    if "original_messages" in redacted and isinstance(redacted["original_messages"], list):
+    if "original_messages" in redacted and isinstance(
+        redacted["original_messages"], list
+    ):
         for msg in redacted["original_messages"]:
             if isinstance(msg, dict) and "content" in msg:
                 msg["content"] = "<redacted-content>"
@@ -160,7 +172,7 @@ def _create_json_response(
     rid: str | None = None,
     trace_id: str | None = None,
     data: dict | None = None,
-    error: dict | None = None
+    error: dict | None = None,
 ) -> dict:
     """Create a standardized JSON response envelope."""
     response = {"ok": ok}
@@ -181,13 +193,17 @@ def _create_error_response(
     machine_code: str,
     human_message: str,
     status_code: int | None = None,
-    details: dict | None = None
+    details: dict | None = None,
 ) -> dict:
     """Create a standardized error response."""
     error = {
         "code": machine_code,
         "message": human_message,
-        "type": _map_http_status_to_error_type(status_code) if status_code else "client_error"
+        "type": (
+            _map_http_status_to_error_type(status_code)
+            if status_code
+            else "client_error"
+        ),
     }
 
     if details:
@@ -199,6 +215,7 @@ def _create_error_response(
 def _create_sse_event(event_type: str, data: dict) -> str:
     """Create a standardized SSE event."""
     import json
+
     return f"data: {json.dumps({'event': event_type, 'data': data})}\n\n"
 
 
@@ -230,7 +247,9 @@ def _map_http_status_to_error_type(status_code: int) -> str:
 
 
 # Log auth dependency configuration at startup
-logger.info("🔐 AUTH: /v1/ask using get_current_user_id + require_user + scope(chat:write) + CSRF")
+logger.info(
+    "🔐 AUTH: /v1/ask using get_current_user_id + require_user + scope(chat:write) + CSRF"
+)
 
 
 # Enforce auth/rate-limit with env gates
@@ -259,6 +278,7 @@ def _normalize_payload(
     """Normalize various payload shapes into a consistent format."""
     if not isinstance(raw, dict):
         from app.error_envelope import raise_enveloped
+
         raise_enveloped("invalid_request", "Invalid request format", status=422)
 
     # Detect payload shape
@@ -324,11 +344,7 @@ def _normalize_payload(
             prompt_text = "\n".join(parts).strip()
         except Exception:
             prompt_text = None
-    if (
-        not prompt_text
-        or not isinstance(prompt_text, str)
-        or not prompt_text.strip()
-    ):
+    if not prompt_text or not isinstance(prompt_text, str) or not prompt_text.strip():
         raise_enveloped("empty_prompt", "Prompt cannot be empty", status=422)
     # Forward select generation options when present
     gen_opts = {}
@@ -354,7 +370,10 @@ async def _verify_bearer_strict(request: Request) -> None:
     if not secret:
         # Treat as auth failure rather than server error to avoid 500s
         from ..http_errors import unauthorized
-        raise unauthorized(message="authentication required", hint="missing JWT secret configuration")
+
+        raise unauthorized(
+            message="authentication required", hint="missing JWT secret configuration"
+        )
     auth = request.headers.get("Authorization")
     token = None
     if auth and auth.startswith("Bearer "):
@@ -368,7 +387,10 @@ async def _verify_bearer_strict(request: Request) -> None:
         )
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
     try:
         payload = jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
@@ -381,7 +403,10 @@ async def _verify_bearer_strict(request: Request) -> None:
         )
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
 
 
 async def _require_auth_dep(request: Request) -> None:
@@ -405,9 +430,11 @@ async def _require_auth_dep(request: Request) -> None:
 @router.post(
     "/ask",
     dependencies=[
-        Depends(require_user),                   # 401 on missing/invalid auth (WWW-Authenticate: Bearer)
-        Depends(require_scope_core("chat:write")),  # 403 on missing scope with structured detail
-        Depends(csrf_validate),                 # Enforce CSRF for POST when enabled
+        Depends(require_user),  # 401 on missing/invalid auth (WWW-Authenticate: Bearer)
+        Depends(
+            require_scope_core("chat:write")
+        ),  # 403 on missing scope with structured detail
+        Depends(csrf_validate),  # Enforce CSRF for POST when enabled
     ],
     responses={
         200: {
@@ -462,7 +489,9 @@ async def _ask(request: Request, body: dict | None):
     except Exception:
         ct = ""
     if "application/json" not in ct:
-        raise_enveloped("unsupported_media_type", "Unsupported content type", status=415)
+        raise_enveloped(
+            "unsupported_media_type", "Unsupported content type", status=415
+        )
 
     # Use canonical user_id from resolved parameter
     _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
@@ -536,13 +565,20 @@ async def _ask(request: Request, body: dict | None):
                 except Exception:
                     pass
                 from app.error_envelope import raise_enveloped
-                raise_enveloped("content_policy", "Content blocked by policy", status=400)
+
+                raise_enveloped(
+                    "content_policy", "Content blocked by policy", status=400
+                )
             # Auth is enforced via route dependency to ensure verify_token runs before rate_limit
             # rate_limit applied via route dependency; keep explicit header snapshot behavior
             # Lazily import to respect tests that monkeypatch app.main.route_prompt
             try:
                 # Prefer injected prompt router (DI via Depends when called by FastAPI)
-                prompt_router = kwargs.get("route_prompt") if "route_prompt" in kwargs else getattr(request.app.state, "prompt_router", None)
+                prompt_router = (
+                    kwargs.get("route_prompt")
+                    if "route_prompt" in kwargs
+                    else getattr(request.app.state, "prompt_router", None)
+                )
             except Exception:
                 prompt_router = None
 
@@ -559,7 +595,10 @@ async def _ask(request: Request, body: dict | None):
                 # Instrument and protect the backend call with timeout/circuit
                 from time import monotonic
 
-                from app.metrics import PROMPT_ROUTER_CALLS_TOTAL, PROMPT_ROUTER_FAILURES_TOTAL
+                from app.metrics import (
+                    PROMPT_ROUTER_CALLS_TOTAL,
+                    PROMPT_ROUTER_FAILURES_TOTAL,
+                )
 
                 backend_label = os.getenv("PROMPT_BACKEND", "dryrun").lower()
                 PROMPT_ROUTER_CALLS_TOTAL.labels(backend_label).inc()
@@ -569,7 +608,9 @@ async def _ask(request: Request, body: dict | None):
                     # Timeout fence: don't let backend block for more than 10s
                     import asyncio
 
-                    result = await asyncio.wait_for(prompt_router(payload), timeout=10.0)
+                    result = await asyncio.wait_for(
+                        prompt_router(payload), timeout=10.0
+                    )
                 except TimeoutError:
                     elapsed = monotonic() - start
                     PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "timeout").inc()
@@ -589,7 +630,9 @@ async def _ask(request: Request, body: dict | None):
                     )
                 except BackendUnavailableError as e:
                     elapsed = monotonic() - start
-                    PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "unavailable").inc()
+                    PROMPT_ROUTER_FAILURES_TOTAL.labels(
+                        backend_label, "unavailable"
+                    ).inc()
                     logger.error(
                         "Prompt backend unavailable: backend=%s elapsed=%.3fs error=%s",
                         backend_label,
@@ -651,7 +694,10 @@ async def _ask(request: Request, body: dict | None):
                         )
                     else:  # Compatibility with tests that monkeypatch route_prompt
                         result = await route_prompt(
-                            prompt_text, user_id, model_override=model_override, **gen_opts
+                            prompt_text,
+                            user_id,
+                            model_override=model_override,
+                            **gen_opts,
                         )
                 except RuntimeError as e:
                     # Router explicitly indicates it hasn't been configured; translate to 503
@@ -696,42 +742,46 @@ async def _ask(request: Request, body: dict | None):
 
                 # Add user message
                 if prompt_text:
-                    messages_to_save.append({
-                        "role": "user",
-                        "content": prompt_text
-                    })
+                    messages_to_save.append({"role": "user", "content": prompt_text})
 
                 # Add assistant response
                 if isinstance(result, str) and result:
-                    messages_to_save.append({
-                        "role": "assistant",
-                        "content": result
-                    })
+                    messages_to_save.append({"role": "assistant", "content": result})
 
                 # Save to database if we have messages
                 if messages_to_save:
                     try:
-                        from app.db.core import get_async_db
                         from app.db.chat_repo import save_messages
+                        from app.db.core import get_async_db
 
                         # Get database session
                         async with get_async_db() as session:
-                            await save_messages(session, user_id, request_id, messages_to_save)
+                            await save_messages(
+                                session, user_id, request_id, messages_to_save
+                            )
 
-                        logger.debug("Chat messages persisted", extra={
-                            "meta": {"rid": request_id, "message_count": len(messages_to_save)}
-                        })
+                        logger.debug(
+                            "Chat messages persisted",
+                            extra={
+                                "meta": {
+                                    "rid": request_id,
+                                    "message_count": len(messages_to_save),
+                                }
+                            },
+                        )
                     except Exception as db_error:
                         # Don't fail the request if persistence fails, just log
-                        logger.warning("Failed to persist chat messages", extra={
-                            "meta": {"rid": request_id, "error": str(db_error)}
-                        })
+                        logger.warning(
+                            "Failed to persist chat messages",
+                            extra={"meta": {"rid": request_id, "error": str(db_error)}},
+                        )
 
             except Exception as persist_error:
                 # Defensive: don't let persistence errors break the request
-                logger.warning("Chat persistence error", extra={
-                    "meta": {"error": str(persist_error)}
-                })
+                logger.warning(
+                    "Chat persistence error",
+                    extra={"meta": {"error": str(persist_error)}},
+                )
             # If we are in local fallback, hint UI via cookie
             try:
                 from app.llama_integration import LLAMA_HEALTHY as _LL_OK
@@ -760,9 +810,12 @@ async def _ask(request: Request, body: dict | None):
                 _error_detail = None
             # TEMP: Return detailed error info for debugging
             import traceback
+
             try:
                 detail_text = (
-                    d if isinstance(d, str) else str(d.get("detail") if isinstance(d, dict) else d)
+                    d
+                    if isinstance(d, str)
+                    else str(d.get("detail") if isinstance(d, dict) else d)
                 )
             except Exception:
                 detail_text = None
@@ -977,7 +1030,9 @@ async def ask_dry_explain(
     except Exception:
         ct = ""
     if "application/json" not in ct:
-        raise_enveloped("unsupported_media_type", "Unsupported content type", status=415)
+        raise_enveloped(
+            "unsupported_media_type", "Unsupported content type", status=415
+        )
 
     # Use canonical user_id from get_current_user_id dependency
     _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
@@ -994,7 +1049,10 @@ async def ask_dry_explain(
             pass
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
 
     # Use the same normalization logic
     (
@@ -1129,7 +1187,9 @@ async def ask_stream(
     except Exception:
         ct = ""
     if "application/json" not in ct:
-        raise_enveloped("unsupported_media_type", "Unsupported content type", status=415)
+        raise_enveloped(
+            "unsupported_media_type", "Unsupported content type", status=415
+        )
 
     # Use canonical user_id from get_current_user_id dependency
     _user_hash = hash_user_id(user_id) if user_id != "anon" else "anon"
@@ -1146,7 +1206,10 @@ async def ask_stream(
             pass
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
 
     # Use the same normalization logic
     (
@@ -1202,7 +1265,10 @@ async def ask_stream(
                     chosen_vendor = "ollama"
                     chosen_model = mv
                 else:
-                    yield sse("error", {"rid": request_id, "code": "unknown_model", "model": mv})
+                    yield sse(
+                        "error",
+                        {"rid": request_id, "code": "unknown_model", "model": mv},
+                    )
                     return
             else:
                 engine, model_name, _picker_reason, _keyword_hit = pick_model(
@@ -1282,7 +1348,14 @@ async def ask_stream(
                         result = task.result()
                     except Exception as e:
                         if tried_fallback:
-                            yield sse("error", {"rid": request_id, "code": "upstream_error", "error": str(e)})
+                            yield sse(
+                                "error",
+                                {
+                                    "rid": request_id,
+                                    "code": "upstream_error",
+                                    "error": str(e),
+                                },
+                            )
                             final_or_error_sent = True
                             break
                         # attempt fallback once on error
@@ -1296,7 +1369,15 @@ async def ask_stream(
                         continue
 
                     # Completed successfully
-                    yield sse("final", {"rid": request_id, "vendor": active_vendor, "model": active_model, "usage": result.get("usage", {})})
+                    yield sse(
+                        "final",
+                        {
+                            "rid": request_id,
+                            "vendor": active_vendor,
+                            "model": active_model,
+                            "usage": result.get("usage", {}),
+                        },
+                    )
                     final_or_error_sent = True
                     break
 
@@ -1321,12 +1402,16 @@ async def ask_stream(
                     except Exception:
                         pass
                     if not final_or_error_sent:
-                        yield sse("error", {"rid": request_id, "code": "upstream_stall"})
+                        yield sse(
+                            "error", {"rid": request_id, "code": "upstream_stall"}
+                        )
                         final_or_error_sent = True
                     break
 
         except Exception as e:
-            yield sse("error", {"rid": request_id, "code": "internal_error", "error": str(e)})
+            yield sse(
+                "error", {"rid": request_id, "code": "internal_error", "error": str(e)}
+            )
 
     return StreamingResponse(
         stream_generator(),
@@ -1336,5 +1421,3 @@ async def ask_stream(
             "X-RID": request_id,
         },
     )
-
-

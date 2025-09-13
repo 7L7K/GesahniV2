@@ -1,12 +1,14 @@
 import asyncio
 import os
-import uuid
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 
 def _conn():
-    url = os.getenv("DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test")
+    url = os.getenv(
+        "DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test"
+    )
     return psycopg2.connect(url, cursor_factory=RealDictCursor)
 
 
@@ -30,18 +32,32 @@ def test_notes_skill_persists_in_user_data_schema():
 
         s = NotesSkill()
         # Add a note
-        resp = await s.run("note buy milk", type("M", (), {"re": type("R", (), {"pattern": "note"}), "group": lambda self, i: "buy milk"})())
+        resp = await s.run(
+            "note buy milk",
+            type(
+                "M",
+                (),
+                {
+                    "re": type("R", (), {"pattern": "note"}),
+                    "group": lambda self, i: "buy milk",
+                },
+            )(),
+        )
         assert resp == "Noted."
         # List notes
-        resp2 = await s.run("list notes", type("M", (), {"re": type("R", (), {"pattern": "list notes"})})())
+        resp2 = await s.run(
+            "list notes",
+            type("M", (), {"re": type("R", (), {"pattern": "list notes"})})(),
+        )
         assert "buy milk" in resp2
 
     asyncio.get_event_loop().run_until_complete(run_skill())
 
     with _conn() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT text FROM user_data.notes WHERE user_id=%s ORDER BY created_at DESC LIMIT 1", (system_user_id,))
+            cur.execute(
+                "SELECT text FROM user_data.notes WHERE user_id=%s ORDER BY created_at DESC LIMIT 1",
+                (system_user_id,),
+            )
             row = cur.fetchone()
             assert row and row["text"]
-
-

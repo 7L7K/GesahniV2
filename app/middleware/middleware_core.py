@@ -78,6 +78,7 @@ from ..telemetry import LogRecord, log_record_var, utc_now
 
 _user_store_provider: Callable[[], Any] | None = None
 
+
 def set_store_providers(*, user_store_provider: Callable[[], Any]):
     """Set store providers for middleware. Called from main.py after app construction."""
     global _user_store_provider
@@ -229,11 +230,16 @@ class DedupMiddleware(BaseHTTPMiddleware):
 
         # Idempotency cache
         from app.middleware._cache import get_idempotency_store, make_idempotency_key
-        idempotency_ttl_raw = float(os.getenv("IDEMPOTENCY_TTL_SECONDS", "300"))  # 5 minutes
+
+        idempotency_ttl_raw = float(
+            os.getenv("IDEMPOTENCY_TTL_SECONDS", "300")
+        )  # 5 minutes
         self._idempotency_store = get_idempotency_store()
         self._idempotency_ttl = idempotency_ttl_raw
         self._make_idempotency_key = make_idempotency_key
-        logger.info(f"DedupMiddleware initialized: ttl={self._ttl}s, max_entries={self._max_entries}, idempotency_ttl={self._idempotency_ttl}s")
+        logger.info(
+            f"DedupMiddleware initialized: ttl={self._ttl}s, max_entries={self._max_entries}, idempotency_ttl={self._idempotency_ttl}s"
+        )
 
     async def dispatch(self, request: Request, call_next):
         # Let CORS handle preflight; do NOTHING here for OPTIONS
@@ -263,39 +269,51 @@ class DedupMiddleware(BaseHTTPMiddleware):
         # Handle Idempotency-Key for POST/PUT/PATCH/DELETE requests
         idempotency_key = request.headers.get("Idempotency-Key")
         if idempotency_key and request.method in {"POST", "PUT", "PATCH", "DELETE"}:
-            logger.debug("idempotency.key_present", extra={
-                "req_id": req_id or "unknown",
-                "key": idempotency_key[:8] + "...",  # Truncate for privacy
-                "method": request.method,
-                "path": request.url.path,
-            })
+            logger.debug(
+                "idempotency.key_present",
+                extra={
+                    "req_id": req_id or "unknown",
+                    "key": idempotency_key[:8] + "...",  # Truncate for privacy
+                    "method": request.method,
+                    "path": request.url.path,
+                },
+            )
 
         # Process the request normally
         response = await call_next(request)
 
         # Cache response for idempotency if Idempotency-Key was provided
-        if idempotency_key and request.method in {"POST", "PUT", "PATCH", "DELETE"} and response.status_code < 500:
+        if (
+            idempotency_key
+            and request.method in {"POST", "PUT", "PATCH", "DELETE"}
+            and response.status_code < 500
+        ):
             try:
                 # Get user identity for cache key
                 user_id = _anon_user_id(request)
-                cache_key = self._make_idempotency_key(request.method, request.url.path, idempotency_key, user_id)
+                cache_key = self._make_idempotency_key(
+                    request.method, request.url.path, idempotency_key, user_id
+                )
 
                 # For FastAPI/Starlette responses, we need to be careful about body access
                 # The body might not be available yet or might be a streaming response
                 response_body = b""
-                if hasattr(response, 'body') and response.body:
+                if hasattr(response, "body") and response.body:
                     response_body = response.body
-                elif hasattr(response, 'body_iterator'):
+                elif hasattr(response, "body_iterator"):
                     # For streaming responses, we can't cache them
-                    logger.debug("idempotency.cache_skipped", extra={
-                        "req_id": req_id or "unknown",
-                        "reason": "streaming_response",
-                    })
+                    logger.debug(
+                        "idempotency.cache_skipped",
+                        extra={
+                            "req_id": req_id or "unknown",
+                            "reason": "streaming_response",
+                        },
+                    )
                     return response
 
                 # Convert headers to dict
                 headers_dict = {}
-                if hasattr(response, 'headers'):
+                if hasattr(response, "headers"):
                     for name, value in response.headers.items():
                         headers_dict[name] = value
 
@@ -303,6 +321,7 @@ class DedupMiddleware(BaseHTTPMiddleware):
                 if response_body and len(response_body) < 1024 * 1024:  # 1MB limit
                     # Create cache entry
                     from app.middleware._cache import IdempotencyEntry
+
                     cache_entry = IdempotencyEntry(
                         status_code=response.status_code,
                         headers=headers_dict,
@@ -310,27 +329,40 @@ class DedupMiddleware(BaseHTTPMiddleware):
                     )
 
                     # Store in cache
-                    await self._idempotency_store.set(cache_key, cache_entry, self._idempotency_ttl)
+                    await self._idempotency_store.set(
+                        cache_key, cache_entry, self._idempotency_ttl
+                    )
 
-                    logger.debug("idempotency.cache_stored", extra={
-                        "req_id": req_id or "unknown",
-                        "cache_key": cache_key[:16] + "...",  # Truncate for privacy
-                        "status_code": response.status_code,
-                        "body_size": len(response_body),
-                    })
+                    logger.debug(
+                        "idempotency.cache_stored",
+                        extra={
+                            "req_id": req_id or "unknown",
+                            "cache_key": cache_key[:16] + "...",  # Truncate for privacy
+                            "status_code": response.status_code,
+                            "body_size": len(response_body),
+                        },
+                    )
                 else:
-                    logger.debug("idempotency.cache_skipped", extra={
-                        "req_id": req_id or "unknown",
-                        "cache_key": cache_key[:16] + "...",  # Truncate for privacy
-                        "reason": "no_body" if not response_body else "body_too_large",
-                    })
+                    logger.debug(
+                        "idempotency.cache_skipped",
+                        extra={
+                            "req_id": req_id or "unknown",
+                            "cache_key": cache_key[:16] + "...",  # Truncate for privacy
+                            "reason": (
+                                "no_body" if not response_body else "body_too_large"
+                            ),
+                        },
+                    )
 
             except Exception as e:
                 # Don't fail the request if caching fails
-                logger.warning("idempotency.cache_store_failed", extra={
-                    "req_id": req_id or "unknown",
-                    "error": str(e),
-                })
+                logger.warning(
+                    "idempotency.cache_store_failed",
+                    extra={
+                        "req_id": req_id or "unknown",
+                        "error": str(e),
+                    },
+                )
 
         # Update X-Request-ID last seen time after completion
         if req_id:
@@ -483,9 +515,12 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                                 for cookie in set_cookie_headers:
                                     try:
                                         from ..web.cookies import NAMES
+
                                         if (
-                                            "access_token" in cookie or NAMES.access in cookie
-                                            or "refresh_token" in cookie or NAMES.refresh in cookie
+                                            "access_token" in cookie
+                                            or NAMES.access in cookie
+                                            or "refresh_token" in cookie
+                                            or NAMES.refresh in cookie
                                         ):
                                             flags = []
                                             if "HttpOnly" in cookie:
@@ -504,9 +539,9 @@ class TraceRequestMiddleware(BaseHTTPMiddleware):
                                                 flags.append("Secure")
 
                                     if "SameSite=" in cookie:
-                                        samesite = cookie.split("SameSite=")[
-                                            1
-                                        ].split(";")[0]
+                                        samesite = cookie.split("SameSite=")[1].split(
+                                            ";"
+                                        )[0]
                                         flags.append(f"SameSite={samesite}")
                                     cookie_flags.extend(flags)
                                 if cookie_flags:
@@ -890,7 +925,15 @@ async def silent_refresh_middleware(request: Request, call_next):
             set_cookies = response.headers.getlist("set-cookie", [])
             try:
                 from ..web.cookies import NAMES
-                auth_cookies = ["access_token", "refresh_token", "__session", NAMES.access, NAMES.refresh, NAMES.session]
+
+                auth_cookies = [
+                    "access_token",
+                    "refresh_token",
+                    "__session",
+                    NAMES.access,
+                    NAMES.refresh,
+                    NAMES.session,
+                ]
             except Exception:
                 auth_cookies = ["access_token", "refresh_token", "__session"]
             if any(
@@ -921,19 +964,23 @@ async def silent_refresh_middleware(request: Request, call_next):
 
         # If no access token but refresh token exists, perform cold-boot refresh
         if not token and refresh_token and secret:
-            logger.debug("SILENT_REFRESH: Cold-boot scenario - no access token but refresh token present")
+            logger.debug(
+                "SILENT_REFRESH: Cold-boot scenario - no access token but refresh token present"
+            )
             # Use perform_lazy_refresh for cold-boot scenario
             try:
                 from ..auth_refresh import perform_lazy_refresh
-                from ..deps.user import get_current_user_id
 
                 # Get user_id from refresh token if possible, otherwise use anon
                 user_id = "anon"
                 try:
                     from ..tokens import decode_jwt_token
+
                     rt_payload = decode_jwt_token(refresh_token)
                     if rt_payload and str(rt_payload.get("type") or "") == "refresh":
-                        user_id = str(rt_payload.get("sub") or rt_payload.get("user_id") or "anon")
+                        user_id = str(
+                            rt_payload.get("sub") or rt_payload.get("user_id") or "anon"
+                        )
                 except Exception:
                     pass
 
@@ -965,7 +1012,9 @@ async def silent_refresh_middleware(request: Request, call_next):
             threshold,
         )
         should_refresh = exp - now <= threshold
-        logger.debug(f"SILENT_REFRESH: should_refresh={should_refresh} (exp={exp} now={now} threshold={threshold})")
+        logger.debug(
+            f"SILENT_REFRESH: should_refresh={should_refresh} (exp={exp} now={now} threshold={threshold})"
+        )
         if should_refresh:
             logger.debug("SILENT_REFRESH: Token needs refresh, proceeding...")
             # Small jitter to avoid stampede when many tabs refresh concurrently
@@ -1033,7 +1082,7 @@ async def silent_refresh_middleware(request: Request, call_next):
                         # For refresh token extension, we need to set it individually
                         # since set_auth_cookies expects both access and refresh tokens
                         try:
-                            from ..web.cookies import set_named_cookie, NAMES
+                            from ..web.cookies import NAMES, set_named_cookie
 
                             set_named_cookie(
                                 resp=response,
@@ -1063,9 +1112,11 @@ async def silent_refresh_middleware(request: Request, call_next):
         # Validation logging: results
         try:
             set_cookie_count = len(response.headers.getlist("set-cookie", []))
-            new_at = bool(new_token) if 'new_token' in locals() else False
-            new_rt = bool(rtok) if 'rtok' in locals() else False
-            logger.debug(f"SILENT_REFRESH: new_at={new_at} new_rt={new_rt} set_cookie_count={set_cookie_count}")
+            new_at = bool(new_token) if "new_token" in locals() else False
+            new_rt = bool(rtok) if "rtok" in locals() else False
+            logger.debug(
+                f"SILENT_REFRESH: new_at={new_at} new_rt={new_rt} set_cookie_count={set_cookie_count}"
+            )
         except Exception:
             pass  # Best-effort logging
 
@@ -1080,7 +1131,12 @@ async def reload_env_middleware(request: Request, call_next):
     try:
         if os.getenv(
             "RELOAD_ENV_ON_REQUEST", os.getenv("ENV_RELOAD_ON_REQUEST", "0")
-        ).lower() in {"1", "true", "yes", "on"}:
+        ).lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }:
             load_env()
     except Exception:
         pass

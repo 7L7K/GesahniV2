@@ -7,9 +7,7 @@ Provides realistic playback simulation without external dependencies.
 
 from __future__ import annotations
 
-import asyncio
 import time
-import uuid
 from collections.abc import Iterable
 from typing import Literal
 
@@ -85,8 +83,16 @@ class FakeProvider(MusicProvider):
 
     def capabilities(self) -> set[str]:
         return {
-            "play", "pause", "resume", "next", "previous", "seek",
-            "volume", "device_transfer", "queue", "search"
+            "play",
+            "pause",
+            "resume",
+            "next",
+            "previous",
+            "seek",
+            "volume",
+            "device_transfer",
+            "queue",
+            "search",
         }
 
     async def search(self, query: str, types: Iterable[str]) -> dict[str, list[Track]]:
@@ -95,14 +101,23 @@ class FakeProvider(MusicProvider):
         query_lower = query.lower()
 
         for track in self._tracks.values():
-            if (query_lower in track.title.lower() or
-                query_lower in track.artist.lower() or
-                query_lower in track.album.lower()):
+            if (
+                query_lower in track.title.lower()
+                or query_lower in track.artist.lower()
+                or query_lower in track.album.lower()
+            ):
                 results.append(track)
 
         return {"track": results}
 
-    async def play(self, entity_id: str, entity_type: str, *, device_id: str | None = None, position_ms: int | None = None) -> None:
+    async def play(
+        self,
+        entity_id: str,
+        entity_type: str,
+        *,
+        device_id: str | None = None,
+        position_ms: int | None = None,
+    ) -> None:
         """Play a track or search result."""
         if entity_type == "track":
             if entity_id not in self._tracks:
@@ -209,7 +224,7 @@ class FakeProvider(MusicProvider):
 
         # Update active status
         for device in self._devices.values():
-            device.active = (device.id == device_id)
+            device.active = device.id == device_id
 
     async def get_state(self) -> PlaybackState:
         """Get current playback state."""

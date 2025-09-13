@@ -204,6 +204,3 @@ async def set_idempotent(key: str, user_id: str, response: dict, db_path: str | 
     async with aiosqlite.connect(p) as db:
         await db.execute("INSERT OR REPLACE INTO music_idempotency (idempotency_key, user_id, response_json, created_at) VALUES (?, ?, ?, ?)", (key, user_id, json.dumps(response), now))
         await db.commit()
-
-
-

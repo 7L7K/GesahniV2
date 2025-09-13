@@ -155,4 +155,3 @@ describe('withBackoff', () => {
         expect(operation).toHaveBeenCalledTimes(4);
     });
 });
-

@@ -14,13 +14,14 @@ Checks the following requirements:
 
 import os
 import sys
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from typing import Dict, List, Tuple, Optional
+
 
 def get_db_connection():
     """Get database connection from environment or default"""
-    db_url = os.getenv('DATABASE_URL', 'postgresql://app:app_pw@localhost:5432/gesahni')
+    db_url = os.getenv("DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni")
 
     try:
         conn = psycopg2.connect(db_url)
@@ -31,18 +32,22 @@ def get_db_connection():
         print("Make sure PostgreSQL is running and DATABASE_URL is set correctly")
         return None
 
-def check_extensions(conn) -> Tuple[bool, List[str]]:
+
+def check_extensions(conn) -> tuple[bool, list[str]]:
     """Check if required extensions exist"""
-    required_extensions = ['citext', 'pgcrypto', 'uuid-ossp']
+    required_extensions = ["citext", "pgcrypto", "uuid-ossp"]
     existing_extensions = []
 
     try:
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT extname FROM pg_extension
                 WHERE extname IN %s
                 ORDER BY extname
-            """, (tuple(required_extensions),))
+            """,
+                (tuple(required_extensions),),
+            )
             existing_extensions = [row[0] for row in cur.fetchall()]
     except Exception as e:
         print(f"Error checking extensions: {e}")
@@ -51,18 +56,31 @@ def check_extensions(conn) -> Tuple[bool, List[str]]:
     missing = [ext for ext in required_extensions if ext not in existing_extensions]
     return len(missing) == 0, missing
 
-def check_schemas(conn) -> Tuple[bool, List[str]]:
+
+def check_schemas(conn) -> tuple[bool, list[str]]:
     """Check if required schemas exist"""
-    required_schemas = ['auth', 'audit', 'storage', 'users', 'tokens', 'care', 'chat', 'music']
+    required_schemas = [
+        "auth",
+        "audit",
+        "storage",
+        "users",
+        "tokens",
+        "care",
+        "chat",
+        "music",
+    ]
     existing_schemas = []
 
     try:
         with conn.cursor() as cur:
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT schema_name FROM information_schema.schemata
                 WHERE schema_name IN %s
                 ORDER BY schema_name
-            """, (tuple(required_schemas),))
+            """,
+                (tuple(required_schemas),),
+            )
             existing_schemas = [row[0] for row in cur.fetchall()]
     except Exception as e:
         print(f"Error checking schemas: {e}")
@@ -71,25 +89,29 @@ def check_schemas(conn) -> Tuple[bool, List[str]]:
     missing = [schema for schema in required_schemas if schema not in existing_schemas]
     return len(missing) == 0, missing
 
-def check_tables(conn) -> Tuple[bool, List[str]]:
+
+def check_tables(conn) -> tuple[bool, list[str]]:
     """Check if required tables exist"""
     required_tables = [
-        ('auth', 'device_sessions'),
-        ('music', 'music_states'),
-        ('storage', 'ledger'),
-        ('tokens', 'third_party_tokens')
+        ("auth", "device_sessions"),
+        ("music", "music_states"),
+        ("storage", "ledger"),
+        ("tokens", "third_party_tokens"),
     ]
     missing_tables = []
 
     try:
         with conn.cursor() as cur:
             for schema, table in required_tables:
-                cur.execute("""
+                cur.execute(
+                    """
                     SELECT EXISTS (
                         SELECT 1 FROM information_schema.tables
                         WHERE table_schema = %s AND table_name = %s
                     )
-                """, (schema, table))
+                """,
+                    (schema, table),
+                )
                 exists = cur.fetchone()[0]
                 if not exists:
                     missing_tables.append(f"{schema}.{table}")
@@ -99,29 +121,37 @@ def check_tables(conn) -> Tuple[bool, List[str]]:
 
     return len(missing_tables) == 0, missing_tables
 
-def check_audit_log_fk(conn) -> Tuple[bool, Dict]:
+
+def check_audit_log_fk(conn) -> tuple[bool, dict]:
     """Check audit.audit_log.session_id is TEXT and FK → auth.device_sessions.sid"""
     issues = {}
 
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Check column type
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT data_type, character_maximum_length
                 FROM information_schema.columns
                 WHERE table_schema = 'audit' AND table_name = 'audit_log' AND column_name = 'session_id'
-            """)
+            """
+            )
             col_info = cur.fetchone()
 
             if not col_info:
-                issues['missing_column'] = 'audit.audit_log.session_id column does not exist'
+                issues["missing_column"] = (
+                    "audit.audit_log.session_id column does not exist"
+                )
                 return False, issues
 
-            if col_info['data_type'] != 'text':
-                issues['wrong_type'] = f"session_id is {col_info['data_type']}, expected text"
+            if col_info["data_type"] != "text":
+                issues["wrong_type"] = (
+                    f"session_id is {col_info['data_type']}, expected text"
+                )
 
             # Check foreign key constraint using pg_constraint
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT
                     con.conname as constraint_name,
                     con.conrelid::regclass as table_name,
@@ -134,20 +164,29 @@ def check_audit_log_fk(conn) -> Tuple[bool, Dict]:
                 WHERE con.contype = 'f'
                   AND con.conrelid = 'audit.audit_log'::regclass
                   AND ta.attname = 'session_id'
-            """)
+            """
+            )
             fk_info = cur.fetchone()
 
             if not fk_info:
-                issues['missing_fk'] = 'No foreign key constraint found on audit.audit_log.session_id'
-            elif str(fk_info['foreign_table_name']) != 'auth.device_sessions' or fk_info['foreign_column_name'] != 'sid':
-                issues['wrong_fk_target'] = f"FK points to {fk_info['foreign_table_name']}.{fk_info['foreign_column_name']}, expected auth.device_sessions.sid"
+                issues["missing_fk"] = (
+                    "No foreign key constraint found on audit.audit_log.session_id"
+                )
+            elif (
+                str(fk_info["foreign_table_name"]) != "auth.device_sessions"
+                or fk_info["foreign_column_name"] != "sid"
+            ):
+                issues["wrong_fk_target"] = (
+                    f"FK points to {fk_info['foreign_table_name']}.{fk_info['foreign_column_name']}, expected auth.device_sessions.sid"
+                )
 
     except Exception as e:
-        issues['error'] = f"Error checking audit log FK: {e}"
+        issues["error"] = f"Error checking audit log FK: {e}"
 
     return len(issues) == 0, issues
 
-def check_ledger_unique_constraint(conn) -> Tuple[bool, Dict]:
+
+def check_ledger_unique_constraint(conn) -> tuple[bool, dict]:
     """Check storage.ledger has UNIQUE (user_id, idempotency_key)"""
     issues = {}
     constraints = []
@@ -155,21 +194,24 @@ def check_ledger_unique_constraint(conn) -> Tuple[bool, Dict]:
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Check if table exists first
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT EXISTS (
                     SELECT 1 FROM information_schema.tables
                     WHERE table_schema = 'storage' AND table_name = 'ledger'
                 )
-            """)
+            """
+            )
             result = cur.fetchone()
-            table_exists = result['exists'] if result else False
+            table_exists = result["exists"] if result else False
 
             if not table_exists:
-                issues['missing_table'] = 'storage.ledger table does not exist'
+                issues["missing_table"] = "storage.ledger table does not exist"
                 return False, issues
 
             # Check for unique constraint using pg_constraint
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT
                     con.conname as constraint_name,
                     array_agg(att.attname ORDER BY array_position(con.conkey, att.attnum)) as columns
@@ -178,35 +220,44 @@ def check_ledger_unique_constraint(conn) -> Tuple[bool, Dict]:
                 WHERE con.contype = 'u'
                   AND con.conrelid = 'storage.ledger'::regclass
                 GROUP BY con.conname
-            """)
+            """
+            )
             constraints = cur.fetchall()
 
             found_unique = False
             for constraint in constraints:
                 # constraint['columns'] is already a list from the array_agg
-                columns = ','.join(constraint['columns'])
-                if columns == 'user_id,idempotency_key':
+                columns = ",".join(constraint["columns"])
+                if columns == "user_id,idempotency_key":
                     found_unique = True
                     break
 
             if not found_unique:
-                issues['missing_unique'] = 'No UNIQUE constraint found on (user_id, idempotency_key)'
+                issues["missing_unique"] = (
+                    "No UNIQUE constraint found on (user_id, idempotency_key)"
+                )
                 if constraints:
-                    issues['existing_constraints'] = [','.join(c['columns']) for c in constraints]
+                    issues["existing_constraints"] = [
+                        ",".join(c["columns"]) for c in constraints
+                    ]
 
     except Exception as e:
-        issues['error'] = f"Error checking ledger unique constraint: {str(e)} - constraints: {constraints}"
+        issues["error"] = (
+            f"Error checking ledger unique constraint: {str(e)} - constraints: {constraints}"
+        )
 
     return len(issues) == 0, issues
 
-def check_concurrent_indexes(conn) -> Tuple[bool, Dict]:
+
+def check_concurrent_indexes(conn) -> tuple[bool, dict]:
     """Check concurrent indexes are valid"""
     issues = {}
 
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             # Get all indexes with their validity status
-            cur.execute("""
+            cur.execute(
+                """
                 SELECT
                     schemaname,
                     tablename,
@@ -220,21 +271,25 @@ def check_concurrent_indexes(conn) -> Tuple[bool, Dict]:
                 JOIN pg_index idx ON c.oid = idx.indexrelid
                 WHERE i.schemaname IN ('auth', 'audit', 'storage', 'users', 'tokens', 'care', 'chat', 'music')
                 ORDER BY schemaname, tablename, indexname
-            """)
+            """
+            )
             indexes = cur.fetchall()
 
             invalid_indexes = []
             for idx in indexes:
-                if not idx['indisvalid']:
-                    invalid_indexes.append(f"{idx['schemaname']}.{idx['tablename']}.{idx['indexname']}")
+                if not idx["indisvalid"]:
+                    invalid_indexes.append(
+                        f"{idx['schemaname']}.{idx['tablename']}.{idx['indexname']}"
+                    )
 
             if invalid_indexes:
-                issues['invalid_indexes'] = invalid_indexes
+                issues["invalid_indexes"] = invalid_indexes
 
     except Exception as e:
-        issues['error'] = f"Error checking concurrent indexes: {e}"
+        issues["error"] = f"Error checking concurrent indexes: {e}"
 
     return len(issues) == 0, issues
+
 
 def main():
     """Main verification function"""
@@ -261,7 +316,9 @@ def main():
         print("\n2. Checking schemas...")
         schema_ok, missing_schemas = check_schemas(conn)
         if schema_ok:
-            print("✅ All required schemas exist: auth, audit, storage, users, tokens, care, chat, music")
+            print(
+                "✅ All required schemas exist: auth, audit, storage, users, tokens, care, chat, music"
+            )
         else:
             print(f"❌ Missing schemas: {', '.join(missing_schemas)}")
             all_good = False
@@ -270,7 +327,9 @@ def main():
         print("\n3. Checking tables...")
         table_ok, missing_tables = check_tables(conn)
         if table_ok:
-            print("✅ All required tables exist: auth.device_sessions, music.music_states, storage.ledger, tokens.third_party_tokens")
+            print(
+                "✅ All required tables exist: auth.device_sessions, music.music_states, storage.ledger, tokens.third_party_tokens"
+            )
         else:
             print(f"❌ Missing tables: {', '.join(missing_tables)}")
             all_good = False
@@ -279,7 +338,9 @@ def main():
         print("\n4. Checking audit.audit_log.session_id FK...")
         audit_ok, audit_issues = check_audit_log_fk(conn)
         if audit_ok:
-            print("✅ audit.audit_log.session_id is TEXT and properly FK → auth.device_sessions.sid")
+            print(
+                "✅ audit.audit_log.session_id is TEXT and properly FK → auth.device_sessions.sid"
+            )
         else:
             print("❌ Issues with audit.audit_log.session_id:")
             for issue, detail in audit_issues.items():
@@ -319,7 +380,7 @@ def main():
         print("⚠️  SOME CHECKS FAILED - Additional migrations needed")
         return False
 
+
 if __name__ == "__main__":
     success = main()
     sys.exit(0 if success else 1)
-

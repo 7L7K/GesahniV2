@@ -41,10 +41,8 @@ SQLITE_PATTERNS = [
     # Import statements
     r"^\s*(import sqlite3|from sqlite3)",
     r"^\s*(import aiosqlite|from aiosqlite)",
-
     # SQLite URLs
     r"sqlite://",
-
     # SQLite-specific SQL syntax
     r"PRAGMA\s+\w+",
     r"VACUUM",
@@ -63,6 +61,7 @@ ALLOWED_SQLITE_IN = [
     "scripts/sql_doctor.py",
 ]
 
+
 def should_exclude_file(file_path: str) -> bool:
     """Check if file should be excluded from scanning."""
     path_obj = Path(file_path)
@@ -74,12 +73,13 @@ def should_exclude_file(file_path: str) -> bool:
 
     return False
 
+
 def scan_file_for_sqlite(file_path: str) -> list[str]:
     """Scan a file for SQLite usage patterns."""
     violations = []
 
     try:
-        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+        with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
             lines = f.readlines()
 
         for line_num, line in enumerate(lines, 1):
@@ -93,6 +93,7 @@ def scan_file_for_sqlite(file_path: str) -> list[str]:
         print(f"Error scanning {file_path}: {e}", file=sys.stderr)
 
     return violations
+
 
 def main():
     """Main scanning function."""
@@ -125,11 +126,14 @@ def main():
         for allowed_file in sorted(ALLOWED_SQLITE_IN):
             print(f"  ✓ {allowed_file}")
 
-        print("\n🚨 GesahniV2 must be PostgreSQL-only. Please migrate these files to use app.db.core")
+        print(
+            "\n🚨 GesahniV2 must be PostgreSQL-only. Please migrate these files to use app.db.core"
+        )
         sys.exit(1)
     else:
         print("\n✅ No SQLite violations found! PostgreSQL-only confirmed.")
         sys.exit(0)
+
 
 if __name__ == "__main__":
     main()

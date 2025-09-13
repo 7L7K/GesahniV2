@@ -1,17 +1,14 @@
-import asyncio
-import os
 import psycopg2
-from psycopg2.extras import RealDictCursor
-
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from psycopg2.extras import RealDictCursor
 
 
 def get_db_connection():
     """Get connection to test PostgreSQL database."""
     return psycopg2.connect(
         "postgresql://app:app_pw@localhost:5432/gesahni_test",
-        cursor_factory=RealDictCursor
+        cursor_factory=RealDictCursor,
     )
 
 
@@ -26,7 +23,9 @@ def test_register_and_duplicate():
     # Clean up any existing test users
     conn = get_db_connection()
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM auth.users WHERE email LIKE 'alice%' OR email LIKE 'test_%'")
+        cur.execute(
+            "DELETE FROM auth.users WHERE email LIKE 'alice%' OR email LIKE 'test_%'"
+        )
         conn.commit()
     conn.close()
 
@@ -37,13 +36,10 @@ def test_register_and_duplicate():
     # Verify user was created in PostgreSQL
     conn = get_db_connection()
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT password_hash FROM auth.users WHERE email = %s",
-            ("alice",)
-        )
+        cur.execute("SELECT password_hash FROM auth.users WHERE email = %s", ("alice",))
         row = cur.fetchone()
         assert row is not None
-        stored = row['password_hash']
+        stored = row["password_hash"]
     conn.close()
 
     assert stored != "secret"
@@ -66,7 +62,9 @@ def test_register_is_public_endpoint():
     # Clean up any existing test users
     conn = get_db_connection()
     with conn.cursor() as cur:
-        cur.execute("DELETE FROM auth.users WHERE email LIKE 'bob%' OR email LIKE 'test_%'")
+        cur.execute(
+            "DELETE FROM auth.users WHERE email LIKE 'bob%' OR email LIKE 'test_%'"
+        )
         conn.commit()
     conn.close()
 
@@ -78,13 +76,10 @@ def test_register_is_public_endpoint():
     # Verify the user was actually created in PostgreSQL
     conn = get_db_connection()
     with conn.cursor() as cur:
-        cur.execute(
-            "SELECT password_hash FROM auth.users WHERE email = %s",
-            ("bob",)
-        )
+        cur.execute("SELECT password_hash FROM auth.users WHERE email = %s", ("bob",))
         row = cur.fetchone()
         assert row is not None
-        stored = row['password_hash']
+        stored = row["password_hash"]
     conn.close()
 
     assert stored != "secret"

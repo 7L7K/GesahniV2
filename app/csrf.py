@@ -63,7 +63,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 response = await call_next(request)
             except Exception:
                 # Even on exceptions, we need to ensure CSRF headers are set
-                response = JSONResponse(status_code=500, content={"error": "internal_error"})
+                response = JSONResponse(
+                    status_code=500, content={"error": "internal_error"}
+                )
 
             # Ensure CSRF token cookie exists
             csrf_cookie = request.cookies.get("csrf_token")
@@ -71,7 +73,13 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                 csrf_cookie = token_urlsafe(16)
                 # Use centralized CSRF cookie helper
                 from app.web.cookies import set_csrf_cookie
-                set_csrf_cookie(resp=response, token=csrf_cookie, ttl=int(os.getenv("CSRF_TTL_SECONDS", "600")), request=request)
+
+                set_csrf_cookie(
+                    resp=response,
+                    token=csrf_cookie,
+                    ttl=int(os.getenv("CSRF_TTL_SECONDS", "600")),
+                    request=request,
+                )
 
             # Mirror CSRF token in response header for client access
             response.headers["X-CSRF-Token"] = csrf_cookie
@@ -83,11 +91,20 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         try:
             from .web.cookies import read_access_cookie, read_session_cookie
 
-            session_cookie = read_access_cookie(request) or read_session_cookie(request) or request.cookies.get("session")
+            session_cookie = (
+                read_access_cookie(request)
+                or read_session_cookie(request)
+                or request.cookies.get("session")
+            )
         except Exception:
             # Fallback to direct cookie reads if helpers fail (should not happen in normal operation)
             from .web.cookies import NAMES
-            session_cookie = request.cookies.get(NAMES.access) or request.cookies.get(NAMES.session) or request.cookies.get("session")
+
+            session_cookie = (
+                request.cookies.get(NAMES.access)
+                or request.cookies.get(NAMES.session)
+                or request.cookies.get("session")
+            )
         if auth_header and auth_header.startswith("Bearer ") and not session_cookie:
             logger.info(
                 "bypass: csrf_bearer_only_auth header=<%s>",
@@ -155,10 +172,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_missing_header_cross_site header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "csrf.missing"}
-                )
+                return JSONResponse(status_code=400, content={"detail": "csrf.missing"})
 
             # Basic validation for cross-site tokens
             if len(token_hdr) < 16:
@@ -166,10 +180,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_invalid_format_cross_site header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "csrf.invalid"}
-                )
+                return JSONResponse(status_code=400, content={"detail": "csrf.invalid"})
 
             # For cross-site, we accept any properly formatted token
             # (server-side validation is optional for basic functionality)
@@ -187,10 +198,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     "deny: csrf_legacy_header_disabled header=<%s>",
                     token_hdr[:8] + "..." if token_hdr else "None",
                 )
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "csrf.missing"}
-                )
+                return JSONResponse(status_code=400, content={"detail": "csrf.missing"})
             # Require both header and cookie, and match
             if not token_hdr or not token_cookie:
                 logger.warning(
@@ -198,20 +206,14 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     token_hdr[:8] + "..." if token_hdr else "None",
                     token_cookie[:8] + "..." if token_cookie else "None",
                 )
-                return JSONResponse(
-                    status_code=403,
-                    content={"detail": "csrf.missing"}
-                )
+                return JSONResponse(status_code=403, content={"detail": "csrf.missing"})
             if token_hdr != token_cookie:
                 logger.warning(
                     "deny: csrf_mismatch header=<%s> cookie=<%s>",
                     token_hdr[:8] + "...",
                     token_cookie[:8] + "...",
                 )
-                return JSONResponse(
-                    status_code=400,
-                    content={"detail": "csrf.invalid"}
-                )
+                return JSONResponse(status_code=400, content={"detail": "csrf.invalid"})
 
             # For unsafe methods, ensure CSRF headers are set even on success
             try:
@@ -227,7 +229,9 @@ class CSRFMiddleware(BaseHTTPMiddleware):
             except Exception:
                 # Even on exceptions from downstream middlewares/routes, ensure CSRF headers
                 csrf_cookie = request.cookies.get("csrf_token") or token_cookie
-                response = JSONResponse(status_code=500, content={"error": "internal_error"})
+                response = JSONResponse(
+                    status_code=500, content={"error": "internal_error"}
+                )
                 if csrf_cookie:
                     response.headers["X-CSRF-Token"] = csrf_cookie
                 return response
@@ -261,6 +265,7 @@ class CSRFTokenStore:
             if not redis_url:
                 return False
             import redis
+
             client = redis.from_url(redis_url)
             client.ping()
             return True
@@ -273,6 +278,7 @@ class CSRFTokenStore:
             return None
         try:
             import redis
+
             redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
             return redis.from_url(redis_url)
         except Exception:
@@ -286,7 +292,11 @@ class CSRFTokenStore:
                 if client:
                     key = f"csrf_token:{token}"
                     client.setex(key, ttl_seconds, "valid")
-                    logger.debug("csrf_token_stored_redis token=<%s> ttl=%d", token[:8] + "...", ttl_seconds)
+                    logger.debug(
+                        "csrf_token_stored_redis token=<%s> ttl=%d",
+                        token[:8] + "...",
+                        ttl_seconds,
+                    )
                     return
             except Exception as e:
                 logger.warning("csrf_token_store_redis_failed error=%s", str(e))
@@ -294,7 +304,9 @@ class CSRFTokenStore:
         # Fallback to in-memory storage
         expires_at = time.time() + ttl_seconds
         self._local_store[token] = expires_at
-        logger.debug("csrf_token_stored_memory token=<%s> ttl=%d", token[:8] + "...", ttl_seconds)
+        logger.debug(
+            "csrf_token_stored_memory token=<%s> ttl=%d", token[:8] + "...", ttl_seconds
+        )
 
         # Clean up expired tokens periodically
         self._cleanup_expired()
@@ -308,7 +320,9 @@ class CSRFTokenStore:
                     key = f"csrf_token:{token}"
                     result = client.get(key)
                     if result:
-                        logger.debug("csrf_token_validated_redis token=<%s>", token[:8] + "...")
+                        logger.debug(
+                            "csrf_token_validated_redis token=<%s>", token[:8] + "..."
+                        )
                         return True
             except Exception as e:
                 logger.warning("csrf_token_validate_redis_failed error=%s", str(e))
@@ -317,7 +331,9 @@ class CSRFTokenStore:
         if token in self._local_store:
             expires_at = self._local_store[token]
             if time.time() < expires_at:
-                logger.debug("csrf_token_validated_memory token=<%s>", token[:8] + "...")
+                logger.debug(
+                    "csrf_token_validated_memory token=<%s>", token[:8] + "..."
+                )
                 return True
             else:
                 # Token expired, remove it
@@ -328,7 +344,11 @@ class CSRFTokenStore:
     def _cleanup_expired(self) -> None:
         """Clean up expired tokens from in-memory storage."""
         current_time = time.time()
-        expired_tokens = [token for token, expires_at in self._local_store.items() if current_time >= expires_at]
+        expired_tokens = [
+            token
+            for token, expires_at in self._local_store.items()
+            if current_time >= expires_at
+        ]
         for token in expired_tokens:
             del self._local_store[token]
         if expired_tokens:

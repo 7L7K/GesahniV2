@@ -3,6 +3,7 @@
 This module defines the /ask API endpoints.
 Imports route_prompt from entrypoint, not from app.router/__init__.py.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -12,18 +13,17 @@ from time import monotonic
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
 
 from app import settings
+from app.db.chat_repo import get_messages_by_rid
+from app.db.core import get_db
+from app.deps.user import get_current_user_id
 from app.metrics import (
     ASK_ERRORS_TOTAL,
     ASK_LATENCY_MS,
 )
-from app.schemas.chat import Message, AskRequest
 from app.otel_utils import get_trace_id_hex
-from app.db.core import get_db
-from app.db.chat_repo import get_messages_by_rid
-from app.deps.user import get_current_user_id
+from app.schemas.chat import AskRequest
 
 # Import from leaf modules, not from app.router.__init__.py
 from .policy import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
@@ -82,7 +82,9 @@ def _redact_sensitive_data(data: dict) -> dict:
                 msg["content"] = "<redacted-content>"
 
     # Redact original_messages if present
-    if "original_messages" in redacted and isinstance(redacted["original_messages"], list):
+    if "original_messages" in redacted and isinstance(
+        redacted["original_messages"], list
+    ):
         for msg in redacted["original_messages"]:
             if isinstance(msg, dict) and "content" in msg:
                 msg["content"] = "<redacted-content>"
@@ -95,6 +97,7 @@ def _redact_sensitive_data(data: dict) -> dict:
 
 def _require_auth_dep():
     """Dependency that requires authentication and chat:write scope."""
+
     async def auth_and_csrf_check(request: Request):
         # For now, skip auth in dryrun mode
         # TODO: Implement proper auth when not in dryrun mode
@@ -157,17 +160,20 @@ async def ask_endpoint(
         cache_key = f"{request.method}:{request.url.path}:{idempotency_key}:{hash(str(body.model_dump()))}"
 
         # Check if we have a cached response
-        cached_result = getattr(ask_endpoint, '_idempotency_cache', {}).get(cache_key)
+        cached_result = getattr(ask_endpoint, "_idempotency_cache", {}).get(cache_key)
         if cached_result is not None:
-            logger.info("idempotency.cache_hit", extra={
-                "rid": request_id,
-                "key": idempotency_key[:8] + "...",
-                "cache_key": cache_key[:16] + "...",
-            })
+            logger.info(
+                "idempotency.cache_hit",
+                extra={
+                    "rid": request_id,
+                    "key": idempotency_key[:8] + "...",
+                    "cache_key": cache_key[:16] + "...",
+                },
+            )
             # Return the exact same response
             return JSONResponse(
                 status_code=cached_result["status_code"],
-                content=cached_result["content"]
+                content=cached_result["content"],
             )
 
     try:
@@ -194,12 +200,14 @@ async def ask_endpoint(
 
         # Prepare payload for backend
         payload = dict(prompt_data)
-        payload.update({
-            "request_id": request_id,
-            "user_id": getattr(request.state, "user_id", "unknown"),
-            "backend": backend_name,
-            "model": model_override,
-        })
+        payload.update(
+            {
+                "request_id": request_id,
+                "user_id": getattr(request.state, "user_id", "unknown"),
+                "backend": backend_name,
+                "model": model_override,
+            }
+        )
 
         # Call backend with timeout
         try:
@@ -212,23 +220,28 @@ async def ask_endpoint(
             elif backend_name == "llama":
                 timeout_seconds = OLLAMA_TIMEOUT_MS / 1000
 
-            response = await asyncio.wait_for(backend_callable(payload), timeout=timeout_seconds)
+            response = await asyncio.wait_for(
+                backend_callable(payload), timeout=timeout_seconds
+            )
             backend_duration = monotonic() - backend_start
 
         except TimeoutError:
             backend_duration = monotonic() - backend_start
             ASK_ERRORS_TOTAL.labels(backend=backend_name, error_type="timeout").inc()
 
-            logger.warning("ask.backend_timeout", extra={
-                "rid": request_id,
-                "backend": backend_name,
-                "model": model_override,
-                "timeout_ms": int(timeout_seconds * 1000),
-                "duration_ms": int(backend_duration * 1000),
-            })
+            logger.warning(
+                "ask.backend_timeout",
+                extra={
+                    "rid": request_id,
+                    "backend": backend_name,
+                    "model": model_override,
+                    "timeout_ms": int(timeout_seconds * 1000),
+                    "duration_ms": int(backend_duration * 1000),
+                },
+            )
             raise HTTPException(
                 status_code=503,
-                detail={"code": "llm_unavailable", "message": "Backend timeout"}
+                detail={"code": "llm_unavailable", "message": "Backend timeout"},
             )
 
         except Exception as backend_error:
@@ -236,18 +249,25 @@ async def ask_endpoint(
             ASK_ERRORS_TOTAL.labels(backend=backend_name, error_type="error").inc()
 
             # Log backend error
-            logger.error("ask.backend_error", extra={
-                "rid": request_id,
-                "backend": backend_name,
-                "model": model_override,
-                "error": str(backend_error),
-                "duration_ms": int(backend_duration * 1000),
-            }, exc_info=True)
+            logger.error(
+                "ask.backend_error",
+                extra={
+                    "rid": request_id,
+                    "backend": backend_name,
+                    "model": model_override,
+                    "error": str(backend_error),
+                    "duration_ms": int(backend_duration * 1000),
+                },
+                exc_info=True,
+            )
 
             # Always return 503 for backend issues (never 500)
             raise HTTPException(
                 status_code=503,
-                detail={"code": "llm_unavailable", "message": f"Backend {backend_name} unavailable"}
+                detail={
+                    "code": "llm_unavailable",
+                    "message": f"Backend {backend_name} unavailable",
+                },
             )
 
         # Format standardized response
@@ -269,34 +289,40 @@ async def ask_endpoint(
         ASK_LATENCY_MS.labels(backend=backend_name).observe(total_latency_ms)
 
         # Log success with structured observability data
-        logger.info("ask.success", extra={
-            "rid": request_id,
-            "route": "/v1/ask",
-            "backend": backend_name,
-            "model": standardized_response["model"],
-            "status": 200,
-            "latency_ms": total_latency_ms,
-            "input_tokens": standardized_response["usage"]["input_tokens"],
-            "output_tokens": standardized_response["usage"]["output_tokens"],
-            "duration_ms": int(backend_duration * 1000),
-        })
+        logger.info(
+            "ask.success",
+            extra={
+                "rid": request_id,
+                "route": "/v1/ask",
+                "backend": backend_name,
+                "model": standardized_response["model"],
+                "status": 200,
+                "latency_ms": total_latency_ms,
+                "input_tokens": standardized_response["usage"]["input_tokens"],
+                "output_tokens": standardized_response["usage"]["output_tokens"],
+                "duration_ms": int(backend_duration * 1000),
+            },
+        )
 
         # Cache response for idempotency if key was provided
         if idempotency_key:
-            if not hasattr(ask_endpoint, '_idempotency_cache'):
+            if not hasattr(ask_endpoint, "_idempotency_cache"):
                 ask_endpoint._idempotency_cache = {}
 
             cache_key = f"{request.method}:{request.url.path}:{idempotency_key}:{hash(str(body.model_dump()))}"
             ask_endpoint._idempotency_cache[cache_key] = {
                 "status_code": 200,
-                "content": standardized_response
+                "content": standardized_response,
             }
 
-            logger.debug("idempotency.cache_stored", extra={
-                "rid": request_id,
-                "key": idempotency_key[:8] + "...",
-                "cache_key": cache_key[:16] + "...",
-            })
+            logger.debug(
+                "idempotency.cache_stored",
+                extra={
+                    "rid": request_id,
+                    "key": idempotency_key[:8] + "...",
+                    "cache_key": cache_key[:16] + "...",
+                },
+            )
 
         return standardized_response
 
@@ -311,18 +337,25 @@ async def ask_endpoint(
         # Record error metric (use backend name if available, otherwise unknown)
         ASK_ERRORS_TOTAL.labels(backend=backend_name, error_type="unexpected").inc()
 
-        logger.error("ask.unexpected_error", extra={
-            "rid": request_id,
-            "route": "/v1/ask",
-            "backend": backend_name,
-            "status": 503,
-            "error": str(e),
-            "latency_ms": total_latency_ms,
-        }, exc_info=True)
+        logger.error(
+            "ask.unexpected_error",
+            extra={
+                "rid": request_id,
+                "route": "/v1/ask",
+                "backend": backend_name,
+                "status": 503,
+                "error": str(e),
+                "latency_ms": total_latency_ms,
+            },
+            exc_info=True,
+        )
 
         raise HTTPException(
             status_code=503,
-            detail={"code": "llm_unavailable", "message": "Service temporarily unavailable"}
+            detail={
+                "code": "llm_unavailable",
+                "message": "Service temporarily unavailable",
+            },
         )
 
 
@@ -347,7 +380,10 @@ async def ask_replay(
         if not messages:
             # No messages found for this RID
             from app.error_envelope import raise_enveloped
-            raise_enveloped("not_found", "No chat messages found for this request ID", status=404)
+
+            raise_enveloped(
+                "not_found", "No chat messages found for this request ID", status=404
+            )
 
         # Convert to response format
         message_list = [
@@ -371,7 +407,8 @@ async def ask_replay(
         # Re-raise HTTP exceptions (like 404)
         raise
     except Exception as e:
-        logger.error("Failed to retrieve chat messages", extra={
-            "meta": {"rid": rid, "user_id": user_id, "error": str(e)}
-        })
+        logger.error(
+            "Failed to retrieve chat messages",
+            extra={"meta": {"rid": rid, "user_id": user_id, "error": str(e)}},
+        )
         raise_enveloped("internal", "Failed to retrieve chat messages", status=500)

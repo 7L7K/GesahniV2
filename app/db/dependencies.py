@@ -29,22 +29,32 @@ from .core import (  # noqa: F401
 warnings.warn(
     "app.db.dependencies is deprecated. Import from app.db.core instead.",
     DeprecationWarning,
-    stacklevel=2
+    stacklevel=2,
 )
 
 
 # Legacy functions - redirect to core module
 def get_db() -> Generator[Session, None, None]:  # type: ignore
     """DEPRECATED: Use app.db.core.get_db instead"""
-    warnings.warn("get_db is deprecated. Import from app.db.core", DeprecationWarning, stacklevel=2)
+    warnings.warn(
+        "get_db is deprecated. Import from app.db.core",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from .core import get_db as _get_db
+
     yield from _get_db()
 
 
 async def get_async_db() -> AsyncGenerator[AsyncSession, None]:  # type: ignore
     """DEPRECATED: Use app.db.core.get_async_db instead"""
-    warnings.warn("get_async_db is deprecated. Import from app.db.core", DeprecationWarning, stacklevel=2)
+    warnings.warn(
+        "get_async_db is deprecated. Import from app.db.core",
+        DeprecationWarning,
+        stacklevel=2,
+    )
     from .core import get_async_db as _get_async_db
+
     async for session in _get_async_db():
         yield session
 

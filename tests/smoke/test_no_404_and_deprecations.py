@@ -73,7 +73,9 @@ def test_deprecated_routes_emit_deprecation_header():
             if method == "GET":
                 resp = client.get(url, follow_redirects=False)
             else:
-                resp = client.request(method, url, json={"text": "hi"}, follow_redirects=False)
+                resp = client.request(
+                    method, url, json={"text": "hi"}, follow_redirects=False
+                )
         except Exception:
             # If the endpoint raised due to missing deps, we cannot assert
             # headers here; skip verification for this route.

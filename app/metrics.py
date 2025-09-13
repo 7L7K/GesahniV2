@@ -810,7 +810,7 @@ SCOPE_REQUESTS_TOTAL = Counter(
 AUTH_FAILURES_TOTAL = Counter(
     "gesahni_auth_failures_total",
     "Authentication and authorization failures",
-    ["type", "route", "reason"],  # type: 401|403|429, reason: specific error
+    ["type", "route", "reason"],  # type: 401/403/429, reason: specific error
 )
 
 # Per-scope latency metrics

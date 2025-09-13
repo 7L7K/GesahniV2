@@ -14,6 +14,7 @@ from app.otel_utils import get_trace_id_hex
 
 log = logging.getLogger(__name__)
 
+
 def _trace_details(request: Request, status: int) -> dict[str, Any]:
     try:
         tid = get_trace_id_hex()
@@ -23,8 +24,11 @@ def _trace_details(request: Request, status: int) -> dict[str, Any]:
         "status_code": status,
         "trace_id": tid,
         "path": request.url.path,
-        "method": getattr(request, "method", "WS"),  # WebSocket requests don't have method attribute
+        "method": getattr(
+            request, "method", "WS"
+        ),  # WebSocket requests don't have method attribute
     }
+
 
 async def handle_http_error(request: Request, exc: StarletteHTTPException):
     # Pass through already-structured payloads, but normalize headers/ids.
@@ -41,8 +45,10 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
                 headers["X-Error-Code"] = str(code_hdr)
             det = shaped.get("details") or {}
             if isinstance(det, dict):
-                if det.get("error_id"): headers["X-Error-ID"] = str(det["error_id"])
-                if det.get("trace_id"): headers["X-Trace-ID"] = str(det["trace_id"])
+                if det.get("error_id"):
+                    headers["X-Error-ID"] = str(det["error_id"])
+                if det.get("trace_id"):
+                    headers["X-Trace-ID"] = str(det["trace_id"])
         except Exception:
             pass
 
@@ -58,7 +64,11 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
 
     # Map generic HTTP errors to your stable envelope
     code, msg, hint = shape_from_status(status)
-    if isinstance(detail, str) and detail and detail not in {"Unauthorized", "forbidden", "Forbidden"}:
+    if (
+        isinstance(detail, str)
+        and detail
+        and detail not in {"Unauthorized", "forbidden", "Forbidden"}
+    ):
         msg = detail
 
     details = _trace_details(request, status)
@@ -75,8 +85,12 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
     except Exception:
         pass
     headers["X-Error-Code"] = code
-    return JSONResponse(build_error(code=code, message=msg, hint=hint, details=details),
-                        status_code=status, headers=headers)
+    return JSONResponse(
+        build_error(code=code, message=msg, hint=hint, details=details),
+        status_code=status,
+        headers=headers,
+    )
+
 
 async def handle_validation_error(request: Request, exc: RequestValidationError):
     # Keep FastAPI-compatible shape *and* your envelope in one response.
@@ -92,15 +106,23 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
     try:
         det = envelope.get("details") or {}
         if isinstance(det, dict):
-            if det.get("error_id"): headers["X-Error-ID"] = str(det["error_id"])
-            if det.get("trace_id"): headers["X-Trace-ID"] = str(det["trace_id"])
+            if det.get("error_id"):
+                headers["X-Error-ID"] = str(det["error_id"])
+            if det.get("trace_id"):
+                headers["X-Trace-ID"] = str(det["trace_id"])
     except Exception:
         pass
 
     # Include traditional FastAPI 'detail' for legacy clients/tests
-    combined = {**envelope, "detail": "Validation Error", "errors": exc.errors(),
-                "path": request.url.path, "method": request.method}
+    combined = {
+        **envelope,
+        "detail": "Validation Error",
+        "errors": exc.errors(),
+        "path": request.url.path,
+        "method": request.method,
+    }
     return JSONResponse(combined, status_code=422, headers=headers)
+
 
 async def handle_unexpected_error(request: Request, exc: Exception):
     try:
@@ -109,23 +131,31 @@ async def handle_unexpected_error(request: Request, exc: Exception):
         pass
 
     details = _trace_details(request, 500)
-    env = build_error(code="internal", message="internal error", hint="try again shortly",
-                      details=details)
+    env = build_error(
+        code="internal",
+        message="internal error",
+        hint="try again shortly",
+        details=details,
+    )
     headers = {"X-Error-Code": "internal"}
     try:
         det = env.get("details") or {}
         if isinstance(det, dict):
-            if det.get("error_id"): headers["X-Error-ID"] = str(det["error_id"])
-            if det.get("trace_id"): headers["X-Trace-ID"] = str(det["trace_id"])
+            if det.get("error_id"):
+                headers["X-Error-ID"] = str(det["error_id"])
+            if det.get("trace_id"):
+                headers["X-Trace-ID"] = str(det["trace_id"])
     except Exception:
         pass
     return JSONResponse(env, status_code=500, headers=headers)
+
 
 def _emit_auth_metrics(request: Request, status: int, payload: dict[str, Any]):
     # Best-effort, never raise
     try:
         path = getattr(request.url, "path", "")
         from app.metrics import AUTH_401_TOTAL, AUTH_403_TOTAL
+
         if status == 401:
             hdr = request.headers.get("Authorization") or ""
             reason = "bad_token" if hdr.lower().startswith("bearer ") else "no_auth"
@@ -139,6 +169,7 @@ def _emit_auth_metrics(request: Request, status: int, payload: dict[str, Any]):
     except Exception:
         pass
 
+
 def register_error_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, handle_http_error)
     app.add_exception_handler(RequestValidationError, handle_validation_error)
@@ -146,4 +177,3 @@ def register_error_handlers(app: FastAPI) -> None:
     # that exercise model validation directly (not via FastAPI request parsing).
     app.add_exception_handler(PydanticValidationError, handle_validation_error)
     app.add_exception_handler(Exception, handle_unexpected_error)
-

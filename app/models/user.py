@@ -10,9 +10,8 @@ from collections.abc import AsyncGenerator, Iterable
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Any
 
-from sqlalchemy import select, text, update
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.core import get_async_db
@@ -57,7 +56,7 @@ async def create_user_async(username: str, hashed_password: str) -> User:
             email=f"{username}@local.test",
             password_hash=hashed_password,
             name=username,
-            created_at=datetime.now(UTC)
+            created_at=datetime.now(UTC),
         )
         session.add(user)
         await session.commit()
@@ -93,21 +92,25 @@ async def list_users_async() -> Iterable[User]:
     """List all users asynchronously using PostgreSQL."""
     async for session in get_async_db():
         result = await session.execute(
-            text("""
+            text(
+                """
                 SELECT id, username, password_hash, created_at
                 FROM auth.users
                 ORDER BY created_at DESC
-            """)
+            """
+            )
         )
         users = []
         for row in result:
-            users.append(User(
-                id=row[0],
-                username=row[1],
-                hashed_password=row[2],
-                login_count=0,
-                last_login=None,
-            ))
+            users.append(
+                User(
+                    id=row[0],
+                    username=row[1],
+                    hashed_password=row[2],
+                    login_count=0,
+                    last_login=None,
+                )
+            )
         return users
 
 
@@ -119,18 +122,20 @@ async def update_login_async(user: User) -> User:
     async for session in get_async_db():
         # Update login count in users.stats if it exists
         await session.execute(
-            text("""
+            text(
+                """
                 INSERT INTO users.user_stats (user_id, login_count, last_login)
                 VALUES (:user_id, :count, :last_login)
                 ON CONFLICT (user_id) DO UPDATE SET
                     login_count = EXCLUDED.login_count,
                     last_login = EXCLUDED.last_login
-            """),
+            """
+            ),
             {
                 "user_id": user.id,
                 "count": user.login_count,
                 "last_login": user.last_login,
-            }
+            },
         )
         await session.commit()
 
@@ -144,8 +149,7 @@ async def delete_user_async(user: User) -> None:
 
     async for session in get_async_db():
         await session.execute(
-            text("DELETE FROM auth.users WHERE id = :user_id"),
-            {"user_id": user.id}
+            text("DELETE FROM auth.users WHERE id = :user_id"), {"user_id": user.id}
         )
         await session.commit()
 
@@ -153,34 +157,47 @@ async def delete_user_async(user: User) -> None:
 # Legacy synchronous wrappers for backward compatibility
 # These will raise errors to force conversion to async
 
+
 def get_session():
     """Deprecated: Use get_async_session() instead."""
-    raise RuntimeError("SQLite synchronous operations are deprecated. Use async PostgreSQL operations.")
+    raise RuntimeError(
+        "SQLite synchronous operations are deprecated. Use async PostgreSQL operations."
+    )
 
 
 def create_user(db, username: str, hashed_password: str) -> User:
     """Deprecated: Use create_user_async() instead."""
-    raise RuntimeError("SQLite operations are deprecated. Use async PostgreSQL operations.")
+    raise RuntimeError(
+        "SQLite operations are deprecated. Use async PostgreSQL operations."
+    )
 
 
 def get_user(db, username: str) -> User | None:
     """Deprecated: Use get_user_async() instead."""
-    raise RuntimeError("SQLite operations are deprecated. Use async PostgreSQL operations.")
+    raise RuntimeError(
+        "SQLite operations are deprecated. Use async PostgreSQL operations."
+    )
 
 
 def list_users(db) -> Iterable[User]:
     """Deprecated: Use list_users_async() instead."""
-    raise RuntimeError("SQLite operations are deprecated. Use async PostgreSQL operations.")
+    raise RuntimeError(
+        "SQLite operations are deprecated. Use async PostgreSQL operations."
+    )
 
 
 def update_login(db, user: User) -> User:
     """Deprecated: Use update_login_async() instead."""
-    raise RuntimeError("SQLite operations are deprecated. Use async PostgreSQL operations.")
+    raise RuntimeError(
+        "SQLite operations are deprecated. Use async PostgreSQL operations."
+    )
 
 
 def delete_user(db, user: User) -> None:
     """Deprecated: Use delete_user_async() instead."""
-    raise RuntimeError("SQLite operations are deprecated. Use async PostgreSQL operations.")
+    raise RuntimeError(
+        "SQLite operations are deprecated. Use async PostgreSQL operations."
+    )
 
 
 __all__ = [

@@ -1,11 +1,14 @@
 import os
 import uuid
+
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
 
 def _conn():
-    url = os.getenv("DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test")
+    url = os.getenv(
+        "DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test"
+    )
     return psycopg2.connect(url, cursor_factory=RealDictCursor)
 
 
@@ -51,7 +54,9 @@ def test_tokens_unique_triplet_and_allows_diff_sub():
                 conn.rollback()
                 raised = True
 
-            assert raised, "Expected unique violation for duplicate (user_id, provider, provider_sub)"
+            assert (
+                raised
+            ), "Expected unique violation for duplicate (user_id, provider, provider_sub)"
 
             # different provider_sub is allowed
             cur.execute(
@@ -69,5 +74,3 @@ def test_tokens_unique_triplet_and_allows_diff_sub():
             )
             c = cur.fetchone()["c"]
             assert c == 2
-
-

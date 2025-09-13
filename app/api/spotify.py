@@ -361,7 +361,10 @@ async def spotify_connect(request: Request) -> Response:
             "meta": {
                 "user_id": user_id,
                 "cookies_count": len(request.cookies),
-                "has_access_token": bool(request.cookies.get("access_token") or request.cookies.get("GSNH_AT")),
+                "has_access_token": bool(
+                    request.cookies.get("access_token")
+                    or request.cookies.get("GSNH_AT")
+                ),
                 "authorization_header": bool(request.headers.get("Authorization")),
                 "host": request.headers.get("host"),
                 "origin": request.headers.get("origin"),

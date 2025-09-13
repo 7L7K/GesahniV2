@@ -16,7 +16,11 @@ STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 ALIASES_JSON = STORAGE_DIR / "aliases.json"
 
 # Optional JSONL debug export (kept for debugging; SQLite is authoritative)
-LEDGER_FILE = Path(os.getenv("LEDGER_FILE", Path(__file__).resolve().parents[1] / "data" / "ledger.jsonl"))
+LEDGER_FILE = Path(
+    os.getenv(
+        "LEDGER_FILE", Path(__file__).resolve().parents[1] / "data" / "ledger.jsonl"
+    )
+)
 
 # Retention defaults
 RETENTION_LEDGER_SECONDS = int(48 * 3600)
@@ -124,9 +128,16 @@ def export_ledger_jsonl(target_path: Path) -> None:
     """
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)
-        from sqlalchemy import select
         with sync_engine.connect() as conn:
-            rows = conn.execute(text("SELECT id, user_id, idempotency_key, operation, amount, metadata, created_at FROM storage.ledger ORDER BY created_at ASC")).mappings().all()
+            rows = (
+                conn.execute(
+                    text(
+                        "SELECT id, user_id, idempotency_key, operation, amount, metadata, created_at FROM storage.ledger ORDER BY created_at ASC"
+                    )
+                )
+                .mappings()
+                .all()
+            )
             with open(target_path, "w", encoding="utf-8") as f:
                 for r in rows:
                     try:
@@ -163,12 +174,23 @@ def add_note(text: str, tags: list[str] | None = None, pinned: bool = False) -> 
         VALUES (:user_id, :text, :created_at)
         RETURNING id
         """,
-        {"user_id": os.getenv("DEFAULT_NOTES_USER_ID", "00000000-0000-0000-0000-000000000001"), "text": text, "created_at": created_at},
+        {
+            "user_id": os.getenv(
+                "DEFAULT_NOTES_USER_ID", "00000000-0000-0000-0000-000000000001"
+            ),
+            "text": text,
+            "created_at": created_at,
+        },
     )
     return int(row["id"]) if row else 0
 
 
-def add_reminder(text: str, when_txt: str, recurrence: str | None = None, created_by: str | None = None) -> int:
+def add_reminder(
+    text: str,
+    when_txt: str,
+    recurrence: str | None = None,
+    created_by: str | None = None,
+) -> int:
     # Not yet implemented in PG; placeholder returns 0
     return 0
 
@@ -179,8 +201,14 @@ def save_alias(alias: str, entity_id: str, confidence: float = 1.0) -> None:
         data = json.loads(ALIASES_JSON.read_text(encoding="utf-8") or "{}")
     except Exception:
         data = {}
-    data[alias] = {"entity": entity_id, "confidence": float(confidence), "last_used": datetime.now(UTC).isoformat()}
-    ALIASES_JSON.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    data[alias] = {
+        "entity": entity_id,
+        "confidence": float(confidence),
+        "last_used": datetime.now(UTC).isoformat(),
+    }
+    ALIASES_JSON.write_text(
+        json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
 
 
 def load_aliases() -> dict[str, dict[str, Any]]:
@@ -191,12 +219,16 @@ def load_aliases() -> dict[str, dict[str, Any]]:
         return {}
 
 
-def save_summary(date_txt: str, bullets: list[str], source_hash: str | None = None) -> int:
+def save_summary(
+    date_txt: str, bullets: list[str], source_hash: str | None = None
+) -> int:
     # Not yet implemented in PG; placeholder returns 0
     return 0
 
 
-def get_last_reversible_action(user_id: str | None = None, action_types: list[str] | None = None) -> dict[str, Any] | None:
+def get_last_reversible_action(
+    user_id: str | None = None, action_types: list[str] | None = None
+) -> dict[str, Any] | None:
     where = ["(metadata->>'reversible')::boolean = true"]
     params: dict[str, Any] = {}
     if user_id:
@@ -230,6 +262,6 @@ def get_last_reversible_action(user_id: str | None = None, action_types: list[st
 def prune_retention() -> None:
     """Prune according to retention policies (best-effort, synchronous)."""
     cutoff = datetime.now(UTC) - timedelta(seconds=RETENTION_LEDGER_SECONDS)
-    _pg_exec("DELETE FROM storage.ledger WHERE created_at < :cutoff", {"cutoff": cutoff})
-
-
+    _pg_exec(
+        "DELETE FROM storage.ledger WHERE created_at < :cutoff", {"cutoff": cutoff}
+    )

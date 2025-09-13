@@ -10,10 +10,10 @@ Tests envelope validation and command dispatcher:
 import asyncio
 import json
 import os
-import pytest
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -51,7 +51,7 @@ async def test_envelope_validation_valid():
                 "type": "ping",
                 "proto_ver": 1,
                 "req_id": "test-123",
-                "ts": 1234567890
+                "ts": 1234567890,
             }
             ws.send_text(json.dumps(valid_payload))
 
@@ -80,10 +80,7 @@ async def test_envelope_validation_missing_type():
             ws.receive_text()
 
             # Send invalid envelope (missing type)
-            invalid_payload = {
-                "proto_ver": 1,
-                "req_id": "test-123"
-            }
+            invalid_payload = {"proto_ver": 1, "req_id": "test-123"}
             ws.send_text(json.dumps(invalid_payload))
 
             # Should receive error response
@@ -113,7 +110,7 @@ async def test_envelope_validation_invalid_proto_ver():
             invalid_payload = {
                 "type": "ping",
                 "proto_ver": 2,  # Should be 1
-                "req_id": "test-123"
+                "req_id": "test-123",
             }
             ws.send_text(json.dumps(invalid_payload))
 
@@ -142,11 +139,7 @@ async def test_ack_response_timing():
 
             # Send ping command with timing
             start_time = time.time()
-            ping_payload = {
-                "type": "ping",
-                "proto_ver": 1,
-                "req_id": "timing-test-123"
-            }
+            ping_payload = {"type": "ping", "proto_ver": 1, "req_id": "timing-test-123"}
             ws.send_text(json.dumps(ping_payload))
 
             # Receive response
@@ -184,7 +177,7 @@ async def test_error_response_timing():
             invalid_payload = {
                 "type": "unknown_command",
                 "proto_ver": 1,
-                "req_id": "error-timing-test-123"
+                "req_id": "error-timing-test-123",
             }
             ws.send_text(json.dumps(invalid_payload))
 
@@ -194,7 +187,9 @@ async def test_error_response_timing():
 
             # Verify response timing
             duration_ms = (end_time - start_time) * 1000
-            assert duration_ms < 500, f"Error response took {duration_ms}ms, expected < 500ms"
+            assert (
+                duration_ms < 500
+            ), f"Error response took {duration_ms}ms, expected < 500ms"
 
             # Verify error response content
             assert response["type"] == "error"
@@ -221,11 +216,7 @@ async def test_idempotency_cache_duplicate_req_id():
 
             # Send ping command twice with same req_id
             req_id = "duplicate-test-123"
-            ping_payload = {
-                "type": "ping",
-                "proto_ver": 1,
-                "req_id": req_id
-            }
+            ping_payload = {"type": "ping", "proto_ver": 1, "req_id": req_id}
 
             # First request
             ws.send_text(json.dumps(ping_payload))
@@ -257,9 +248,10 @@ async def test_refresh_state_command():
     auth_headers = _auth()
 
     # Mock the state building function
-    with patch("app.api.music_ws.get_ws_manager") as mock_get_manager, \
-         patch("app.api.music_ws._build_state_payload") as mock_build_state:
-
+    with (
+        patch("app.api.music_ws.get_ws_manager") as mock_get_manager,
+        patch("app.api.music_ws._build_state_payload") as mock_build_state,
+    ):
         mock_manager = AsyncMock()
         mock_manager.add_connection = AsyncMock(return_value=MagicMock())
         mock_get_manager.return_value = mock_manager
@@ -278,7 +270,7 @@ async def test_refresh_state_command():
                 "type": "refreshState",
                 "proto_ver": 1,
                 "req_id": "refresh-test-123",
-                "ts": 1234567890
+                "ts": 1234567890,
             }
             ws.send_text(json.dumps(refresh_payload))
 
@@ -298,9 +290,10 @@ async def test_command_dispatcher_error_handling():
 
     auth_headers = _auth()
 
-    with patch("app.api.music_ws.get_ws_manager") as mock_get_manager, \
-         patch("app.api.music_ws._build_state_payload") as mock_build_state:
-
+    with (
+        patch("app.api.music_ws.get_ws_manager") as mock_get_manager,
+        patch("app.api.music_ws._build_state_payload") as mock_build_state,
+    ):
         mock_manager = AsyncMock()
         mock_manager.add_connection = AsyncMock(return_value=MagicMock())
         mock_get_manager.return_value = mock_manager
@@ -316,7 +309,7 @@ async def test_command_dispatcher_error_handling():
             refresh_payload = {
                 "type": "refreshState",
                 "proto_ver": 1,
-                "req_id": "error-test-123"
+                "req_id": "error-test-123",
             }
             ws.send_text(json.dumps(refresh_payload))
 

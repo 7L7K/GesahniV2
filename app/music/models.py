@@ -41,6 +41,7 @@ class QueueItem:
 @dataclass
 class PlayerState:
     """Comprehensive player state model with serialization and hashing."""
+
     is_playing: bool = False
     progress_ms: int = 0
     track: Track | None = None
@@ -150,11 +151,11 @@ QueueItem.to_dict = lambda self: {
     "vibe": self.vibe,
 }
 
-QueueItem.from_dict = classmethod(lambda cls, data: cls(
-    id=data["id"],
-    track=Track.from_dict(data["track"]),
-    requested_by=data.get("requested_by"),
-    vibe=data.get("vibe"),
-))
-
-
+QueueItem.from_dict = classmethod(
+    lambda cls, data: cls(
+        id=data["id"],
+        track=Track.from_dict(data["track"]),
+        requested_by=data.get("requested_by"),
+        vibe=data.get("vibe"),
+    )
+)

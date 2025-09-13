@@ -4,6 +4,7 @@ import json
 import logging
 import os
 import time
+from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -203,7 +204,6 @@ async def admin_system_status():
     admin:read can view status but not modify system settings.
     """
     import os
-    import time
 
     return {
         "status": "operational",
@@ -263,6 +263,7 @@ async def admin_user_identities(user_id: str):
     """
     try:
         from sqlalchemy import select
+
         from app.db.core import get_async_db
         from app.db.models import AuthIdentity
 
@@ -275,10 +276,16 @@ async def admin_user_identities(user_id: str):
             for identity in identities:
                 # Get last token info for this identity
                 from app.db.models import ThirdPartyToken
-                stmt = select(ThirdPartyToken).where(
-                    ThirdPartyToken.identity_id == identity.id,
-                    ThirdPartyToken.provider == identity.provider
-                ).order_by(ThirdPartyToken.updated_at.desc()).limit(1)
+
+                stmt = (
+                    select(ThirdPartyToken)
+                    .where(
+                        ThirdPartyToken.identity_id == identity.id,
+                        ThirdPartyToken.provider == identity.provider,
+                    )
+                    .order_by(ThirdPartyToken.updated_at.desc())
+                    .limit(1)
+                )
 
                 result = await session.execute(stmt)
                 token = result.scalar_one_or_none()
@@ -287,7 +294,11 @@ async def admin_user_identities(user_id: str):
                 if token:
                     last = {
                         "expires_at": token.expires_at,
-                        "updated_at": token.updated_at.timestamp() if isinstance(token.updated_at, datetime) else token.updated_at,
+                        "updated_at": (
+                            token.updated_at.timestamp()
+                            if isinstance(token.updated_at, datetime)
+                            else token.updated_at
+                        ),
                         "last_refresh_at": token.last_refresh_at,
                     }
 
@@ -299,8 +310,16 @@ async def admin_user_identities(user_id: str):
                         "provider_sub": identity.provider_sub,
                         "email_normalized": identity.email_normalized,
                         "email_verified": identity.email_verified,
-                        "created_at": identity.created_at.timestamp() if isinstance(identity.created_at, datetime) else identity.created_at,
-                        "updated_at": identity.updated_at.timestamp() if isinstance(identity.updated_at, datetime) else identity.updated_at,
+                        "created_at": (
+                            identity.created_at.timestamp()
+                            if isinstance(identity.created_at, datetime)
+                            else identity.created_at
+                        ),
+                        "updated_at": (
+                            identity.updated_at.timestamp()
+                            if isinstance(identity.updated_at, datetime)
+                            else identity.updated_at
+                        ),
                         "last_token": last,
                     }
                 )
@@ -323,15 +342,15 @@ async def admin_unlink_identity(
     If unlinking would remove the last usable login method for the user, require `force=true`.
     """
     try:
-        from sqlalchemy import select, func, delete
+        from sqlalchemy import delete, func, select
+
         from app.db.core import get_async_db
         from app.db.models import AuthIdentity, AuthUser
 
         async with get_async_db() as session:
             # Verify identity belongs to user
             stmt = select(AuthIdentity).where(
-                AuthIdentity.id == identity_id,
-                AuthIdentity.user_id == user_id
+                AuthIdentity.id == identity_id, AuthIdentity.user_id == user_id
             )
             result = await session.execute(stmt)
             identity = result.scalar_one_or_none()
@@ -342,7 +361,11 @@ async def admin_unlink_identity(
             provider = identity.provider
 
             # Count remaining identities for this user
-            stmt = select(func.count()).select_from(AuthIdentity).where(AuthIdentity.user_id == user_id)
+            stmt = (
+                select(func.count())
+                .select_from(AuthIdentity)
+                .where(AuthIdentity.user_id == user_id)
+            )
             result = await session.execute(stmt)
             remaining = result.scalar() or 0
 
@@ -365,16 +388,17 @@ async def admin_unlink_identity(
 
         # Mark tokens invalid for this identity
         try:
+            from datetime import datetime
+
             from sqlalchemy import update
-            from datetime import datetime, timezone
+
             from app.db.models import ThirdPartyToken
 
             async with get_async_db() as session:
-                stmt = update(ThirdPartyToken).where(
-                    ThirdPartyToken.identity_id == identity_id
-                ).values(
-                    is_valid=False,
-                    updated_at=datetime.now(timezone.utc)
+                stmt = (
+                    update(ThirdPartyToken)
+                    .where(ThirdPartyToken.identity_id == identity_id)
+                    .values(is_valid=False, updated_at=datetime.now(UTC))
                 )
                 await session.execute(stmt)
                 await session.commit()

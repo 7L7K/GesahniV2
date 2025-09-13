@@ -9,7 +9,11 @@ from fastapi import HTTPException
 from starlette.websockets import WebSocket
 
 from .security import _payload_scopes, jwt_decode
-from .ws_metrics import record_ws_auth_attempt, record_ws_auth_failure, record_ws_auth_success
+from .ws_metrics import (
+    record_ws_auth_attempt,
+    record_ws_auth_failure,
+    record_ws_auth_success,
+)
 
 log = logging.getLogger(__name__)
 
@@ -30,8 +34,11 @@ async def verify_ws(ws: WebSocket):
     origin = ws.headers.get("origin")
     allowed_origins = getattr(ws.app.state, "allowed_origins", None)
     if allowed_origins and origin and origin not in allowed_origins:
-        log.warning("ws.auth.deny: origin_not_allowed origin=%s client=%s",
-                   origin, getattr(ws.client, "host", "unknown"))
+        log.warning(
+            "ws.auth.deny: origin_not_allowed origin=%s client=%s",
+            origin,
+            getattr(ws.client, "host", "unknown"),
+        )
         record_ws_auth_failure("origin_not_allowed")
         try:
             await log_ws_close(ws, code=4403, reason="origin_not_allowed")
@@ -48,7 +55,11 @@ async def verify_ws(ws: WebSocket):
 
     # Allow connections in test mode for easier testing
     pytest_running = os.getenv("PYTEST_RUNNING")
-    log.info("ws.auth.bypass_check: PYTEST_RUNNING=%s (type: %s)", pytest_running, type(pytest_running))
+    log.info(
+        "ws.auth.bypass_check: PYTEST_RUNNING=%s (type: %s)",
+        pytest_running,
+        type(pytest_running),
+    )
     if pytest_running and pytest_running.lower() in ("1", "true", "yes"):
         log.info("ws.auth.allow: test_mode_bypass activated")
         # Set dummy user_id for test mode
@@ -105,8 +116,11 @@ async def verify_ws(ws: WebSocket):
                     ws.state.user_id = ident.get("user_id") or ident.get("sub")
                     scopes = _payload_scopes(ident)
                     ws.state.scopes = scopes
-                    log.info("ws.auth.success: session_identity user_id=%s source=%s",
-                            ws.state.user_id, src)
+                    log.info(
+                        "ws.auth.success: session_identity user_id=%s source=%s",
+                        ws.state.user_id,
+                        src,
+                    )
                     return ws.state.user_id
         except Exception as e:
             log.warning("ws.auth.error: session_extraction_failed error=%s", str(e))
@@ -122,7 +136,10 @@ async def verify_ws(ws: WebSocket):
             await ws.close(code=1013, reason="identity_unavailable")
             raise HTTPException(status_code=503, detail="session_store_unavailable")
 
-        log.warning("ws.auth.deny: missing_token client=%s", getattr(ws.client, "host", "unknown"))
+        log.warning(
+            "ws.auth.deny: missing_token client=%s",
+            getattr(ws.client, "host", "unknown"),
+        )
         record_ws_auth_failure("missing_token")
         try:
             await log_ws_close(ws, code=4401, reason="missing_token")
@@ -130,30 +147,46 @@ async def verify_ws(ws: WebSocket):
             pass
         await ws.close(code=4401, reason="missing_token")
         from .http_errors import unauthorized
-        raise unauthorized(message="authentication required", hint="include token in Authorization header, query param, or cookie")
+
+        raise unauthorized(
+            message="authentication required",
+            hint="include token in Authorization header, query param, or cookie",
+        )
 
     try:
         log.info("ws.auth.attempting_jwt_decode: token=%s", token[:20] + "...")
         payload = jwt_decode(token, key=os.getenv("JWT_SECRET"))  # 60s leeway inside
         log.info("ws.auth.jwt_decoded: payload=%s", payload)
-        ws.state.user_id = payload.get("sub") or payload.get("uid") or payload.get("user_id")
+        ws.state.user_id = (
+            payload.get("sub") or payload.get("uid") or payload.get("user_id")
+        )
         scopes = _payload_scopes(payload)
         ws.state.scopes = scopes
 
-        log.info("ws.auth.success: jwt_validated user_id=%s token_source=%s scopes=%s",
-                ws.state.user_id, token_source, scopes)
+        log.info(
+            "ws.auth.success: jwt_validated user_id=%s token_source=%s scopes=%s",
+            ws.state.user_id,
+            token_source,
+            scopes,
+        )
 
         # Record successful authentication
         record_ws_auth_success()
         try:
             from .auth_monitoring import record_auth_success
-            record_auth_success("websocket", ws.state.user_id, getattr(ws.client, "host", "unknown"))
+
+            record_auth_success(
+                "websocket", ws.state.user_id, getattr(ws.client, "host", "unknown")
+            )
         except Exception:
             pass  # Don't fail auth due to monitoring
 
         return ws.state.user_id
     except jwt.ExpiredSignatureError:
-        log.warning("ws.auth.deny: token_expired user_id=%s", payload.get("sub", "unknown") if 'payload' in locals() else "unknown")
+        log.warning(
+            "ws.auth.deny: token_expired user_id=%s",
+            payload.get("sub", "unknown") if "payload" in locals() else "unknown",
+        )
         record_ws_auth_failure("token_expired")
         try:
             await log_ws_close(ws, code=4401, reason="token_expired")

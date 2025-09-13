@@ -10,9 +10,9 @@ Tests the handshake protocol:
 import asyncio
 import json
 import os
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -140,7 +140,7 @@ async def test_ws_music_degraded_to_ok_transition():
                 "type": "ping",
                 "proto_ver": 1,
                 "req_id": "test-123",
-                "ts": 1234567890
+                "ts": 1234567890,
             }
             ws.send_text(json.dumps(test_payload))
 

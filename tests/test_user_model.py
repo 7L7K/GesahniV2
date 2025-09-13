@@ -6,9 +6,10 @@ from app.models import user as user_model
 async def test_user_crud_cycle():
     """Test user CRUD operations using PostgreSQL."""
     # Clean up any existing test users first
+    from sqlalchemy import delete
+
     from app.db.core import get_async_db
     from app.db.models import AuthUser
-    from sqlalchemy import delete
 
     async for session in get_async_db():
         await session.execute(delete(AuthUser).where(AuthUser.username == "alice"))

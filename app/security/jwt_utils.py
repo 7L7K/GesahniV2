@@ -1,5 +1,6 @@
 # JWT utility functions to avoid circular imports
 
+
 def _payload_scopes(payload: dict | None) -> set[str]:
     """Extract scopes from JWT payload."""
     if not isinstance(payload, dict):

@@ -673,15 +673,18 @@ def read_access_cookie(req):
     legacy = req.cookies.get("access_token")
     if legacy:
         try:
-            logger.info("auth.legacy_cookie_used", extra={
-                "meta": {
-                    "name": "access_token",
-                    "canonical_name": NAMES.access,
-                    "action": "read",
-                    "success": True,
-                    "location": "web.cookies.read_access_cookie"
-                }
-            })
+            logger.info(
+                "auth.legacy_cookie_used",
+                extra={
+                    "meta": {
+                        "name": "access_token",
+                        "canonical_name": NAMES.access,
+                        "action": "read",
+                        "success": True,
+                        "location": "web.cookies.read_access_cookie",
+                    }
+                },
+            )
         except Exception:
             pass  # Best effort logging
         return legacy
@@ -699,15 +702,18 @@ def read_refresh_cookie(req):
     legacy = req.cookies.get("refresh_token")
     if legacy:
         try:
-            logger.info("auth.legacy_cookie_used", extra={
-                "meta": {
-                    "name": "refresh_token",
-                    "canonical_name": NAMES.refresh,
-                    "action": "read",
-                    "success": True,
-                    "location": "web.cookies.read_refresh_cookie"
-                }
-            })
+            logger.info(
+                "auth.legacy_cookie_used",
+                extra={
+                    "meta": {
+                        "name": "refresh_token",
+                        "canonical_name": NAMES.refresh,
+                        "action": "read",
+                        "success": True,
+                        "location": "web.cookies.read_refresh_cookie",
+                    }
+                },
+            )
         except Exception:
             pass  # Best effort logging
         return legacy
@@ -725,15 +731,18 @@ def read_session_cookie(req):
     legacy = req.cookies.get("__session")
     if legacy:
         try:
-            logger.info("auth.legacy_cookie_used", extra={
-                "meta": {
-                    "name": "__session",
-                    "canonical_name": NAMES.session,
-                    "action": "read",
-                    "success": True,
-                    "location": "web.cookies.read_session_cookie"
-                }
-            })
+            logger.info(
+                "auth.legacy_cookie_used",
+                extra={
+                    "meta": {
+                        "name": "__session",
+                        "canonical_name": NAMES.session,
+                        "action": "read",
+                        "success": True,
+                        "location": "web.cookies.read_session_cookie",
+                    }
+                },
+            )
         except Exception:
             pass  # Best effort logging
         return legacy

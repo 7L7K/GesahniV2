@@ -8,7 +8,6 @@ try:
 except Exception:  # pragma: no cover - optional dependency in tests
     httpx = None  # type: ignore
 
-from .user_store import user_store
 
 HealthResult = Literal["ok", "error", "skipped"]
 
@@ -62,8 +61,9 @@ async def check_jwt_secret() -> HealthResult:
 async def check_db() -> HealthResult:
     # Required readiness: ability to open database connection
     try:
-        from .db.core import get_async_db
         from sqlalchemy import text
+
+        from .db.core import get_async_db
 
         # get_async_db is an async generator, so we need to iterate it
         async for session in get_async_db():
@@ -131,7 +131,9 @@ async def check_chroma() -> HealthResult:
     # For Chroma Cloud, check the API endpoint
     chroma_url = os.getenv("CHROMA_URL")
     if chroma_url:
-        return await _http_probe(chroma_url.rstrip("/") + "/api/v1/heartbeat", method="GET")
+        return await _http_probe(
+            chroma_url.rstrip("/") + "/api/v1/heartbeat", method="GET"
+        )
 
     # For local Chroma, check if the path exists and is accessible
     chroma_path = os.getenv("CHROMA_PATH", ".chroma_data")
@@ -139,6 +141,7 @@ async def check_chroma() -> HealthResult:
         try:
             # Try to initialize Chroma to check if it's working
             import chromadb
+
             client = chromadb.PersistentClient(path=chroma_path)
             # Simple heartbeat check
             collections = client.list_collections()

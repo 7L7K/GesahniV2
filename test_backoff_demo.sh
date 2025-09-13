@@ -58,4 +58,3 @@ echo "Attempt 5: +3200ms (6000ms total, but capped at 5000ms)"
 echo
 
 echo "Demo complete! Follow the steps above to test the backoff functionality."
-

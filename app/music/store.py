@@ -4,19 +4,16 @@ PostgreSQL-based music store for tokens and devices.
 
 from __future__ import annotations
 
-import json
 import os
 import time
-from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import select, update, delete
+from cryptography.fernet import Fernet, InvalidToken
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.core import get_async_db
-from app.db.models import MusicToken, MusicDevice, MusicPreferences
-from cryptography.fernet import Fernet, InvalidToken
-
+from app.db.models import MusicDevice, MusicPreferences, MusicToken
 
 MASTER_KEY = os.getenv("MUSIC_MASTER_KEY")
 
@@ -36,8 +33,7 @@ async def get_music_token(user_id: str, provider: str) -> dict[str, Any] | None:
     """Get music token for user/provider."""
     async with get_async_db() as session:
         stmt = select(MusicToken).where(
-            MusicToken.user_id == user_id,
-            MusicToken.provider == provider
+            MusicToken.user_id == user_id, MusicToken.provider == provider
         )
         result = await session.execute(stmt)
         token = result.scalar_one_or_none()
@@ -67,7 +63,9 @@ async def get_music_token(user_id: str, provider: str) -> dict[str, Any] | None:
             "provider": token.provider,
             "access_token": access_token,
             "refresh_token": refresh_token,
-            "scope": token.scope.decode() if isinstance(token.scope, bytes) else token.scope,
+            "scope": (
+                token.scope.decode() if isinstance(token.scope, bytes) else token.scope
+            ),
             "expires_at": token.expires_at,
             "updated_at": token.updated_at,
         }
@@ -95,8 +93,7 @@ async def set_music_token(
 
         # Upsert token
         stmt = select(MusicToken).where(
-            MusicToken.user_id == user_id,
-            MusicToken.provider == provider
+            MusicToken.user_id == user_id, MusicToken.provider == provider
         )
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
@@ -156,8 +153,7 @@ async def set_music_device(
     """Set music device info."""
     async with get_async_db() as session:
         stmt = select(MusicDevice).where(
-            MusicDevice.provider == provider,
-            MusicDevice.device_id == device_id
+            MusicDevice.provider == provider, MusicDevice.device_id == device_id
         )
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
@@ -189,10 +185,11 @@ async def set_music_device(
 async def update_device_last_seen(provider: str, device_id: str) -> None:
     """Update device last seen time."""
     async with get_async_db() as session:
-        stmt = update(MusicDevice).where(
-            MusicDevice.provider == provider,
-            MusicDevice.device_id == device_id
-        ).values(last_seen=int(time.time()))
+        stmt = (
+            update(MusicDevice)
+            .where(MusicDevice.provider == provider, MusicDevice.device_id == device_id)
+            .values(last_seen=int(time.time()))
+        )
         await session.execute(stmt)
         await session.commit()
 
@@ -257,7 +254,9 @@ async def set_music_preferences(
 
 
 # Idempotency functions for caching responses
-async def get_idempotent(key: str, user_id: str, session: AsyncSession | None = None) -> dict | None:
+async def get_idempotent(
+    key: str, user_id: str, session: AsyncSession | None = None
+) -> dict | None:
     """Get cached idempotent response from database."""
     from app.db.core import get_async_db
 
@@ -270,14 +269,18 @@ async def get_idempotent(key: str, user_id: str, session: AsyncSession | None = 
     return None
 
 
-async def _get_idempotent_impl(key: str, user_id: str, session: AsyncSession) -> dict | None:
+async def _get_idempotent_impl(
+    key: str, user_id: str, session: AsyncSession
+) -> dict | None:
     """Internal implementation for getting idempotent response."""
     # This would need a database table for music_idempotency
     # For now, return None to disable caching until table is created
     return None
 
 
-async def set_idempotent(key: str, user_id: str, response: dict, session: AsyncSession | None = None) -> None:
+async def set_idempotent(
+    key: str, user_id: str, response: dict, session: AsyncSession | None = None
+) -> None:
     """Store idempotent response in database."""
     from app.db.core import get_async_db
 
@@ -289,7 +292,9 @@ async def set_idempotent(key: str, user_id: str, response: dict, session: AsyncS
         await _set_idempotent_impl(key, user_id, response, session)
 
 
-async def _set_idempotent_impl(key: str, user_id: str, response: dict, session: AsyncSession) -> None:
+async def _set_idempotent_impl(
+    key: str, user_id: str, response: dict, session: AsyncSession
+) -> None:
     """Internal implementation for storing idempotent response."""
     # This would need a database table for music_idempotency
     # For now, do nothing until table is created

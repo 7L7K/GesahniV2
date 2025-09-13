@@ -8,26 +8,24 @@ using PostgreSQL and SQLAlchemy ORM.
 from __future__ import annotations
 
 import json
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, update, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 
 from .db.core import get_async_db
 from .db.models import (
-    AuthUser,
-    AuthDevice,
-    Session,
-    AuthIdentity,
-    PATToken,
     AuditLog,
+    AuthDevice,
+    AuthIdentity,
+    AuthUser,
+    PATToken,
+    Session,
 )
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 async def ensure_tables() -> None:
@@ -91,8 +89,16 @@ async def get_user_by_email(email: str) -> dict[str, Any] | None:
             "password_hash": user.password_hash,
             "name": user.name,
             "avatar_url": user.avatar_url,
-            "created_at": user.created_at.timestamp() if isinstance(user.created_at, datetime) else user.created_at,
-            "verified_at": user.verified_at.timestamp() if user.verified_at and isinstance(user.verified_at, datetime) else user.verified_at,
+            "created_at": (
+                user.created_at.timestamp()
+                if isinstance(user.created_at, datetime)
+                else user.created_at
+            ),
+            "verified_at": (
+                user.verified_at.timestamp()
+                if user.verified_at and isinstance(user.verified_at, datetime)
+                else user.verified_at
+            ),
             "auth_providers": [],  # TODO: Add auth_providers field to model if needed
         }
 
@@ -124,7 +130,11 @@ async def create_device(
 
 async def touch_device(device_id: str) -> None:
     async with get_async_db() as session:
-        stmt = update(AuthDevice).where(AuthDevice.id == device_id).values(last_seen_at=_now())
+        stmt = (
+            update(AuthDevice)
+            .where(AuthDevice.id == device_id)
+            .values(last_seen_at=_now())
+        )
         await session.execute(stmt)
         await session.commit()
 
@@ -148,7 +158,9 @@ async def create_session(
 
 async def touch_session(session_id: str) -> None:
     async with get_async_db() as session:
-        stmt = update(Session).where(Session.id == session_id).values(last_seen_at=_now())
+        stmt = (
+            update(Session).where(Session.id == session_id).values(last_seen_at=_now())
+        )
         await session.execute(stmt)
         await session.commit()
 
@@ -162,7 +174,14 @@ async def revoke_session(session_id: str) -> None:
 
 # ------------------------- oauth identities ----------------------------------
 async def link_oauth_identity(
-    *, id: str, user_id: str, provider: str, provider_sub: str, email_normalized: str, provider_iss: str | None = None, email_verified: bool = False
+    *,
+    id: str,
+    user_id: str,
+    provider: str,
+    provider_sub: str,
+    email_normalized: str,
+    provider_iss: str | None = None,
+    email_verified: bool = False,
 ) -> None:
     async with get_async_db() as session:
         identity = AuthIdentity(
@@ -180,7 +199,9 @@ async def link_oauth_identity(
         await session.commit()
 
 
-async def get_oauth_identity_by_provider(provider: str, provider_iss: str | None, provider_sub: str) -> dict | None:
+async def get_oauth_identity_by_provider(
+    provider: str, provider_iss: str | None, provider_sub: str
+) -> dict | None:
     """Return oauth identity row by provider+iss+provider_sub or None."""
     async with get_async_db() as session:
         stmt = select(AuthIdentity).where(
@@ -202,12 +223,22 @@ async def get_oauth_identity_by_provider(provider: str, provider_iss: str | None
             "provider_sub": identity.provider_sub,
             "email_normalized": identity.email_normalized,
             "email_verified": identity.email_verified,
-            "created_at": identity.created_at.timestamp() if isinstance(identity.created_at, datetime) else identity.created_at,
-            "updated_at": identity.updated_at.timestamp() if isinstance(identity.updated_at, datetime) else identity.updated_at,
+            "created_at": (
+                identity.created_at.timestamp()
+                if isinstance(identity.created_at, datetime)
+                else identity.created_at
+            ),
+            "updated_at": (
+                identity.updated_at.timestamp()
+                if isinstance(identity.updated_at, datetime)
+                else identity.updated_at
+            ),
         }
 
 
-async def get_oauth_identity_by_provider_simple(provider: str, provider_sub: str) -> dict | None:
+async def get_oauth_identity_by_provider_simple(
+    provider: str, provider_sub: str
+) -> dict | None:
     """Return oauth identity row by provider+provider_sub or None."""
     async with get_async_db() as session:
         stmt = select(AuthIdentity).where(
@@ -227,8 +258,16 @@ async def get_oauth_identity_by_provider_simple(provider: str, provider_sub: str
             "provider_sub": identity.provider_sub,
             "email_normalized": identity.email_normalized,
             "email_verified": identity.email_verified,
-            "created_at": identity.created_at.timestamp() if isinstance(identity.created_at, datetime) else identity.created_at,
-            "updated_at": identity.updated_at.timestamp() if isinstance(identity.updated_at, datetime) else identity.updated_at,
+            "created_at": (
+                identity.created_at.timestamp()
+                if isinstance(identity.created_at, datetime)
+                else identity.created_at
+            ),
+            "updated_at": (
+                identity.updated_at.timestamp()
+                if isinstance(identity.updated_at, datetime)
+                else identity.updated_at
+            ),
         }
 
 
@@ -258,7 +297,7 @@ async def create_pat(
             name=name,
             token_hash=token_hash,
             scopes=json.dumps(scopes or []),
-            exp_at=datetime.fromtimestamp(exp_at, timezone.utc) if exp_at else None,
+            exp_at=datetime.fromtimestamp(exp_at, UTC) if exp_at else None,
             created_at=_now(),
         )
         session.add(pat)
@@ -287,9 +326,21 @@ async def get_pat_by_id(pat_id: str) -> dict[str, Any] | None:
             "name": pat.name,
             "token_hash": pat.token_hash,
             "scopes": json.loads(pat.scopes) if pat.scopes else [],
-            "exp_at": pat.exp_at.timestamp() if pat.exp_at and isinstance(pat.exp_at, datetime) else pat.exp_at,
-            "created_at": pat.created_at.timestamp() if isinstance(pat.created_at, datetime) else pat.created_at,
-            "revoked_at": pat.revoked_at.timestamp() if pat.revoked_at and isinstance(pat.revoked_at, datetime) else pat.revoked_at,
+            "exp_at": (
+                pat.exp_at.timestamp()
+                if pat.exp_at and isinstance(pat.exp_at, datetime)
+                else pat.exp_at
+            ),
+            "created_at": (
+                pat.created_at.timestamp()
+                if isinstance(pat.created_at, datetime)
+                else pat.created_at
+            ),
+            "revoked_at": (
+                pat.revoked_at.timestamp()
+                if pat.revoked_at and isinstance(pat.revoked_at, datetime)
+                else pat.revoked_at
+            ),
         }
 
 
@@ -308,16 +359,32 @@ async def get_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
             "name": pat.name,
             "token_hash": pat.token_hash,
             "scopes": json.loads(pat.scopes) if pat.scopes else [],
-            "exp_at": pat.exp_at.timestamp() if pat.exp_at and isinstance(pat.exp_at, datetime) else pat.exp_at,
-            "created_at": pat.created_at.timestamp() if isinstance(pat.created_at, datetime) else pat.created_at,
-            "revoked_at": pat.revoked_at.timestamp() if pat.revoked_at and isinstance(pat.revoked_at, datetime) else pat.revoked_at,
+            "exp_at": (
+                pat.exp_at.timestamp()
+                if pat.exp_at and isinstance(pat.exp_at, datetime)
+                else pat.exp_at
+            ),
+            "created_at": (
+                pat.created_at.timestamp()
+                if isinstance(pat.created_at, datetime)
+                else pat.created_at
+            ),
+            "revoked_at": (
+                pat.revoked_at.timestamp()
+                if pat.revoked_at and isinstance(pat.revoked_at, datetime)
+                else pat.revoked_at
+            ),
         }
 
 
 async def list_pats_for_user(user_id: str) -> list[dict[str, Any]]:
     """List all PATs for a user, returning safe fields only (no token hash)."""
     async with get_async_db() as session:
-        stmt = select(PATToken).where(PATToken.user_id == user_id).order_by(PATToken.created_at.desc())
+        stmt = (
+            select(PATToken)
+            .where(PATToken.user_id == user_id)
+            .order_by(PATToken.created_at.desc())
+        )
         result = await session.execute(stmt)
         pats = result.scalars().all()
 
@@ -326,8 +393,16 @@ async def list_pats_for_user(user_id: str) -> list[dict[str, Any]]:
                 "id": pat.id,
                 "name": pat.name,
                 "scopes": json.loads(pat.scopes) if pat.scopes else [],
-                "created_at": pat.created_at.timestamp() if isinstance(pat.created_at, datetime) else pat.created_at,
-                "revoked_at": pat.revoked_at.timestamp() if pat.revoked_at and isinstance(pat.revoked_at, datetime) else pat.revoked_at,
+                "created_at": (
+                    pat.created_at.timestamp()
+                    if isinstance(pat.created_at, datetime)
+                    else pat.created_at
+                ),
+                "revoked_at": (
+                    pat.revoked_at.timestamp()
+                    if pat.revoked_at and isinstance(pat.revoked_at, datetime)
+                    else pat.revoked_at
+                ),
             }
             for pat in pats
         ]

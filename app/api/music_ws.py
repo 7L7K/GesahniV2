@@ -4,11 +4,9 @@ import asyncio
 import logging
 import os
 import time as _t
-from collections import OrderedDict
-from datetime import datetime, UTC
-from typing import Any, Dict
+from typing import Any
 
-from fastapi import APIRouter, Depends, Request, Response, WebSocket
+from fastapi import APIRouter, Request, Response, WebSocket
 
 from app.api._deps import dep_verify_ws
 from app.music import get_provider
@@ -16,8 +14,6 @@ from app.music.delta import DeltaBuilder
 from app.music.models import PlayerState
 from app.utils.lru_cache import ws_idempotency_cache
 from app.ws_manager import WSConnectionManager, get_ws_manager
-
-from .music_http import _build_state_payload
 
 router = APIRouter(tags=["Music"])  # mounted under /v1
 
@@ -38,7 +34,10 @@ def _ws_origin_allowed(ws: WebSocket) -> bool:
         origin = ws.headers.get("Origin")
         configured = list(getattr(ws.app.state, "allowed_origins", []))  # type: ignore[attr-defined]
         if not configured:
-            _env = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000") or "http://localhost:3000"
+            _env = (
+                os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+                or "http://localhost:3000"
+            )
             configured = [o.strip() for o in _env.split(",") if o.strip()]
         return (not origin) or (origin in configured)
     except Exception:
@@ -86,17 +85,18 @@ async def _send_ack(ws: WebSocket, req_id: str | None, user_id: str) -> None:
         ack_payload["req_id"] = req_id
 
     try:
-        await asyncio.wait_for(
-            ws.send_json(ack_payload),
-            timeout=0.5
-        )
-    except asyncio.TimeoutError:
+        await asyncio.wait_for(ws.send_json(ack_payload), timeout=0.5)
+    except TimeoutError:
         logger.warning("ws.music.ack_timeout", extra={"meta": {"user_id": user_id}})
     except Exception as e:
-        logger.debug("ws.music.ack_failed", extra={"meta": {"user_id": user_id, "error": str(e)}})
+        logger.debug(
+            "ws.music.ack_failed", extra={"meta": {"user_id": user_id, "error": str(e)}}
+        )
 
 
-async def _send_error(ws: WebSocket, req_id: str | None, code: str, message: str, user_id: str) -> None:
+async def _send_error(
+    ws: WebSocket, req_id: str | None, code: str, message: str, user_id: str
+) -> None:
     """Send error response within 500ms."""
     error_payload = {
         "type": "error",
@@ -109,14 +109,14 @@ async def _send_error(ws: WebSocket, req_id: str | None, code: str, message: str
         error_payload["req_id"] = req_id
 
     try:
-        await asyncio.wait_for(
-            ws.send_json(error_payload),
-            timeout=0.5
-        )
-    except asyncio.TimeoutError:
+        await asyncio.wait_for(ws.send_json(error_payload), timeout=0.5)
+    except TimeoutError:
         logger.warning("ws.music.error_timeout", extra={"meta": {"user_id": user_id}})
     except Exception as e:
-        logger.debug("ws.music.error_send_failed", extra={"meta": {"user_id": user_id, "error": str(e)}})
+        logger.debug(
+            "ws.music.error_send_failed",
+            extra={"meta": {"user_id": user_id, "error": str(e)}},
+        )
 
 
 async def _dispatch_command(
@@ -124,7 +124,7 @@ async def _dispatch_command(
     payload: dict,
     user_id: str,
     manager: WSConnectionManager | None,
-    logger: logging.Logger
+    logger: logging.Logger,
 ) -> None:
     """Dispatch WebSocket command with idempotency and ack/error handling."""
     req_id = payload.get("req_id")
@@ -137,10 +137,7 @@ async def _dispatch_command(
         if cached_result is not None:
             # Return cached response
             try:
-                await asyncio.wait_for(
-                    ws.send_json(cached_result),
-                    timeout=0.5
-                )
+                await asyncio.wait_for(ws.send_json(cached_result), timeout=0.5)
                 return
             except Exception:
                 pass  # Fall through to processing
@@ -220,7 +217,13 @@ async def _dispatch_command(
                 await provider.transfer_playback(device_id)
                 await _send_ack(ws, req_id, user_id)
             else:
-                await _send_error(ws, req_id, "missing_device_id", "device_id required for transferPlayback", user_id)
+                await _send_error(
+                    ws,
+                    req_id,
+                    "missing_device_id",
+                    "device_id required for transferPlayback",
+                    user_id,
+                )
 
         elif cmd_type == "queueAdd":
             entity_id = payload.get("entity_id") or payload.get("id")
@@ -230,29 +233,40 @@ async def _dispatch_command(
 
         else:
             # Unknown command
-            await _send_error(ws, req_id, "unknown_command", f"unknown command type: {cmd_type}", user_id)
+            await _send_error(
+                ws,
+                req_id,
+                "unknown_command",
+                f"unknown command type: {cmd_type}",
+                user_id,
+            )
             return
 
         # Send response
         if response_payload:
             try:
-                await asyncio.wait_for(
-                    ws.send_json(response_payload),
-                    timeout=0.5
-                )
+                await asyncio.wait_for(ws.send_json(response_payload), timeout=0.5)
                 # Cache successful response
                 if cache_key:
                     await ws_idempotency_cache.put(cache_key, response_payload)
-            except asyncio.TimeoutError:
-                logger.warning("ws.music.response_timeout", extra={"meta": {"user_id": user_id}})
+            except TimeoutError:
+                logger.warning(
+                    "ws.music.response_timeout", extra={"meta": {"user_id": user_id}}
+                )
             except Exception as e:
-                logger.debug("ws.music.response_failed", extra={"meta": {"user_id": user_id, "error": str(e)}})
+                logger.debug(
+                    "ws.music.response_failed",
+                    extra={"meta": {"user_id": user_id, "error": str(e)}},
+                )
 
         # Send ack for commands that don't have explicit responses
         # Note: ping already sends pong response, so no ack needed
 
     except Exception as e:
-        logger.error("ws.music.command_error", extra={"meta": {"user_id": user_id, "command": cmd_type, "error": str(e)}})
+        logger.error(
+            "ws.music.command_error",
+            extra={"meta": {"user_id": user_id, "command": cmd_type, "error": str(e)}},
+        )
         await _send_error(ws, req_id, "command_failed", str(e), user_id)
 
 
@@ -273,20 +287,28 @@ async def _broadcast(topic: str, payload: dict) -> None:
     message = {"topic": topic, "data": payload}
     await ws_manager.broadcast_to_all(message)
 
-    logger.debug("ws.music.broadcast: topic=%s connections=%d", topic, len(music_connections))
+    logger.debug(
+        "ws.music.broadcast: topic=%s connections=%d", topic, len(music_connections)
+    )
 
 
 @router.websocket("/ws/music")
 async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
     import logging
+
     logger = logging.getLogger(__name__)
 
-    logger.info("🎵 ws.music.handler.STARTED", extra={"meta": {
-        "origin": ws.headers.get("Origin"),
-        "user_agent": ws.headers.get("User-Agent"),
-        "query_params": dict(ws.query_params),
-        "headers": dict(ws.headers)
-    }})
+    logger.info(
+        "🎵 ws.music.handler.STARTED",
+        extra={
+            "meta": {
+                "origin": ws.headers.get("Origin"),
+                "user_agent": ws.headers.get("User-Agent"),
+                "query_params": dict(ws.query_params),
+                "headers": dict(ws.headers),
+            }
+        },
+    )
 
     # Get user_id from WebSocket state (set by dep_verify_ws)
     try:
@@ -308,7 +330,10 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
     # Always accept with subprotocol - never fall back
     try:
         await ws.accept(subprotocol="json.realtime.v1")
-        logger.info("ws.music.accept.success", extra={"meta": {"subprotocol": "json.realtime.v1"}})
+        logger.info(
+            "ws.music.accept.success",
+            extra={"meta": {"subprotocol": "json.realtime.v1"}},
+        )
     except Exception as e:
         logger.error("ws.music.accept.failed", extra={"meta": {"error": str(e)}})
         return
@@ -327,7 +352,10 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
             degraded_mode = False
             logger.info("ws.music.manager.ready", extra={"meta": {"user_id": uid}})
         except Exception as e:
-            logger.error("ws.music.manager.init_failed", extra={"meta": {"user_id": uid, "error": str(e)}})
+            logger.error(
+                "ws.music.manager.init_failed",
+                extra={"meta": {"user_id": uid, "error": str(e)}},
+            )
             degraded_mode = True
 
     # Store current state for delta builder (updated by commands)
@@ -339,17 +367,24 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
         try:
             playback_state = await provider.get_state()
             current_state = PlayerState(
-                is_playing=getattr(playback_state, 'is_playing', False),
-                progress_ms=getattr(playback_state, 'progress_ms', 0),
-                track=getattr(playback_state, 'track', None),
-                device=getattr(playback_state, 'device', None),
-                shuffle=getattr(playback_state, 'shuffle', False),
-                repeat=getattr(playback_state, 'repeat', 'off'),
-                volume_percent=getattr(playback_state.device, 'volume', 50) if getattr(playback_state, 'device', None) else 50,
+                is_playing=getattr(playback_state, "is_playing", False),
+                progress_ms=getattr(playback_state, "progress_ms", 0),
+                track=getattr(playback_state, "track", None),
+                device=getattr(playback_state, "device", None),
+                shuffle=getattr(playback_state, "shuffle", False),
+                repeat=getattr(playback_state, "repeat", "off"),
+                volume_percent=(
+                    getattr(playback_state.device, "volume", 50)
+                    if getattr(playback_state, "device", None)
+                    else 50
+                ),
                 provider=provider.name,
             )
         except Exception as e:
-            logger.error("ws.music.state.get_failed", extra={"meta": {"user_id": uid, "error": str(e)}})
+            logger.error(
+                "ws.music.state.get_failed",
+                extra={"meta": {"user_id": uid, "error": str(e)}},
+            )
             current_state = None
 
     def _get_current_state() -> PlayerState | None:
@@ -359,12 +394,12 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
     async def _send_delta(payload: dict[str, Any]) -> None:
         """Send delta payload to WebSocket."""
         try:
-            await asyncio.wait_for(
-                ws.send_json(payload),
-                timeout=1.0
-            )
+            await asyncio.wait_for(ws.send_json(payload), timeout=1.0)
         except Exception as e:
-            logger.debug("ws.music.delta.send_failed", extra={"meta": {"user_id": uid, "error": str(e)}})
+            logger.debug(
+                "ws.music.delta.send_failed",
+                extra={"meta": {"user_id": uid, "error": str(e)}},
+            )
 
     # Start manager initialization in background
     manager_task = asyncio.create_task(_init_manager())
@@ -377,14 +412,19 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
         "type": "hello",
         "proto": "json.realtime.v1",
         "mode": "degraded" if degraded_mode else "ok",
-        "ts": int(_t.time() * 1000)
+        "ts": int(_t.time() * 1000),
     }
 
     try:
         await ws.send_json(hello_payload)
-        logger.info("ws.music.hello.sent", extra={"meta": {"user_id": uid, "mode": hello_payload["mode"]}})
+        logger.info(
+            "ws.music.hello.sent",
+            extra={"meta": {"user_id": uid, "mode": hello_payload["mode"]}},
+        )
     except Exception as e:
-        logger.error("ws.music.hello.failed", extra={"meta": {"user_id": uid, "error": str(e)}})
+        logger.error(
+            "ws.music.hello.failed", extra={"meta": {"user_id": uid, "error": str(e)}}
+        )
         return
 
     # Send initial state after hello
@@ -400,7 +440,10 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
             await ws.send_json(state_payload)
             logger.info("ws.music.initial_state.sent", extra={"meta": {"user_id": uid}})
         except Exception as e:
-            logger.error("ws.music.initial_state.failed", extra={"meta": {"user_id": uid, "error": str(e)}})
+            logger.error(
+                "ws.music.initial_state.failed",
+                extra={"meta": {"user_id": uid, "error": str(e)}},
+            )
 
     # Initialize delta builder (without sending initial state again)
     try:
@@ -408,7 +451,10 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
         await delta_builder.start_emitter(_send_delta, send_initial_state=False)
         logger.info("ws.music.delta_builder.ready", extra={"meta": {"user_id": uid}})
     except Exception as e:
-        logger.warning("ws.music.delta_builder.init_failed", extra={"meta": {"user_id": uid, "error": str(e)}})
+        logger.warning(
+            "ws.music.delta_builder.init_failed",
+            extra={"meta": {"user_id": uid, "error": str(e)}},
+        )
 
     # Phase 6.2: Audit WebSocket connect
     try:
@@ -443,9 +489,14 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
     if manager is not None:
         try:
             conn_state = await manager.add_connection(ws, uid, endpoint="music")
-            logger.info("ws.music.connection_established", extra={"meta": {"user_id": uid}})
+            logger.info(
+                "ws.music.connection_established", extra={"meta": {"user_id": uid}}
+            )
         except Exception as e:
-            logger.warning("ws.music.add_connection.failed", extra={"meta": {"user_id": uid, "error": str(e)}})
+            logger.warning(
+                "ws.music.add_connection.failed",
+                extra={"meta": {"user_id": uid, "error": str(e)}},
+            )
 
     _logger = logging.getLogger(__name__)
     connected_at = _t.time()
@@ -455,6 +506,7 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
     try:
         while True:
             import asyncio as _aio
+
             recv_task = _aio.create_task(ws.receive())
             done, _ = await _aio.wait({recv_task}, timeout=25.0)
             if not done:
@@ -487,12 +539,16 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
             data = raw.get("text") or raw.get("bytes")
 
             # Handle legacy ping/pong (backward compatibility)
-            if data == "pong" or (isinstance(data, bytes | bytearray) and bytes(data) == b"pong"):
+            if data == "pong" or (
+                isinstance(data, bytes | bytearray) and bytes(data) == b"pong"
+            ):
                 last_pong = _t.monotonic()
                 if conn_state:
                     conn_state.update_activity()
                 continue
-            elif data == "ping" or (isinstance(data, bytes | bytearray) and bytes(data) == b"ping"):
+            elif data == "ping" or (
+                isinstance(data, bytes | bytearray) and bytes(data) == b"ping"
+            ):
                 await ws.send_text("pong")
                 logger.debug("ws.music.ping_handled")
                 continue
@@ -500,7 +556,12 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
             # Parse JSON payload
             try:
                 import json
-                payload = json.loads(data) if isinstance(data, str | bytes | bytearray) else None
+
+                payload = (
+                    json.loads(data)
+                    if isinstance(data, str | bytes | bytearray)
+                    else None
+                )
             except Exception:
                 payload = None
 
@@ -510,7 +571,9 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
             # Validate envelope
             is_valid, error_msg = _validate_envelope(payload)
             if not is_valid:
-                await _send_error(ws, payload.get("req_id"), "invalid_envelope", error_msg, uid)
+                await _send_error(
+                    ws, payload.get("req_id"), "invalid_envelope", error_msg, uid
+                )
                 continue
 
             # Update activity for valid messages
@@ -525,9 +588,14 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
         if delta_builder:
             try:
                 await delta_builder.stop_emitter()
-                logger.debug("ws.music.delta_builder.stopped", extra={"meta": {"user_id": uid}})
+                logger.debug(
+                    "ws.music.delta_builder.stopped", extra={"meta": {"user_id": uid}}
+                )
             except Exception as e:
-                logger.debug("ws.music.delta_builder.cleanup_failed", extra={"meta": {"user_id": uid, "error": str(e)}})
+                logger.debug(
+                    "ws.music.delta_builder.cleanup_failed",
+                    extra={"meta": {"user_id": uid, "error": str(e)}},
+                )
 
         # Clean up manager task
         if not manager_task.done():
@@ -544,9 +612,15 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
 
         try:
             dur = int(round(_t.time() - connected_at))
-            logger.info("ws.music.connection_closed", extra={"meta": {"user_id": uid, "duration_s": dur}})
+            logger.info(
+                "ws.music.connection_closed",
+                extra={"meta": {"user_id": uid, "duration_s": dur}},
+            )
         except Exception as e:
-            logger.debug("ws.music.cleanup.error", extra={"meta": {"user_id": uid, "error": str(e)}})
+            logger.debug(
+                "ws.music.cleanup.error",
+                extra={"meta": {"user_id": uid, "error": str(e)}},
+            )
             pass
 
 

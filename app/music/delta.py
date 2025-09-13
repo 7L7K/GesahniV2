@@ -10,7 +10,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from .models import PlayerState
 
@@ -28,7 +29,9 @@ class DeltaBuilder:
         self.send_fn: Callable[[dict[str, Any]], None] | None = None
         self.is_running = False
 
-    async def start_emitter(self, send_fn: Callable[[dict[str, Any]], None], send_initial_state: bool = True) -> None:
+    async def start_emitter(
+        self, send_fn: Callable[[dict[str, Any]], None], send_initial_state: bool = True
+    ) -> None:
         """Start the delta emitter with the given send function."""
         self.send_fn = send_fn
         self.is_running = True
@@ -73,7 +76,9 @@ class DeltaBuilder:
                         await self._emit_position_tick(current_state)
 
                 # Sleep based on playing state
-                sleep_time = 1.0 if current_state.is_playing else 8.0  # 5-10s when paused
+                sleep_time = (
+                    1.0 if current_state.is_playing else 8.0
+                )  # 5-10s when paused
                 await asyncio.sleep(sleep_time)
 
             except asyncio.CancelledError:
@@ -127,7 +132,10 @@ class DeltaBuilder:
             current_progress = state.progress_ms + int(time_since_position * 1000)
 
             # Don't emit if position hasn't changed meaningfully
-            if self.last_state and abs(current_progress - self.last_state.progress_ms) < 500:
+            if (
+                self.last_state
+                and abs(current_progress - self.last_state.progress_ms) < 500
+            ):
                 return
 
             payload = {
@@ -144,7 +152,9 @@ class DeltaBuilder:
         except Exception as e:
             logger.error("Failed to emit position tick: %s", e)
 
-    def _compute_changes(self, old_state: PlayerState, new_state: PlayerState) -> dict[str, Any]:
+    def _compute_changes(
+        self, old_state: PlayerState, new_state: PlayerState
+    ) -> dict[str, Any]:
         """Compute the changes between two states."""
         changes = {}
 
@@ -158,21 +168,36 @@ class DeltaBuilder:
         # Compare progress (with tolerance)
         progress_diff = abs(new_state.progress_ms - old_state.progress_ms)
         if progress_diff > 1000:  # More than 1 second difference
-            changes["progress_ms"] = {"old": old_state.progress_ms, "new": new_state.progress_ms}
+            changes["progress_ms"] = {
+                "old": old_state.progress_ms,
+                "new": new_state.progress_ms,
+            }
 
         # Compare track
-        if (old_state.track and new_state.track and old_state.track.id != new_state.track.id) or \
-           (old_state.track is None and new_state.track is not None) or \
-           (old_state.track is not None and new_state.track is None):
+        if (
+            (
+                old_state.track
+                and new_state.track
+                and old_state.track.id != new_state.track.id
+            )
+            or (old_state.track is None and new_state.track is not None)
+            or (old_state.track is not None and new_state.track is None)
+        ):
             changes["track"] = {
                 "old": old_state.track.to_dict() if old_state.track else None,
                 "new": new_state.track.to_dict() if new_state.track else None,
             }
 
         # Compare device
-        if (old_state.device and new_state.device and old_state.device.id != new_state.device.id) or \
-           (old_state.device is None and new_state.device is not None) or \
-           (old_state.device is not None and new_state.device is None):
+        if (
+            (
+                old_state.device
+                and new_state.device
+                and old_state.device.id != new_state.device.id
+            )
+            or (old_state.device is None and new_state.device is not None)
+            or (old_state.device is not None and new_state.device is None)
+        ):
             changes["device"] = {
                 "old": old_state.device.to_dict() if old_state.device else None,
                 "new": new_state.device.to_dict() if new_state.device else None,

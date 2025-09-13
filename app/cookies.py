@@ -43,7 +43,10 @@ from .cookie_config import format_cookie_header, get_cookie_config
 
 log = logging.getLogger(__name__)
 
-def _read_first_cookie(request: Request, names: list[str]) -> tuple[str | None, str | None]:
+
+def _read_first_cookie(
+    request: Request, names: list[str]
+) -> tuple[str | None, str | None]:
     """Return (value, name) for the first present cookie among names.
 
     Handles both `__Host-<name>` and `<name>` automatically when secure host cookies
@@ -51,7 +54,12 @@ def _read_first_cookie(request: Request, names: list[str]) -> tuple[str | None, 
     """
     try:
         # Prefer __Host- prefixed variant when configured
-        use_host_prefix = os.getenv("USE_HOST_COOKIE_PREFIX", "1").strip().lower() in {"1","true","yes","on"}
+        use_host_prefix = os.getenv("USE_HOST_COOKIE_PREFIX", "1").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
     except Exception:
         use_host_prefix = True
     for n in names:
@@ -65,30 +73,39 @@ def _read_first_cookie(request: Request, names: list[str]) -> tuple[str | None, 
             return v, n
     return None, None
 
+
 def _warn_legacy_cookie_used(found_name: str, canonical: str) -> None:
     try:
         # Treat ACCESS_TOKEN/REFRESH_TOKEN/SESSION (and bare 'session') as legacy readers
         legacy_names = {ACCESS_TOKEN, REFRESH_TOKEN, SESSION, "session"}
         if found_name in legacy_names:
-            log.warning("auth.legacy_cookie_read name=%s canonical=%s", found_name, canonical)
+            log.warning(
+                "auth.legacy_cookie_read name=%s canonical=%s", found_name, canonical
+            )
     except Exception:
         pass
+
 
 def read_access_cookie(request: Request) -> str | None:
     """Read access token cookie using canonical names from web.cookies.NAMES."""
     from .web.cookies import read
+
     cookies = read(request)
     return cookies.get("access")
+
 
 def read_refresh_cookie(request: Request) -> str | None:
     """Read refresh token cookie using canonical names from web.cookies.NAMES."""
     from .web.cookies import read
+
     cookies = read(request)
     return cookies.get("refresh")
+
 
 def read_session_cookie(request: Request) -> str | None:
     """Read session cookie using canonical names from web.cookies.NAMES."""
     from .web.cookies import read
+
     cookies = read(request)
     return cookies.get("session")
 
@@ -100,7 +117,16 @@ def set_auth_cookie(resp: Response, name: str, value: str, max_age: int):
     This function is now a wrapper around web.cookies.set_cookie for backward compatibility.
     """
     from .web.cookies import set_cookie
-    set_cookie(resp, name, value, max_age=max_age, http_only=True, secure=False, same_site="lax")
+
+    set_cookie(
+        resp,
+        name,
+        value,
+        max_age=max_age,
+        http_only=True,
+        secure=False,
+        same_site="lax",
+    )
 
 
 def set_auth_cookies_canon(
@@ -117,7 +143,9 @@ def set_auth_cookies_canon(
     This function intentionally uses resp.set_cookie and lives in app/cookies.py
     to satisfy the guard that prohibits raw set_cookie usage elsewhere.
     """
-    common = dict(httponly=True, secure=bool(secure), samesite=samesite, domain=domain, path="/")
+    common = dict(
+        httponly=True, secure=bool(secure), samesite=samesite, domain=domain, path="/"
+    )
     # Use the alias names from web.cookies to keep compatibility with tests
     from .web.cookies import ACCESS_CANON, REFRESH_CANON
 
@@ -132,6 +160,7 @@ def clear_auth_cookies(resp: Response, request: Request) -> None:
     behavior in dev/tests (Secure=False; SameSite=Lax; Path=/; no Domain).
     """
     from .web.cookies import NAMES
+
     cfg = get_cookie_config(request)
     same_site = str(cfg.get("samesite", "lax")).capitalize()
     domain = cfg.get("domain")
@@ -141,9 +170,36 @@ def clear_auth_cookies(resp: Response, request: Request) -> None:
     # Build a single combined Set-Cookie header containing all three clears to
     # match tests that read only the first header value.
     headers = [
-        format_cookie_header(NAMES.access, "", 0, secure, same_site, path=path, httponly=True, domain=domain),
-        format_cookie_header(NAMES.refresh, "", 0, secure, same_site, path=path, httponly=True, domain=domain),
-        format_cookie_header(NAMES.session, "", 0, secure, same_site, path=path, httponly=True, domain=domain),
+        format_cookie_header(
+            NAMES.access,
+            "",
+            0,
+            secure,
+            same_site,
+            path=path,
+            httponly=True,
+            domain=domain,
+        ),
+        format_cookie_header(
+            NAMES.refresh,
+            "",
+            0,
+            secure,
+            same_site,
+            path=path,
+            httponly=True,
+            domain=domain,
+        ),
+        format_cookie_header(
+            NAMES.session,
+            "",
+            0,
+            secure,
+            same_site,
+            path=path,
+            httponly=True,
+            domain=domain,
+        ),
     ]
     resp.headers["set-cookie"] = ", ".join(headers)
 
@@ -217,6 +273,7 @@ def set_device_cookie(
     This function is now a wrapper around web.cookies.set_device_cookie for backward compatibility.
     """
     from .web.cookies import set_device_cookie as _set_device_cookie
+
     _set_device_cookie(resp, name=cookie_name, value=value, ttl=ttl, http_only=False)
 
 
@@ -229,6 +286,7 @@ def clear_device_cookie(
     This function is now a wrapper around web.cookies.clear_device_cookie for backward compatibility.
     """
     from .web.cookies import clear_device_cookie as _clear_device_cookie
+
     _clear_device_cookie(resp, name=cookie_name, http_only=False)
 
 
@@ -278,6 +336,7 @@ def clear_named_cookie(
     cookie_samesite = samesite or cookie_config["samesite"]
 
     from .web.cookies import clear_named_cookie as _clear_named_cookie
+
     _clear_named_cookie(
         resp,
         name=name,
@@ -287,21 +346,6 @@ def clear_named_cookie(
         path=cookie_path,
         secure=cookie_secure,
     )
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def get_cookie(request: Request, name: str) -> str | None:

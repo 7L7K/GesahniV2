@@ -115,7 +115,12 @@ def _append_legacy_auth_cookie_headers(
     Controlled by AUTH_LEGACY_COOKIE_NAMES environment variable.
     """
     # Check if legacy cookie names are enabled
-    if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "0").strip().lower() not in {"1", "true", "yes", "on"}:
+    if os.getenv("AUTH_LEGACY_COOKIE_NAMES", "0").strip().lower() not in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         return  # Skip writing legacy cookies
 
     try:
@@ -259,13 +264,12 @@ def mint_access_token(user_id: str) -> str:
     """
     if not user_id or user_id == "anon":
         raise HTTPException(
-            status_code=500,
-            detail="cannot_mint_token_for_invalid_user"
+            status_code=500, detail="cannot_mint_token_for_invalid_user"
         )
 
     try:
-        from ..tokens import make_access
         from ..cookie_config import get_token_ttls
+        from ..tokens import make_access
 
         access_ttl, _ = get_token_ttls()
         token = make_access({"user_id": user_id}, ttl_s=access_ttl)
@@ -273,18 +277,12 @@ def mint_access_token(user_id: str) -> str:
         # Guard against empty tokens
         if not token or not isinstance(token, str) or len(token.strip()) == 0:
             logger.error(f"Empty token generated for user {user_id}")
-            raise HTTPException(
-                status_code=500,
-                detail="token_generation_failed"
-            )
+            raise HTTPException(status_code=500, detail="token_generation_failed")
 
         return token
     except Exception as e:
         logger.error(f"Token minting failed for user {user_id}: {e}")
-        raise HTTPException(
-            status_code=500,
-            detail="token_generation_failed"
-        ) from e
+        raise HTTPException(status_code=500, detail="token_generation_failed") from e
 
 
 @router.get("/debug/cookies")
@@ -1349,19 +1347,22 @@ async def register_v1(request: Request, response: Response):
     # Register user using PostgreSQL via auth_password module
     try:
         from .auth_password import _pwd
+
         h = _pwd.hash(password)
 
-        from datetime import datetime, timezone
-        from app.db.models import AuthUser
-        from app.db.core import get_async_db
+        from datetime import datetime
+
         from sqlalchemy.exc import IntegrityError
+
+        from app.db.core import get_async_db
+        from app.db.models import AuthUser
 
         user = AuthUser(
             username=username,
             email=f"{username}@local.auth",  # Generate a dummy email for username-based auth
             password_hash=h,
             name=username,  # Use username as display name
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(UTC),
         )
 
         async with get_async_db() as session:
@@ -1382,9 +1383,12 @@ async def register_v1(request: Request, response: Response):
     access_ttl, refresh_ttl = get_token_ttls()
     # Get or create device_id for token binding
     from ..auth_refresh import _get_or_create_device_id
+
     device_id = _get_or_create_device_id(request, response)
 
-    access_token = make_access({"user_id": username, "device_id": device_id}, ttl_s=access_ttl)
+    access_token = make_access(
+        {"user_id": username, "device_id": device_id}, ttl_s=access_ttl
+    )
 
     # Create refresh with JTI
     try:
@@ -1400,7 +1404,9 @@ async def register_v1(request: Request, response: Response):
     except Exception:
         # Fallback minimal refresh
         jti = None
-        refresh_token = make_refresh({"user_id": username, "device_id": device_id}, ttl_s=refresh_ttl)
+        refresh_token = make_refresh(
+            {"user_id": username, "device_id": device_id}, ttl_s=refresh_ttl
+        )
 
     # Map session id and set cookies
     try:
@@ -1530,13 +1536,15 @@ async def login(
 
     # Use consistent TTL from cookie config
     # Use tokens.py facade instead of direct JWT encoding
-    from ..tokens import make_access
-
     # Get or create device_id for token binding
     from ..auth_refresh import _get_or_create_device_id
+    from ..tokens import make_access
+
     device_id = _get_or_create_device_id(request, response)
 
-    jwt_token = make_access({"user_id": username, "device_id": device_id}, ttl_s=access_ttl)
+    jwt_token = make_access(
+        {"user_id": username, "device_id": device_id}, ttl_s=access_ttl
+    )
 
     # Also issue a refresh token and mark it allowed for this session
     refresh_token = None
@@ -1568,7 +1576,8 @@ async def login(
         from ..tokens import make_refresh
 
         refresh_token = make_refresh(
-            {"user_id": username, "jti": jti, "device_id": device_id}, ttl_s=refresh_life
+            {"user_id": username, "jti": jti, "device_id": device_id},
+            ttl_s=refresh_life,
         )
 
         # Create opaque session ID instead of using JWT
@@ -1822,11 +1831,7 @@ async def logout_all(request: Request, response: Response):
     response_model_exclude_none=True,
     responses={
         200: {
-            "content": {
-                "application/json": {
-                    "schema": {"example": {"rotated": False}}
-                }
-            }
+            "content": {"application/json": {"schema": {"example": {"rotated": False}}}}
         }
     },
 )
@@ -2021,7 +2026,9 @@ async def refresh(
                 # Guard against empty tokens
                 if not at or not isinstance(at, str) or len(at.strip()) == 0:
                     logger.error("Empty access token detected in rotation, raising 500")
-                    raise HTTPException(status_code=500, detail="token_generation_failed")
+                    raise HTTPException(
+                        status_code=500, detail="token_generation_failed"
+                    )
                 return RefreshOut(rotated=True, access_token=at)
             else:
                 return RefreshOut(rotated=True, access_token=None)
@@ -2045,14 +2052,22 @@ async def refresh(
                 return RefreshOut(rotated=False, access_token=None)
 
             # Guard against empty tokens
-            if current_access_token and (not current_access_token or not isinstance(current_access_token, str) or len(current_access_token.strip()) == 0):
-                logger.error("Empty access token detected in no-rotation path, raising 500")
+            if current_access_token and (
+                not current_access_token
+                or not isinstance(current_access_token, str)
+                or len(current_access_token.strip()) == 0
+            ):
+                logger.error(
+                    "Empty access token detected in no-rotation path, raising 500"
+                )
                 raise HTTPException(status_code=500, detail="token_validation_failed")
 
             # Also set cookies when present to avoid emitting empty Set-Cookie values
             try:
                 from ..cookie_config import get_token_ttls as _ttls
-                from ..web.cookies import set_auth_cookies as _set_c, set_named_cookie as _set_named, NAMES as _CN
+                from ..web.cookies import NAMES as _CN
+                from ..web.cookies import set_auth_cookies as _set_c
+                from ..web.cookies import set_named_cookie as _set_named
 
                 access_ttl, refresh_ttl = _ttls()
                 sid = resolve_session_id(request=request, user_id=current_user_id)
@@ -2118,7 +2133,10 @@ async def refresh(
             except Exception:
                 pass
 
-            return RefreshOut(rotated=False, access_token=current_access_token if current_access_token else None)
+            return RefreshOut(
+                rotated=False,
+                access_token=current_access_token if current_access_token else None,
+            )
 
     except HTTPException:
         # Re-raise HTTP exceptions (like 401 for replay protection)

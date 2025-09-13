@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import time
 
 from fastapi import APIRouter, Depends, Request, Response, WebSocket
 from pydantic import BaseModel, ConfigDict
@@ -58,12 +57,18 @@ async def _broadcast(topic: str, payload: dict) -> None:
         except Exception as e:
             # Avoid async logging issues in tests
             if os.getenv("WS_DISABLE_ASYNC_LOGGING", "0") != "1":
-                logger.debug("ws.broadcast.error: failed_to_send_topic topic=%s user_id=%s error=%s",
-                            topic, getattr(ws.state, "user_id", "unknown"), str(e))
+                logger.debug(
+                    "ws.broadcast.error: failed_to_send_topic topic=%s user_id=%s error=%s",
+                    topic,
+                    getattr(ws.state, "user_id", "unknown"),
+                    str(e),
+                )
             dead.append(ws)
 
     # Use gather with return_exceptions for parallel sending
-    results = await _aio.gather(*[_send(ws) for ws in list(clients)], return_exceptions=True)
+    results = await _aio.gather(
+        *[_send(ws) for ws in list(clients)], return_exceptions=True
+    )
 
     if dead:
         async with _lock:
@@ -74,19 +79,31 @@ async def _broadcast(topic: str, payload: dict) -> None:
                     user_id = getattr(ws.state, "user_id", "unknown")
                     # Avoid async logging issues in tests
                     if os.getenv("WS_DISABLE_ASYNC_LOGGING", "0") != "1":
-                        logger.info("ws.broadcast.cleanup: removed_dead_connection_topic topic=%s user_id=%s", topic, user_id)
+                        logger.info(
+                            "ws.broadcast.cleanup: removed_dead_connection_topic topic=%s user_id=%s",
+                            topic,
+                            user_id,
+                        )
                     await ws.close(code=1000, reason="connection_unhealthy")
                 except Exception as e:
                     # Avoid async logging issues in tests
                     if os.getenv("WS_DISABLE_ASYNC_LOGGING", "0") != "1":
-                        logger.debug("ws.broadcast.cleanup.error: failed_to_close user_id=%s error=%s",
-                                    getattr(ws.state, "user_id", "unknown"), str(e))
+                        logger.debug(
+                            "ws.broadcast.cleanup.error: failed_to_close user_id=%s error=%s",
+                            getattr(ws.state, "user_id", "unknown"),
+                            str(e),
+                        )
 
     # Log broadcast metrics (avoid async logging issues in tests)
     duration = _time.monotonic() - start_time
     if os.getenv("WS_DISABLE_ASYNC_LOGGING", "0") != "1":
-        logger.debug("ws.broadcast.complete: topic=%s clients=%d dead=%d duration_ms=%.2f",
-                    topic, len(clients), len(dead), duration * 1000)
+        logger.debug(
+            "ws.broadcast.complete: topic=%s clients=%d dead=%d duration_ms=%.2f",
+            topic,
+            len(clients),
+            len(dead),
+            duration * 1000,
+        )
 
 
 class WSSubscribeExample(BaseModel):
@@ -157,7 +174,9 @@ async def websocket_http_handler(request: Request):
 
 
 @router.get(
-    "/ws/care/docs", response_model=WSTopicsInfo, responses={200: {"model": WSTopicsInfo}}
+    "/ws/care/docs",
+    response_model=WSTopicsInfo,
+    responses={200: {"model": WSTopicsInfo}},
 )
 async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
     """WebSocket entry point documentation.
@@ -171,14 +190,20 @@ async def ws_care_docs(_user_id: str = Depends(get_current_user_id)):
 @router.websocket("/ws/care")
 async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
     import logging
+
     logger = logging.getLogger(__name__)
 
-    logger.info("🏥 ws.care.handler.STARTED", extra={"meta": {
-        "origin": ws.headers.get("Origin"),
-        "user_agent": ws.headers.get("User-Agent"),
-        "query_params": dict(ws.query_params),
-        "headers": dict(ws.headers)
-    }})
+    logger.info(
+        "🏥 ws.care.handler.STARTED",
+        extra={
+            "meta": {
+                "origin": ws.headers.get("Origin"),
+                "user_agent": ws.headers.get("User-Agent"),
+                "query_params": dict(ws.query_params),
+                "headers": dict(ws.headers),
+            }
+        },
+    )
 
     # Get user_id from WebSocket state (set by dep_verify_ws)
     try:
@@ -297,6 +322,3 @@ async def ws_care(ws: WebSocket, _v: None = dep_verify_ws()):
 async def broadcast_resident(resident_id: str, event: str, data: dict) -> None:
     topic = f"resident:{resident_id}"
     await _broadcast(topic, {"event": event, **data})
-
-
-

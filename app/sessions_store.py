@@ -5,14 +5,14 @@ PostgreSQL-based device sessions store.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import select, update, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update
 
 from .db.core import get_async_db
-from .db.models import Session as SessionModel, AuthDevice
+from .db.models import AuthDevice
+from .db.models import Session as SessionModel
 
 
 class SessionsStore:
@@ -41,8 +41,8 @@ class SessionsStore:
                     device_name=device_name or "Web",
                     ua_hash="",
                     ip_hash="",
-                    created_at=datetime.now(timezone.utc),
-                    last_seen_at=datetime.now(timezone.utc),
+                    created_at=datetime.now(UTC),
+                    last_seen_at=datetime.now(UTC),
                 )
                 session.add(device)
 
@@ -51,8 +51,8 @@ class SessionsStore:
                 id=sid,
                 user_id=user_id,
                 device_id=did,
-                created_at=datetime.now(timezone.utc),
-                last_seen_at=datetime.now(timezone.utc),
+                created_at=datetime.now(UTC),
+                last_seen_at=datetime.now(UTC),
                 mfa_passed=False,
             )
             session.add(session_obj)
@@ -63,8 +63,10 @@ class SessionsStore:
     async def update_last_seen(self, sid: str) -> None:
         """Update last seen time for session."""
         async with get_async_db() as session:
-            stmt = update(SessionModel).where(SessionModel.id == sid).values(
-                last_seen_at=datetime.now(timezone.utc)
+            stmt = (
+                update(SessionModel)
+                .where(SessionModel.id == sid)
+                .values(last_seen_at=datetime.now(UTC))
             )
             await session.execute(stmt)
             await session.commit()
@@ -72,31 +74,45 @@ class SessionsStore:
     async def list_user_sessions(self, user_id: str) -> list[dict[str, Any]]:
         """List all sessions for a user."""
         async with get_async_db() as session:
-            stmt = select(SessionModel, AuthDevice).join(
-                AuthDevice, SessionModel.device_id == AuthDevice.id
-            ).where(SessionModel.user_id == user_id)
+            stmt = (
+                select(SessionModel, AuthDevice)
+                .join(AuthDevice, SessionModel.device_id == AuthDevice.id)
+                .where(SessionModel.user_id == user_id)
+            )
 
             result = await session.execute(stmt)
             rows = result.all()
 
             sessions = []
             for session_obj, device in rows:
-                sessions.append({
-                    "sid": session_obj.id,
-                    "did": device.id,
-                    "device_name": device.device_name,
-                    "created_at": session_obj.created_at.isoformat() if session_obj.created_at else None,
-                    "last_seen": session_obj.last_seen_at.isoformat() if session_obj.last_seen_at else None,
-                    "revoked": session_obj.revoked_at is not None,
-                })
+                sessions.append(
+                    {
+                        "sid": session_obj.id,
+                        "did": device.id,
+                        "device_name": device.device_name,
+                        "created_at": (
+                            session_obj.created_at.isoformat()
+                            if session_obj.created_at
+                            else None
+                        ),
+                        "last_seen": (
+                            session_obj.last_seen_at.isoformat()
+                            if session_obj.last_seen_at
+                            else None
+                        ),
+                        "revoked": session_obj.revoked_at is not None,
+                    }
+                )
 
             return sessions
 
     async def revoke_family(self, sid: str) -> None:
         """Revoke a session family."""
         async with get_async_db() as session:
-            stmt = update(SessionModel).where(SessionModel.id == sid).values(
-                revoked_at=datetime.now(timezone.utc)
+            stmt = (
+                update(SessionModel)
+                .where(SessionModel.id == sid)
+                .values(revoked_at=datetime.now(UTC))
             )
             await session.execute(stmt)
             await session.commit()
@@ -106,8 +122,7 @@ class SessionsStore:
         async with get_async_db() as session:
             # Verify device belongs to user
             stmt = select(AuthDevice).where(
-                AuthDevice.id == did,
-                AuthDevice.user_id == user_id
+                AuthDevice.id == did, AuthDevice.user_id == user_id
             )
             result = await session.execute(stmt)
             device = result.scalar_one_or_none()
@@ -122,10 +137,11 @@ class SessionsStore:
     async def revoke_device_sessions(self, user_id: str, did: str) -> None:
         """Revoke all sessions for a device."""
         async with get_async_db() as session:
-            stmt = update(SessionModel).where(
-                SessionModel.user_id == user_id,
-                SessionModel.device_id == did
-            ).values(revoked_at=datetime.now(timezone.utc))
+            stmt = (
+                update(SessionModel)
+                .where(SessionModel.user_id == user_id, SessionModel.device_id == did)
+                .values(revoked_at=datetime.now(UTC))
+            )
             await session.execute(stmt)
             await session.commit()
 

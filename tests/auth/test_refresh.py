@@ -2,6 +2,7 @@
 
 import pytest
 from fastapi.testclient import TestClient
+
 from app.main import app
 
 
@@ -44,9 +45,11 @@ def test_refresh_lazy_no_cookie(setup_client):
 def test_refresh_rotate_sets_cookie_once(setup_client, monkeypatch):
     """Test that when rotation happens, exactly one cookie is set."""
     client = setup_client
+
     # Mock the rotation decision to force rotation (async function)
     async def mock_should_rotate(*args):
         return True
+
     monkeypatch.setattr("app.auth_refresh.should_rotate_token", mock_should_rotate)
     r = client.post("/v1/auth/refresh", headers=csrf_headers(client))
     set_cookie_headers = r.headers.get_list("set-cookie")
@@ -66,8 +69,9 @@ def test_refresh_rotate_sets_cookie_once(setup_client, monkeypatch):
 
 def test_no_empty_cookie_ever():
     """Test that the mint_access_token function guards against empty tokens."""
-    from app.api.auth import mint_access_token
     import pytest
+
+    from app.api.auth import mint_access_token
 
     # Test that mint_access_token raises an error for invalid user_id
     with pytest.raises(Exception):  # Should raise HTTPException
@@ -82,7 +86,7 @@ def test_no_empty_cookie_ever():
         assert token is not None
         assert isinstance(token, str)
         assert len(token.strip()) > 0
-    except Exception as e:
+    except Exception:
         # If token creation fails for other reasons (like missing JWT_SECRET), that's OK
         # The important thing is that empty tokens are caught
         pass

@@ -6,15 +6,19 @@ import os
 import random
 import secrets
 import time
-from datetime import datetime, timezone
-from typing import List, Tuple
+from datetime import UTC, datetime
 
 from sqlalchemy import select
 
 from ..db.core import get_async_db
 from ..db.models import ThirdPartyToken
 from ..integrations.google.oauth import refresh_token
-from ..metrics import SPOTIFY_REFRESH, SPOTIFY_REFRESH_ERROR, GOOGLE_REFRESH_SUCCESS, GOOGLE_REFRESH_FAILED
+from ..metrics import (
+    GOOGLE_REFRESH_FAILED,
+    GOOGLE_REFRESH_SUCCESS,
+    SPOTIFY_REFRESH,
+    SPOTIFY_REFRESH_ERROR,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -22,20 +26,24 @@ logger = logging.getLogger(__name__)
 REFRESH_AHEAD_SECONDS = int(os.getenv("GOOGLE_REFRESH_AHEAD_SECONDS", "300"))
 
 
-async def _get_candidates(now: int) -> List[Tuple[str, str, int]]:
+async def _get_candidates(now: int) -> list[tuple[str, str, int]]:
     """Return list of (user_id, provider, expires_at) for Google tokens expiring within window."""
-    cutoff = datetime.fromtimestamp(now + REFRESH_AHEAD_SECONDS, tz=timezone.utc)
+    cutoff = datetime.fromtimestamp(now + REFRESH_AHEAD_SECONDS, tz=UTC)
 
     async with get_async_db() as session:
         # Query Google tokens that need refreshing
-        stmt = select(
-            ThirdPartyToken.user_id,
-            ThirdPartyToken.provider,
-            ThirdPartyToken.expires_at
-        ).where(
-            ThirdPartyToken.provider == "google",
-            ThirdPartyToken.expires_at <= cutoff
-        ).group_by(ThirdPartyToken.user_id, ThirdPartyToken.provider)
+        stmt = (
+            select(
+                ThirdPartyToken.user_id,
+                ThirdPartyToken.provider,
+                ThirdPartyToken.expires_at,
+            )
+            .where(
+                ThirdPartyToken.provider == "google",
+                ThirdPartyToken.expires_at <= cutoff,
+            )
+            .group_by(ThirdPartyToken.user_id, ThirdPartyToken.provider)
+        )
 
         result = await session.execute(stmt)
         rows = result.fetchall()
@@ -62,19 +70,31 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
         try:
             # Fetch latest token row by user_id
             async with get_async_db() as session:
-                stmt = select(ThirdPartyToken).where(
-                    ThirdPartyToken.user_id == user_id,
-                    ThirdPartyToken.provider == provider
-                ).order_by(ThirdPartyToken.updated_at.desc()).limit(1)
+                stmt = (
+                    select(ThirdPartyToken)
+                    .where(
+                        ThirdPartyToken.user_id == user_id,
+                        ThirdPartyToken.provider == provider,
+                    )
+                    .order_by(ThirdPartyToken.updated_at.desc())
+                    .limit(1)
+                )
 
                 result = await session.execute(stmt)
                 token = result.scalar_one_or_none()
 
                 if not token or not token.refresh_token:
-                    logger.warning("google_refresh: no refresh token found", extra={"user_id": user_id, "provider": provider})
+                    logger.warning(
+                        "google_refresh: no refresh token found",
+                        extra={"user_id": user_id, "provider": provider},
+                    )
                     return
 
-                refresh_tok = token.refresh_token.decode() if isinstance(token.refresh_token, bytes) else token.refresh_token
+                refresh_tok = (
+                    token.refresh_token.decode()
+                    if isinstance(token.refresh_token, bytes)
+                    else token.refresh_token
+                )
 
             td = await refresh_token(refresh_tok)
 
@@ -82,17 +102,24 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             from ..auth_store_tokens import upsert_token
 
             now = int(time.time())
-            expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
+            expires_at = int(
+                td.get("expires_at", now + int(td.get("expires_in", 3600)))
+            )
 
             # Create new token object for upsert
             from ..models.third_party_tokens import ThirdPartyToken
+
             new_token = ThirdPartyToken(
                 id=f"google:{secrets.token_hex(8)}",
                 user_id=user_id,
                 identity_id="",  # Not used for Google tokens
                 provider="google",
                 access_token=td.get("access_token", "").encode(),
-                refresh_token=td.get("refresh_token", "").encode() if td.get("refresh_token") else None,
+                refresh_token=(
+                    td.get("refresh_token", "").encode()
+                    if td.get("refresh_token")
+                    else None
+                ),
                 scopes=td.get("scope"),
                 expires_at=expires_at,
                 created_at=now,
@@ -106,11 +133,18 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             except Exception:
                 pass
 
-            logger.info("google_refresh: success", extra={"user_id": user_id, "provider": provider})
+            logger.info(
+                "google_refresh: success",
+                extra={"user_id": user_id, "provider": provider},
+            )
             return
 
         except Exception as e:
-            logger.exception("google_refresh: error", extra={"user_id": user_id, "provider": provider}, exc_info=e)
+            logger.exception(
+                "google_refresh: error",
+                extra={"user_id": user_id, "provider": provider},
+                exc_info=e,
+            )
             try:
                 SPOTIFY_REFRESH_ERROR.inc()
                 GOOGLE_REFRESH_FAILED.labels(user_id, str(e)[:200]).inc()
@@ -120,7 +154,10 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             delay = delay + random.random()
             await asyncio.sleep(delay)
 
-    logger.error("google_refresh: failed after attempts", extra={"user_id": user_id, "provider": provider})
+    logger.error(
+        "google_refresh: failed after attempts",
+        extra={"user_id": user_id, "provider": provider},
+    )
 
 
 async def run_once() -> None:
@@ -150,4 +187,3 @@ def main_loop() -> None:
 
 if __name__ == "__main__":
     main_loop()
-

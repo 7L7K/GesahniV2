@@ -34,7 +34,7 @@ function markPageLoadRefreshAttempted() {
 // Simulate refresh logic
 function attemptRefresh(attemptNumber) {
   console.log('\n' + attemptNumber + '. Attempting refresh...');
-  
+
   if (hasAttemptedPageLoadRefresh()) {
     console.log('⏭️ BLOCKED: Refresh already attempted for this page load');
     return false;
@@ -60,4 +60,3 @@ console.log('\n✅ CONCLUSION: One-try rule working perfectly!');
 console.log('   - First attempt: ALLOWED ✅');
 console.log('   - Subsequent attempts: BLOCKED ✅');
 console.log('   - State persisted to sessionStorage ✅');
-

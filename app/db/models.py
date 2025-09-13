@@ -37,6 +37,7 @@ class Base(DeclarativeBase):
 # AUTH schema
 # =====================================================================
 
+
 class AuthUser(Base):
     __tablename__ = "users"
     __table_args__ = {"schema": "auth"}
@@ -77,10 +78,14 @@ class AuthDevice(Base):
     __table_args__ = {"schema": "auth"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     device_name: Mapped[str | None] = mapped_column(String(200))
     ua_hash: Mapped[str] = mapped_column(String(128), nullable=False)
@@ -99,20 +104,28 @@ class Session(Base):
     __table_args__ = {"schema": "auth"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     device_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.devices.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.devices.id", ondelete="CASCADE"),
+        nullable=False,
     )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
     last_seen_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
-    mfa_passed: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
+    mfa_passed: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.text("false")
+    )
 
     user: Mapped[AuthUser] = relationship(back_populates="sessions")
     device: Mapped[AuthDevice] = relationship(back_populates="sessions")
@@ -122,22 +135,31 @@ class AuthIdentity(Base):
     __tablename__ = "auth_identities"
     __table_args__ = (
         UniqueConstraint(
-            "provider", "provider_iss", "provider_sub", name="uq_auth_identity_provider_tuple"
+            "provider",
+            "provider_iss",
+            "provider_sub",
+            name="uq_auth_identity_provider_tuple",
         ),
         {"schema": "auth"},
     )
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     provider: Mapped[str] = mapped_column(String(50), nullable=False)
     provider_iss: Mapped[str | None] = mapped_column(String(255))
     provider_sub: Mapped[str | None] = mapped_column(String(255))
     email_normalized: Mapped[str | None] = mapped_column(String(320))
-    email_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
+    email_verified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.text("false")
+    )
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
@@ -153,10 +175,14 @@ class PATToken(Base):
     __table_args__ = {"schema": "auth"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     name: Mapped[str] = mapped_column(String(200), nullable=False)
     token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -174,6 +200,7 @@ class PATToken(Base):
 # USERS schema
 # =====================================================================
 
+
 class UserStats(Base):
     __tablename__ = "user_stats"
     __table_args__ = {"schema": "users"}
@@ -183,21 +210,28 @@ class UserStats(Base):
         ForeignKey("auth.users.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    login_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sa.text("0"))
+    login_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa.text("0")
+    )
     last_login: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
-    request_count: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sa.text("0"))
+    request_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa.text("0")
+    )
 
 
 # =====================================================================
 # CARE schema
 # =====================================================================
 
+
 class Resident(Base):
     __tablename__ = "residents"
     __table_args__ = {"schema": "care"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     name: Mapped[str | None] = mapped_column(String(200))
 
@@ -219,7 +253,9 @@ class Caregiver(Base):
     __table_args__ = {"schema": "care"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     name: Mapped[str | None] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(50))
@@ -232,17 +268,25 @@ class Caregiver(Base):
 class CaregiverResident(Base):
     __tablename__ = "caregiver_resident"
     __table_args__ = (
-        PrimaryKeyConstraint("caregiver_id", "resident_id", name="pk_caregiver_resident"),
+        PrimaryKeyConstraint(
+            "caregiver_id", "resident_id", name="pk_caregiver_resident"
+        ),
         {"schema": "care"},
     )
 
     caregiver_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("care.caregivers.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("care.caregivers.id", ondelete="CASCADE"),
+        nullable=False,
     )
     resident_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("care.residents.id", ondelete="CASCADE"),
+        nullable=False,
     )
-    primary_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
+    primary_flag: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.text("false")
+    )
 
 
 class CareDevice(Base):
@@ -250,17 +294,25 @@ class CareDevice(Base):
     __table_args__ = {"schema": "care"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     resident_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="SET NULL")
     )
     last_seen: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     battery_pct: Mapped[int | None] = mapped_column(Integer)
-    battery_low_since: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
-    battery_notified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
+    battery_low_since: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True)
+    )
+    battery_notified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.text("false")
+    )
     offline_since: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
-    offline_notified: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("false"))
+    offline_notified: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.text("false")
+    )
 
     resident: Mapped[Resident | None] = relationship(back_populates="devices")
 
@@ -270,7 +322,9 @@ class Alert(Base):
     __table_args__ = {"schema": "care"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     resident_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="SET NULL")
@@ -295,7 +349,9 @@ class AlertEvent(Base):
 
     id: Mapped[int] = mapped_column(sa.BigInteger, primary_key=True, autoincrement=True)
     alert_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("care.alerts.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("care.alerts.id", ondelete="CASCADE"),
+        nullable=False,
     )
     t: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     type: Mapped[str | None] = mapped_column(String(50))
@@ -309,7 +365,9 @@ class CareSession(Base):
     __table_args__ = {"schema": "care"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     resident_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="SET NULL")
@@ -327,10 +385,14 @@ class Contact(Base):
     __table_args__ = {"schema": "care"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     resident_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("care.residents.id", ondelete="CASCADE"),
+        nullable=False,
     )
     name: Mapped[str | None] = mapped_column(String(200))
     phone: Mapped[str | None] = mapped_column(String(50))
@@ -345,7 +407,9 @@ class TVConfig(Base):
     __table_args__ = {"schema": "care"}
 
     resident_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("care.residents.id", ondelete="CASCADE"), primary_key=True
+        UUID(as_uuid=False),
+        ForeignKey("care.residents.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     ambient_rotation: Mapped[int | None] = mapped_column(Integer)
     rail: Mapped[str | None] = mapped_column(String(50))
@@ -360,16 +424,23 @@ class TVConfig(Base):
 # CHAT schema
 # =====================================================================
 
+
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
     __table_args__ = {"schema": "chat"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
-    rid: Mapped[str] = mapped_column(String(32), nullable=False, index=True)  # Request ID
-    role: Mapped[str] = mapped_column(String(20), nullable=False)  # system|user|assistant
+    rid: Mapped[str] = mapped_column(
+        String(32), nullable=False, index=True
+    )  # Request ID
+    role: Mapped[str] = mapped_column(
+        String(20), nullable=False
+    )  # system|user|assistant
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
@@ -379,13 +450,14 @@ class ChatMessage(Base):
     __table_args__ = (
         sa.Index("ix_chat_messages_user_rid", "user_id", "rid"),
         sa.Index("ix_chat_messages_created_at", "created_at"),
-        {"schema": "chat"}
+        {"schema": "chat"},
     )
 
 
 # =====================================================================
 # MUSIC schema
 # =====================================================================
+
 
 class MusicDevice(Base):
     __tablename__ = "music_devices"
@@ -410,7 +482,9 @@ class MusicToken(Base):
     )
 
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     access_token: Mapped[bytes] = mapped_column(sa.LargeBinary, nullable=False)
@@ -425,13 +499,23 @@ class MusicPreferences(Base):
     __table_args__ = {"schema": "music"}
 
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), primary_key=True
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        primary_key=True,
     )
     default_provider: Mapped[str | None] = mapped_column(String(40))
-    quiet_start: Mapped[str] = mapped_column(Time, nullable=False, server_default=sa.text("'22:00'::time"))
-    quiet_end: Mapped[str] = mapped_column(Time, nullable=False, server_default=sa.text("'07:00'::time"))
-    quiet_max_volume: Mapped[int] = mapped_column(Integer, nullable=False, server_default=sa.text("30"))
-    allow_explicit: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=sa.text("true"))
+    quiet_start: Mapped[str] = mapped_column(
+        Time, nullable=False, server_default=sa.text("'22:00'::time")
+    )
+    quiet_end: Mapped[str] = mapped_column(
+        Time, nullable=False, server_default=sa.text("'07:00'::time")
+    )
+    quiet_max_volume: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa.text("30")
+    )
+    allow_explicit: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.text("true")
+    )
 
 
 class MusicSession(Base):
@@ -439,7 +523,9 @@ class MusicSession(Base):
     __table_args__ = {"schema": "music"}
 
     session_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     user_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="SET NULL")
@@ -459,7 +545,9 @@ class MusicQueue(Base):
     )
 
     session_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("music.music_sessions.session_id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("music.music_sessions.session_id", ondelete="CASCADE"),
+        nullable=False,
     )
     position: Mapped[int] = mapped_column(Integer, nullable=False)
     provider: Mapped[str | None] = mapped_column(String(40))
@@ -471,17 +559,23 @@ class MusicQueue(Base):
 class MusicFeedback(Base):
     __tablename__ = "music_feedback"
     __table_args__ = (
-        PrimaryKeyConstraint("user_id", "track_id", "provider", "ts", name="pk_music_feedback"),
+        PrimaryKeyConstraint(
+            "user_id", "track_id", "provider", "ts", name="pk_music_feedback"
+        ),
         {"schema": "music"},
     )
 
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     track_id: Mapped[str] = mapped_column(String(128), nullable=False)
     provider: Mapped[str] = mapped_column(String(40), nullable=False)
     action: Mapped[str] = mapped_column(String(40), nullable=False)
-    ts: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=sa.text("now()"))
+    ts: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    )
 
 
 # =====================================================================
@@ -492,32 +586,41 @@ class MusicFeedback(Base):
 # USER schema (user-specific data)
 # =====================================================================
 
+
 class UserNote(Base):
     __tablename__ = "notes"
     __table_args__ = {"schema": "user_data"}
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     text: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
 
+
 # =====================================================================
 # TOKENS schema
 # =====================================================================
 
+
 class ThirdPartyToken(Base):
     __tablename__ = "third_party_tokens"
     __table_args__ = (
-        PrimaryKeyConstraint("user_id", "provider", "provider_sub", name="pk_third_party_tokens"),
+        PrimaryKeyConstraint(
+            "user_id", "provider", "provider_sub", name="pk_third_party_tokens"
+        ),
         {"schema": "tokens"},
     )
 
     user_id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="CASCADE"), nullable=False
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
     )
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
     provider_sub: Mapped[str] = mapped_column(Text, nullable=False)
@@ -532,12 +635,15 @@ class ThirdPartyToken(Base):
 # AUDIT schema
 # =====================================================================
 
+
 class AuditLog(Base):
     __tablename__ = "audit_log"
     __table_args__ = {"schema": "audit"}
 
     id: Mapped[str] = mapped_column(
-        UUID(as_uuid=False), primary_key=True, server_default=sa.text("uuid_generate_v4()")
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
     )
     user_id: Mapped[str | None] = mapped_column(
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="SET NULL")
@@ -550,4 +656,3 @@ class AuditLog(Base):
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
-

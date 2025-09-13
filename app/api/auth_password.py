@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC
+
 from fastapi import APIRouter, HTTPException
 from passlib.context import CryptContext
 from sqlalchemy import select
@@ -23,13 +25,14 @@ async def register_pw(body: dict[str, str]):
     h = _pwd.hash(p)
 
     # Create user with username and password
-    from datetime import datetime, timezone
+    from datetime import datetime
+
     user = AuthUser(
         username=u,
         email=f"{u}@local.auth",  # Generate a dummy email for username-based auth
         password_hash=h,
         name=u,  # Use username as display name
-        created_at=datetime.now(timezone.utc)
+        created_at=datetime.now(UTC),
     )
 
     try:
@@ -55,11 +58,21 @@ async def login_pw(body: dict[str, str]):
 
     if not row:
         from ..http_errors import unauthorized
-        raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username/password")
+
+        raise unauthorized(
+            code="invalid_credentials",
+            message="invalid credentials",
+            hint="check username/password",
+        )
 
     if not _pwd.verify(p, row):
         from ..http_errors import unauthorized
-        raise unauthorized(code="invalid_credentials", message="invalid credentials", hint="check username/password")
+
+        raise unauthorized(
+            code="invalid_credentials",
+            message="invalid credentials",
+            hint="check username/password",
+        )
 
     return {"status": "ok"}
 

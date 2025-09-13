@@ -1,10 +1,10 @@
 """Tests for chat message persistence."""
+
 import pytest
-from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.db.chat_repo import get_messages_by_rid, save_messages
 from app.db.models import ChatMessage
-from app.db.chat_repo import save_messages, get_messages_by_rid
 
 
 class TestChatPersistence:
@@ -27,10 +27,7 @@ class TestChatPersistence:
         messages = []
         for msg in sample_messages:
             chat_msg = ChatMessage(
-                user_id=user_id,
-                rid=rid,
-                role=msg["role"],
-                content=msg["content"]
+                user_id=user_id, rid=rid, role=msg["role"], content=msg["content"]
             )
             messages.append(chat_msg)
 
@@ -41,7 +38,9 @@ class TestChatPersistence:
         assert messages[1].rid == rid
         assert messages[0].user_id == user_id
 
-    async def test_save_and_retrieve_messages(self, sample_messages, async_session: AsyncSession):
+    async def test_save_and_retrieve_messages(
+        self, sample_messages, async_session: AsyncSession
+    ):
         """Test saving and retrieving messages."""
         user_id = "test-user-123"
         rid = "test-rid-456"
@@ -88,17 +87,17 @@ class TestChatPersistence:
 
     def test_replay_endpoint_structure(self):
         """Test that replay endpoint has correct structure."""
-        from app.main import create_app
         import os
 
-        os.environ['JWT_SECRET'] = 'test-secret-123'
-        os.environ['PYTEST_RUNNING'] = '1'
+        from app.main import create_app
+
+        os.environ["JWT_SECRET"] = "test-secret-123"
+        os.environ["PYTEST_RUNNING"] = "1"
 
         app = create_app()
 
         # Check that /v1/ask/replay/{rid} route exists
-        routes = [route.path for route in app.routes if hasattr(route, 'path')]
+        routes = [route.path for route in app.routes if hasattr(route, "path")]
         assert "/v1/ask/replay/{rid}" in routes
 
         print("✅ Replay endpoint route exists in application")
-

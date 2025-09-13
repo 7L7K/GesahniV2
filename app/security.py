@@ -1438,7 +1438,13 @@ async def rate_limit(request: Request) -> None:
                 "RateLimit-Reset": str(retry_long),
             }
             from app.error_envelope import raise_enveloped
-            raise_enveloped("rate_limited", "Rate limit exceeded", status=429, details={"retry_after": retry_long})
+
+            raise_enveloped(
+                "rate_limited",
+                "Rate limit exceeded",
+                status=429,
+                details={"retry_after": retry_long},
+            )
 
         # Check burst rate limit
         ok_burst = _bucket_rate_limit(key, http_burst, rate_limit_burst, burst_window)
@@ -1458,7 +1464,13 @@ async def rate_limit(request: Request) -> None:
                 "RateLimit-Reset": str(retry_burst),
             }
             from app.error_envelope import raise_enveloped
-            raise_enveloped("rate_limited", "Rate limit exceeded", status=429, details={"retry_after": retry_burst})
+
+            raise_enveloped(
+                "rate_limited",
+                "Rate limit exceeded",
+                status=429,
+                details={"retry_after": retry_burst},
+            )
 
 
 async def verify_ws(websocket: WebSocket) -> None:
@@ -2128,6 +2140,7 @@ def scope_rate_limit(
                 ok_long = _bucket_rate_limit(key, scope_rate_limits, _long, _window)
             if not ok_long:
                 from app.error_envelope import raise_enveloped
+
                 raise_enveloped("rate_limited", "Rate limit exceeded", status=429)
             return None
         # If the user does not have the scope, do not enforce any extra limits here

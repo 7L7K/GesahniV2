@@ -1,10 +1,6 @@
 from __future__ import annotations
 
-import hashlib
 import json
-import os
-import sys
-import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -43,10 +39,12 @@ async def insert_alert(rec: dict[str, Any]) -> None:
     """Insert alert into PostgreSQL care.alerts table."""
     with sync_engine.begin() as conn:
         conn.execute(
-            text("""
+            text(
+                """
                 INSERT INTO care.alerts (id, resident_id, kind, severity, note, created_at, status, ack_at, resolved_at)
                 VALUES (:id, :resident_id, :kind, :severity, :note, :created_at, :status, :ack_at, :resolved_at)
-            """),
+            """
+            ),
             {
                 "id": rec["id"],
                 "resident_id": rec["resident_id"],
@@ -57,7 +55,7 @@ async def insert_alert(rec: dict[str, Any]) -> None:
                 "status": rec.get("status", "open"),
                 "ack_at": rec.get("ack_at"),
                 "resolved_at": rec.get("resolved_at"),
-            }
+            },
         )
 
 
@@ -65,11 +63,13 @@ async def get_alert(alert_id: str) -> dict[str, Any] | None:
     """Get alert from PostgreSQL care.alerts table."""
     with sync_engine.connect() as conn:
         result = conn.execute(
-            text("""
+            text(
+                """
                 SELECT id, resident_id, kind, severity, note, created_at, status, ack_at, resolved_at
                 FROM care.alerts WHERE id = :alert_id
-            """),
-            {"alert_id": alert_id}
+            """
+            ),
+            {"alert_id": alert_id},
         )
         row = result.mappings().first()
         return dict(row) if row else None
@@ -85,8 +85,7 @@ async def update_alert(alert_id: str, **fields: Any) -> None:
 
     with sync_engine.begin() as conn:
         conn.execute(
-            text(f"UPDATE care.alerts SET {set_clause} WHERE id = :alert_id"),
-            params
+            text(f"UPDATE care.alerts SET {set_clause} WHERE id = :alert_id"), params
         )
 
 
@@ -96,16 +95,18 @@ async def insert_event(
     """Insert event into PostgreSQL care.alert_events table."""
     with sync_engine.begin() as conn:
         conn.execute(
-            text("""
+            text(
+                """
                 INSERT INTO care.alert_events (alert_id, t, type, meta)
                 VALUES (:alert_id, :t, :type, :meta::jsonb)
-            """),
+            """
+            ),
             {
                 "alert_id": alert_id,
                 "t": _now(),
                 "type": type_,
                 "meta": json.dumps(meta or {}),
-            }
+            },
         )
 
 
@@ -135,28 +136,32 @@ async def upsert_device(
     with sync_engine.begin() as conn:
         # Try to fetch current device
         result = conn.execute(
-            text("""
+            text(
+                """
                 SELECT id, resident_id, last_seen, battery_pct, battery_low_since,
                        battery_notified, offline_since, offline_notified
                 FROM care.devices WHERE id = :device_id
-            """),
-            {"device_id": device_id}
+            """
+            ),
+            {"device_id": device_id},
         )
         row = result.mappings().first()
 
         if not row:
             # Insert new device
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO care.devices (id, resident_id, last_seen, battery_pct)
                     VALUES (:id, :resident_id, :last_seen, :battery_pct)
-                """),
+                """
+                ),
                 {
                     "id": device_id,
                     "resident_id": resident_id,
                     "last_seen": now,
                     "battery_pct": battery_pct,
-                }
+                },
             )
             return {
                 "id": device_id,
@@ -185,14 +190,16 @@ async def upsert_device(
 
         # Update device
         conn.execute(
-            text("""
+            text(
+                """
                 UPDATE care.devices
                 SET resident_id = :resident_id, last_seen = :last_seen,
                     battery_pct = :battery_pct, battery_low_since = :battery_low_since,
                     battery_notified = :battery_notified, offline_since = :offline_since,
                     offline_notified = :offline_notified
                 WHERE id = :device_id
-            """),
+            """
+            ),
             {
                 "resident_id": resident_id,
                 "last_seen": now,
@@ -202,7 +209,7 @@ async def upsert_device(
                 "offline_since": off_since,
                 "offline_notified": off_notified,
                 "device_id": device_id,
-            }
+            },
         )
 
         return {
@@ -221,12 +228,14 @@ async def get_device(device_id: str) -> dict[str, Any] | None:
     """Get device from PostgreSQL care.devices table."""
     with sync_engine.connect() as conn:
         result = conn.execute(
-            text("""
+            text(
+                """
                 SELECT id, resident_id, last_seen, battery_pct, battery_low_since,
                        battery_notified, offline_since, offline_notified
                 FROM care.devices WHERE id = :device_id
-            """),
-            {"device_id": device_id}
+            """
+            ),
+            {"device_id": device_id},
         )
         row = result.mappings().first()
         if not row:
@@ -254,8 +263,7 @@ async def set_device_flags(device_id: str, **flags: Any) -> None:
 
     with sync_engine.begin() as conn:
         conn.execute(
-            text(f"UPDATE care.devices SET {set_clause} WHERE id = :device_id"),
-            params
+            text(f"UPDATE care.devices SET {set_clause} WHERE id = :device_id"), params
         )
 
 
@@ -263,11 +271,13 @@ async def list_devices() -> list[dict[str, Any]]:
     """List all devices from PostgreSQL care.devices table."""
     with sync_engine.connect() as conn:
         result = conn.execute(
-            text("""
+            text(
+                """
                 SELECT id, resident_id, last_seen, battery_pct, battery_low_since,
                        battery_notified, offline_since, offline_notified
                 FROM care.devices
-            """)
+            """
+            )
         )
         return [dict(row) for row in result.mappings()]
 
@@ -279,11 +289,13 @@ async def get_tv_config(resident_id: str) -> dict[str, Any] | None:
     """Get TV config from PostgreSQL care.tv_config table."""
     with sync_engine.connect() as conn:
         result = conn.execute(
-            text("""
+            text(
+                """
                 SELECT resident_id, ambient_rotation, rail, quiet_hours, default_vibe, updated_at
                 FROM care.tv_config WHERE resident_id = :resident_id
-            """),
-            {"resident_id": resident_id}
+            """
+            ),
+            {"resident_id": resident_id},
         )
         row = result.mappings().first()
         if not row:
@@ -312,7 +324,8 @@ async def set_tv_config(
 
     with sync_engine.begin() as conn:
         conn.execute(
-            text("""
+            text(
+                """
                 INSERT INTO care.tv_config (resident_id, ambient_rotation, rail, quiet_hours, default_vibe, updated_at)
                 VALUES (:resident_id, :ambient_rotation, :rail, :quiet_hours::jsonb, :default_vibe, :updated_at)
                 ON CONFLICT (resident_id) DO UPDATE SET
@@ -321,7 +334,8 @@ async def set_tv_config(
                     quiet_hours = EXCLUDED.quiet_hours,
                     default_vibe = EXCLUDED.default_vibe,
                     updated_at = EXCLUDED.updated_at
-            """),
+            """
+            ),
             {
                 "resident_id": resident_id,
                 "ambient_rotation": int(ambient_rotation),
@@ -329,7 +343,7 @@ async def set_tv_config(
                 "quiet_hours": qh,
                 "default_vibe": str(default_vibe),
                 "updated_at": now,
-            }
+            },
         )
 
 
@@ -341,10 +355,12 @@ async def create_session(rec: dict[str, Any]) -> None:
     now = _now()
     with sync_engine.begin() as conn:
         conn.execute(
-            text("""
+            text(
+                """
                 INSERT INTO care.care_sessions (id, resident_id, title, transcript_uri, created_at, updated_at)
                 VALUES (:id, :resident_id, :title, :transcript_uri, :created_at, :updated_at)
-            """),
+            """
+            ),
             {
                 "id": rec["id"],
                 "resident_id": rec["resident_id"],
@@ -352,7 +368,7 @@ async def create_session(rec: dict[str, Any]) -> None:
                 "transcript_uri": rec.get("transcript_uri"),
                 "created_at": now,
                 "updated_at": now,
-            }
+            },
         )
 
 
@@ -368,7 +384,7 @@ async def update_session(session_id: str, **fields: Any) -> None:
     with sync_engine.begin() as conn:
         conn.execute(
             text(f"UPDATE care.care_sessions SET {set_clause} WHERE id = :session_id"),
-            params
+            params,
         )
 
 
@@ -393,10 +409,12 @@ async def create_contact(rec: dict[str, Any]) -> None:
     """Create contact in PostgreSQL care.contacts table."""
     with sync_engine.begin() as conn:
         conn.execute(
-            text("""
+            text(
+                """
                 INSERT INTO care.contacts (id, resident_id, name, phone, priority, quiet_hours)
                 VALUES (:id, :resident_id, :name, :phone, :priority, :quiet_hours::jsonb)
-            """),
+            """
+            ),
             {
                 "id": rec["id"],
                 "resident_id": rec["resident_id"],
@@ -404,7 +422,7 @@ async def create_contact(rec: dict[str, Any]) -> None:
                 "phone": rec.get("phone"),
                 "priority": int(rec.get("priority", 0)),
                 "quiet_hours": json.dumps(rec.get("quiet_hours") or {}),
-            }
+            },
         )
 
 
@@ -412,24 +430,28 @@ async def list_contacts(resident_id: str) -> list[dict[str, Any]]:
     """List contacts from PostgreSQL care.contacts table."""
     with sync_engine.connect() as conn:
         result = conn.execute(
-            text("""
+            text(
+                """
                 SELECT id, resident_id, name, phone, priority, quiet_hours
                 FROM care.contacts
                 WHERE resident_id = :resident_id
                 ORDER BY priority DESC
-            """),
-            {"resident_id": resident_id}
+            """
+            ),
+            {"resident_id": resident_id},
         )
         contacts = []
         for row in result.mappings():
-            contacts.append({
-                "id": row["id"],
-                "resident_id": row["resident_id"],
-                "name": row["name"],
-                "phone": row["phone"],
-                "priority": row["priority"],
-                "quiet_hours": json.loads(row["quiet_hours"] or "{}"),
-            })
+            contacts.append(
+                {
+                    "id": row["id"],
+                    "resident_id": row["resident_id"],
+                    "name": row["name"],
+                    "phone": row["phone"],
+                    "priority": row["priority"],
+                    "quiet_hours": json.loads(row["quiet_hours"] or "{}"),
+                }
+            )
         return contacts
 
 
@@ -446,7 +468,7 @@ async def update_contact(contact_id: str, **fields: Any) -> None:
     with sync_engine.begin() as conn:
         conn.execute(
             text(f"UPDATE care.contacts SET {set_clause} WHERE id = :contact_id"),
-            params
+            params,
         )
 
 
@@ -455,5 +477,5 @@ async def delete_contact(contact_id: str) -> None:
     with sync_engine.begin() as conn:
         conn.execute(
             text("DELETE FROM care.contacts WHERE id = :contact_id"),
-            {"contact_id": contact_id}
+            {"contact_id": contact_id},
         )

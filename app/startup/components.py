@@ -45,6 +45,7 @@ def _log_failure_dev(service: str, error: Exception):
         return
 
     import time
+
     now = time.time()
     last = _failure_timestamps.get(service, 0)
 
@@ -82,6 +83,7 @@ async def init_database_migrations():
     """
     try:
         from app.db.migrate import ensure_all_schemas_migrated
+
         await ensure_all_schemas_migrated()
         logger.info("All database migrations completed successfully")
     except Exception as e:
@@ -98,12 +100,14 @@ async def init_token_store_schema():
     migrations are triggered.
     """
     from app.auth_store_tokens import token_dao  # lazy import
+
     try:
         from app.startup import start_background_task  # type: ignore
 
         start_background_task(token_dao.ensure_schema_migrated())
     except Exception:
         import asyncio
+
         asyncio.create_task(token_dao.ensure_schema_migrated())
     logger.debug("Token store schema migration started in background")
 
@@ -115,6 +119,7 @@ async def init_openai_health_check():
     vendor probe and enforces gating via ``STARTUP_VENDOR_PINGS``.
     """
     from app.startup import util_check_vendor
+
     await util_check_vendor("openai")
 
 
@@ -126,14 +131,15 @@ async def init_vector_store():
     and awaiting awaitables when needed.
     """
     from app.feature_flags import QDRANT_ON
-    
+
     # Check if this is a Qdrant vector store that's disabled
     vector_store = (os.getenv("VECTOR_STORE") or "memory").lower()
     if vector_store.startswith("qdrant") and not QDRANT_ON:
         logger.debug("Qdrant disabled in this profile")
         return
-    
+
     from app.memory.api import _get_store
+
     store = _get_store()
     try:
         if hasattr(store, "ping"):
@@ -167,11 +173,11 @@ async def init_llama():
       perform the concrete health check.
     """
     from app.feature_flags import OLLAMA_ON
-    
+
     if not OLLAMA_ON:
         logger.debug("Ollama disabled in this profile")
         return
-    
+
     enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
     if enabled in {"0", "false", "no", "off"}:
         logger.debug("LLaMA disabled by LLAMA_ENABLED")
@@ -181,6 +187,7 @@ async def init_llama():
         logger.debug("LLaMA not configured (no OLLAMA_URL); skipping")
         return
     from app.llama_integration import _check_and_set_flag
+
     try:
         await _check_and_set_flag()
         logger.debug("LLaMA integration OK")
@@ -197,11 +204,11 @@ async def init_home_assistant():
     log and skip. Otherwise perform a minimal ``get_states`` probe.
     """
     from app.feature_flags import HA_ON
-    
+
     if not HA_ON:
         logger.debug("Home Assistant disabled in this profile")
         return
-    
+
     enabled = (os.getenv("HOME_ASSISTANT_ENABLED") or "").strip().lower()
     if enabled in {"0", "false", "no", "off"}:
         logger.debug("HA disabled by HOME_ASSISTANT_ENABLED")
@@ -210,6 +217,7 @@ async def init_home_assistant():
         logger.debug("HA not configured (no HOME_ASSISTANT_URL); skipping")
         return
     from app.home_assistant import get_states
+
     try:
         await get_states()
         logger.debug("Home Assistant integration OK")
@@ -225,6 +233,7 @@ async def init_chaos_mode():
     Logs chaos configuration for monitoring.
     """
     from app.chaos import log_chaos_status
+
     log_chaos_status()
     logger.info("🎭 Chaos mode initialization completed")
 
@@ -236,6 +245,7 @@ async def init_memory_store():
     configuration rather than performing heavy operations.
     """
     from app.memory.api import _get_store
+
     _get_store()
     logger.debug("Memory store OK")
 
@@ -243,6 +253,7 @@ async def init_memory_store():
 async def init_scheduler():
     """Start the scheduler if not already running (sync/async tolerant)."""
     from app.deps.scheduler import scheduler
+
     start = scheduler.start
     if inspect.iscoroutinefunction(start):
         await start()
@@ -288,7 +299,9 @@ async def init_client_warmup():
     Skips in dev environment unless explicitly requested.
     """
     env = os.getenv("ENV", "dev").strip().lower()
-    warmup_enabled = os.getenv("GSN_WARMUP", "1" if env in {"prod", "production"} else "0").strip()
+    warmup_enabled = os.getenv(
+        "GSN_WARMUP", "1" if env in {"prod", "production"} else "0"
+    ).strip()
 
     if warmup_enabled != "1":
         logger.debug("Client warmup skipped (GSN_WARMUP != 1)")
@@ -299,6 +312,7 @@ async def init_client_warmup():
     try:
         # Warm OpenAI client (DNS + TCP)
         from app.embeddings import get_openai_client
+
         client = get_openai_client()
         # Simple DNS resolution and connection test
         logger.debug("OpenAI client warmed up")
@@ -308,6 +322,7 @@ async def init_client_warmup():
     try:
         # Warm Qdrant client (DNS + TCP + basic ping)
         from app.embeddings import get_qdrant_client
+
         qdrant = get_qdrant_client()
         # The QdrantVectorStore constructor already performs connection setup
         logger.debug("Qdrant client warmed up")
@@ -315,6 +330,3 @@ async def init_client_warmup():
         logger.warning("Qdrant client warmup failed: %s", e)
 
     logger.info("✅ Client warmup completed")
-
-
- 

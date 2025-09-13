@@ -52,6 +52,8 @@ async def cancel_background_tasks(timeout: float = 2.0) -> None:
     except Exception:
         pass
     _background_tasks.clear()
+
+
 # --- end addition ---
 
 logger = logging.getLogger(__name__)
@@ -78,6 +80,7 @@ async def lifespan(app: FastAPI):
     # 3) Initialize WebSocket LRU cache
     try:
         from app.utils.lru_cache import init_ws_idempotency_cache
+
         await init_ws_idempotency_cache()
         logger.info("✅ WebSocket LRU cache initialized")
     except Exception as e:
@@ -133,8 +136,16 @@ async def _run_components():
         fn = name_to_callable[comp_name]
         started = time.time()
         try:
-            await asyncio.wait_for(fn(), timeout=float(os.getenv("STARTUP_STEP_TIMEOUT", "30")))
-            logger.info("✅ [%d/%d] %s ok (%.1fs)", idx, len(profile.components), comp_name, time.time()-started)
+            await asyncio.wait_for(
+                fn(), timeout=float(os.getenv("STARTUP_STEP_TIMEOUT", "30"))
+            )
+            logger.info(
+                "✅ [%d/%d] %s ok (%.1fs)",
+                idx,
+                len(profile.components),
+                comp_name,
+                time.time() - started,
+            )
         except TimeoutError:
             logger.warning("⚠️ %s timed out; continuing", comp_name)
         except Exception as e:
@@ -145,12 +156,14 @@ def _start_daemons():
     # These are best-effort; never fatal
     try:
         from app.care_daemons import heartbeat_monitor_loop
+
         start_background_task(heartbeat_monitor_loop())
     except Exception:
         logger.debug("heartbeat_monitor_loop not started", exc_info=True)
 
     try:
         from app.api.sms_queue import sms_worker
+
         start_background_task(sms_worker())
     except Exception:
         logger.debug("sms_worker not started", exc_info=True)
@@ -175,7 +188,10 @@ async def _shutdown(app: FastAPI):
         pass
 
     # Close clients (best effort)
-    for closer_path in ("app.gpt_client:close_client", "app.transcription:close_whisper_client"):
+    for closer_path in (
+        "app.gpt_client:close_client",
+        "app.transcription:close_whisper_client",
+    ):
         try:
             mod, name = closer_path.split(":")
             m = __import__(mod, fromlist=[name])
@@ -215,18 +231,21 @@ async def _shutdown(app: FastAPI):
     try:
         from app.user_store import close_user_store  # async
     except Exception:
+
         async def close_user_store():  # type: ignore
             return None
 
     try:
         from app.skills.notes_skill import close_notes_dao  # async
     except Exception:
+
         async def close_notes_dao():  # type: ignore
             return None
 
     try:
         from app.auth_store_tokens import close_token_dao  # sync
     except Exception:
+
         def close_token_dao():  # type: ignore
             return None
 
@@ -275,5 +294,3 @@ async def vendor_health(vendor: str):
 
 
 __all__ = ["lifespan", "util_check_vendor", "vendor_health", "detect_profile"]
-
- 

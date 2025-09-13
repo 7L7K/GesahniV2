@@ -20,12 +20,15 @@ def _bootstrap_db_and_env():
     os.environ.setdefault("ENABLE_SPOTIFY", "1")
 
     # isolated DB dir for this run
-    os.environ.setdefault("GESAHNI_TEST_DB_DIR", f"/tmp/gesahni_tests/{uuid.uuid4().hex}")
+    os.environ.setdefault(
+        "GESAHNI_TEST_DB_DIR", f"/tmp/gesahni_tests/{uuid.uuid4().hex}"
+    )
     pathlib.Path(os.environ["GESAHNI_TEST_DB_DIR"]).mkdir(parents=True, exist_ok=True)
 
     # Don't call init_db_once here - let the app's lifespan handler do it
     # to avoid event loop conflicts
     return True
+
 
 # Live server fixture - only start if needed by tests
 @pytest.fixture(scope="session")
@@ -34,7 +37,9 @@ def live_server(_bootstrap_db_and_env):
 
     # Start server using subprocess with dedicated script
     cmd = [sys.executable, "test_server.py"]
-    p = subprocess.Popen(cmd, cwd=os.getcwd(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    p = subprocess.Popen(
+        cmd, cwd=os.getcwd(), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
     # wait for server
     deadline = time.time() + 15
@@ -58,6 +63,7 @@ def live_server(_bootstrap_db_and_env):
     except Exception:
         pass
 
+
 # Pytest early hook: set test DB dir and flags before any imports
 def pytest_load_initial_conftests(early_config, parser):
     try:
@@ -65,16 +71,20 @@ def pytest_load_initial_conftests(early_config, parser):
         os.environ.setdefault("PYTEST_RUNNING", "1")
 
         # Per-worker test DB directory (xdist sets PYTEST_XDIST_WORKER or PYTEST_WORKER_ID)
-        worker = os.getenv("PYTEST_XDIST_WORKER") or os.getenv("PYTEST_WORKER_ID") or "main"
+        worker = (
+            os.getenv("PYTEST_XDIST_WORKER") or os.getenv("PYTEST_WORKER_ID") or "main"
+        )
         test_dir = f"/tmp/gesahni_tests/{worker}"
         os.environ.setdefault("GESAHNI_TEST_DB_DIR", test_dir)
 
         # Test-friendly configuration overrides
         # JWT: Allow short secrets in tests
         os.environ.setdefault("DEV_MODE", "1")  # Allows weak JWT secrets
-        os.environ.setdefault("ENV", "dev")     # Alternative way to allow weak secrets
+        os.environ.setdefault("ENV", "dev")  # Alternative way to allow weak secrets
         # Provide a deterministic dev JWT secret to enable token minting
-        os.environ.setdefault("JWT_SECRET", "dev-secret-key-please-change-0123456789abcdef0123456789abcd")
+        os.environ.setdefault(
+            "JWT_SECRET", "dev-secret-key-please-change-0123456789abcdef0123456789abcd"
+        )
 
         # Rate limiting: Disable for tests by default
         os.environ.setdefault("ENABLE_RATE_LIMIT_IN_TESTS", "0")
@@ -108,9 +118,11 @@ def pytest_load_initial_conftests(early_config, parser):
         # STANDARDIZED TEST IDENTITY AND TTL CONFIGURATION
         # ==================================================
         # Use long TTLs to prevent expiry during test execution
-        os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")          # 1 hour access tokens
-        os.environ.setdefault("JWT_REFRESH_EXPIRE_MINUTES", "1440") # 1 day refresh tokens
-        os.environ.setdefault("CSRF_TTL_SECONDS", "3600")           # 1 hour CSRF tokens
+        os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")  # 1 hour access tokens
+        os.environ.setdefault(
+            "JWT_REFRESH_EXPIRE_MINUTES", "1440"
+        )  # 1 day refresh tokens
+        os.environ.setdefault("CSRF_TTL_SECONDS", "3600")  # 1 hour CSRF tokens
 
         # Allow optional auth in tests for convenience
         os.environ.setdefault("JWT_OPTIONAL_IN_TESTS", "1")
@@ -123,6 +135,7 @@ def pytest_load_initial_conftests(early_config, parser):
     except Exception as e:
         print(f"Warning: Failed to set test configuration: {e}")
         pass
+
 
 # Filter Pydantic v2 deprecation warnings to keep CI green
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")
@@ -145,6 +158,7 @@ def client():
     """
     # Import the FastAPI app after test env vars are set
     from app.main import app
+
     return TestClient(app)
 
 
@@ -174,6 +188,7 @@ def prompt_router(monkeypatch):
 def app_client():
     """Alias for client fixture to maintain backward compatibility."""
     from app.main import app
+
     return TestClient(app)
 
 
@@ -181,6 +196,7 @@ def app_client():
 def app():
     """Provide the FastAPI app instance for tests that need direct access."""
     from app.main import app
+
     return app
 
 
@@ -188,6 +204,7 @@ def app():
 async def async_app():
     """Provide the FastAPI app instance for async tests."""
     from app.main import app
+
     return app
 
 
@@ -241,7 +258,7 @@ async def test_user():
         access_token="test_spotify_access_token",
         refresh_token="test_spotify_refresh_token",
         expires_at=expires_at,
-        scopes="user-read-private,user-read-email"
+        scopes="user-read-private,user-read-email",
     )
 
     try:
@@ -254,7 +271,7 @@ async def test_user():
         "user_id": user_id,
         "username": username,
         "password": password,
-        "email": "test@example.com"
+        "email": "test@example.com",
     }
 
 
@@ -269,7 +286,7 @@ async def cors_client(async_app):
         base_url="http://testserver",
         timeout=30.0,  # Use longer timeout for consistency
         follow_redirects=True,
-        headers={"Origin": "http://localhost:3000"}  # Default CORS origin for tests
+        headers={"Origin": "http://localhost:3000"},  # Default CORS origin for tests
     )
 
     try:
@@ -289,10 +306,7 @@ async def csrf_client(async_app):
         base_url="http://testserver",
         timeout=30.0,  # Use longer timeout for consistency
         follow_redirects=True,
-        headers={
-            "Origin": "http://localhost:3000",
-            "Referer": "http://localhost:3000"
-        }
+        headers={"Origin": "http://localhost:3000", "Referer": "http://localhost:3000"},
     )
 
     try:
@@ -333,6 +347,7 @@ async def fetch_csrf_token(client):
 
     # Last resort: generate a random token for testing
     import secrets
+
     return secrets.token_urlsafe(16)
 
 
@@ -358,10 +373,7 @@ async def cors_csrf_client(async_app):
         base_url="http://testserver",
         timeout=10.0,
         follow_redirects=True,
-        headers={
-            "Origin": "http://localhost:3000",
-            "Referer": "http://localhost:3000"
-        }
+        headers={"Origin": "http://localhost:3000", "Referer": "http://localhost:3000"},
     )
 
     try:
@@ -382,7 +394,7 @@ async def seed_spotify_token():
         access_token="test_access_token",
         refresh_token="test_refresh_token",
         expires_at=int(time.time()) + 3600,  # 1 hour from now
-        scopes="user-read-private,user-read-email"
+        scopes="user-read-private,user-read-email",
     )
     await upsert_token(token)
     return token
@@ -619,6 +631,7 @@ def _isolate_debug_and_flags(monkeypatch):
         import importlib
 
         import app.web.cookies as _cookies_mod
+
         importlib.reload(_cookies_mod)
     except Exception:
         pass
@@ -628,6 +641,7 @@ def _isolate_debug_and_flags(monkeypatch):
         import app.auth_store_tokens as _auth_tokens
         import app.care_store as _care_store
         import app.music.store as _music_store
+
         try:
             loop = asyncio.get_event_loop()
         except RuntimeError:
@@ -639,7 +653,15 @@ def _isolate_debug_and_flags(monkeypatch):
             pass
         try:
             # Ensure token table exists (use class default path)
-            dao = _auth_tokens.TokenDAO(str(getattr(_auth_tokens.TokenDAO, "DEFAULT_DB_PATH", _auth_tokens.DEFAULT_DB_PATH)))
+            dao = _auth_tokens.TokenDAO(
+                str(
+                    getattr(
+                        _auth_tokens.TokenDAO,
+                        "DEFAULT_DB_PATH",
+                        _auth_tokens.DEFAULT_DB_PATH,
+                    )
+                )
+            )
             loop.run_until_complete(dao._ensure_table())
         except Exception:
             pass
@@ -656,8 +678,6 @@ def _isolate_debug_and_flags(monkeypatch):
     except Exception:
         # If auth modules aren't importable during some unit tests, ignore
         pass
-
-
 
     yield
 

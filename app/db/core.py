@@ -21,16 +21,18 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as sa_create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from .models import Base
-
 logger = logging.getLogger(__name__)
 
 # Enforce PostgreSQL-only - no SQLite fallbacks
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
-    raise RuntimeError("DATABASE_URL environment variable is required (PostgreSQL-only)")
-if (DATABASE_URL.split(":", 1)[0].lower() == "sqlite"):
-    raise RuntimeError("SQLite URLs are not supported. Use PostgreSQL with DATABASE_URL.")
+    raise RuntimeError(
+        "DATABASE_URL environment variable is required (PostgreSQL-only)"
+    )
+if DATABASE_URL.split(":", 1)[0].lower() == "sqlite":
+    raise RuntimeError(
+        "SQLite URLs are not supported. Use PostgreSQL with DATABASE_URL."
+    )
 
 # Validate PostgreSQL URL format
 if not DATABASE_URL.startswith("postgresql://"):

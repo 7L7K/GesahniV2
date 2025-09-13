@@ -119,11 +119,13 @@ async def ask_replay_compat(rid: str, request: Request):
     Only enabled when LEGACY_CHAT=1 environment variable is set.
     """
     import os
+
     from fastapi.responses import RedirectResponse
 
     # Check if legacy chat endpoints are enabled
-    if not os.getenv("LEGACY_CHAT", "").strip() in {"1", "true", "yes", "on"}:
+    if os.getenv("LEGACY_CHAT", "").strip() not in {"1", "true", "yes", "on"}:
         from fastapi.responses import JSONResponse
+
         return JSONResponse(
             {"error": "not_found", "message": "endpoint not available"},
             status_code=404,

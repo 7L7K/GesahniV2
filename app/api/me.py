@@ -30,10 +30,10 @@ def _to_dict(x) -> dict:
         return x
     if isinstance(x, BaseModel):
         return x.model_dump()
-    if hasattr(x, '__dataclass_fields__'):  # dataclass
+    if hasattr(x, "__dataclass_fields__"):  # dataclass
         return asdict(x)
-    if hasattr(x, '__dict__'):
-        return {k: v for k, v in vars(x).items() if not k.startswith('_')}
+    if hasattr(x, "__dict__"):
+        return {k: v for k, v in vars(x).items() if not k.startswith("_")}
     return {"value": x}
 
 
@@ -45,7 +45,9 @@ def _truthy(v: str | None) -> bool:
 
 
 @router.get("/me")
-async def me(request: Request, response: Response, user_id: str = Depends(get_current_user_id)) -> dict:
+async def me(
+    request: Request, response: Response, user_id: str = Depends(get_current_user_id)
+) -> dict:
     is_auth = user_id != "anon"
 
     # In tests, allow optional auth to simplify smoke checks
@@ -58,7 +60,12 @@ async def me(request: Request, response: Response, user_id: str = Depends(get_cu
         is_auth = True
 
     # Contract compliance: return 401 for anonymous users (outside optional mode)
-    optional_in_tests = os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {"1", "true", "yes", "on"}
+    optional_in_tests = os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     # Do not fail closed here; return anonymous shape when not authenticated.
     # This keeps the endpoint usable for smoke tests and header verification.
     # Detailed auth state is exposed via /v1/whoami.
@@ -67,7 +74,9 @@ async def me(request: Request, response: Response, user_id: str = Depends(get_cu
     stats = None
     if is_auth:
         try:
-            stats = await _STATS_CACHE.get(user_id, lambda: user_store.get_stats(user_id))
+            stats = await _STATS_CACHE.get(
+                user_id, lambda: user_store.get_stats(user_id)
+            )
         except Exception:
             stats = None
     else:
@@ -80,7 +89,7 @@ async def me(request: Request, response: Response, user_id: str = Depends(get_cu
     stats_result = {
         "login_count": stats_dict.get("login_count", 0),
         "request_count": stats_dict.get("request_count", 0),
-        "last_login": stats_dict.get("last_login")
+        "last_login": stats_dict.get("last_login"),
     }
 
     # Mixed auth source handling
@@ -91,22 +100,27 @@ async def me(request: Request, response: Response, user_id: str = Depends(get_cu
     if jose_jwt is not None:
         try:
             from ..web.cookies import read_access_cookie
+
             access_token = read_access_cookie(request)
         except Exception:
             access_token = request.cookies.get("access_token")
             if access_token:
                 try:
                     import logging
+
                     logger = logging.getLogger(__name__)
-                    logger.info("auth.legacy_cookie_used", extra={
-                        "meta": {
-                            "name": "access_token",
-                            "canonical_name": "GSNH_AT",  # Default canonical name
-                            "action": "read",
-                            "success": True,
-                            "location": "me.py_fallback"
-                        }
-                    })
+                    logger.info(
+                        "auth.legacy_cookie_used",
+                        extra={
+                            "meta": {
+                                "name": "access_token",
+                                "canonical_name": "GSNH_AT",  # Default canonical name
+                                "action": "read",
+                                "success": True,
+                                "location": "me.py_fallback",
+                            }
+                        },
+                    )
                 except Exception:
                     pass  # Best effort logging
         if access_token:
@@ -117,15 +131,21 @@ async def me(request: Request, response: Response, user_id: str = Depends(get_cu
             except Exception:
                 try:
                     # Fallback: decode with ignore signature
-                    payload = jose_jwt.decode(access_token, "ignore", options={"verify_signature": False})
+                    payload = jose_jwt.decode(
+                        access_token, "ignore", options={"verify_signature": False}
+                    )
                     sub = payload.get("sub")
                 except Exception:
                     sub = None
 
     body = {
-        "user": {"id": user_id if is_auth else None, "auth_source": source, "auth_conflict": conflicted},
+        "user": {
+            "id": user_id if is_auth else None,
+            "auth_source": source,
+            "auth_conflict": conflicted,
+        },
         "stats": stats_result,
-        "sub": sub
+        "sub": sub,
     }
     # For compatibility with deprecated alias paths, include Deprecation header
     # even when served by the canonical /v1/me handler.
@@ -166,7 +186,10 @@ async def sessions(
     if user_id == "anon":
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
     rows = await sessions_store.list_user_sessions(user_id)
     items = _to_session_info(rows)
     try:
@@ -187,7 +210,10 @@ async def sessions_paginated(
     if user_id == "anon":
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
     rows = await sessions_store.list_user_sessions(user_id)
     start = 0
     try:
@@ -208,7 +234,10 @@ async def revoke_session(
     if user_id == "anon":
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
     await sessions_store.revoke_family(sid)
     return {"status": "ok"}
 

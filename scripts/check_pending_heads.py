@@ -17,10 +17,7 @@ def check_pending_heads():
     try:
         # Run alembic heads command
         result = subprocess.run(
-            ["alembic", "heads"],
-            capture_output=True,
-            text=True,
-            check=True
+            ["alembic", "heads"], capture_output=True, text=True, check=True
         )
 
         output = result.stdout.strip()
@@ -29,8 +26,8 @@ def check_pending_heads():
             return True
 
         # Check if output contains any heads
-        lines = output.split('\n')
-        heads_found = any('->' in line for line in lines)
+        lines = output.split("\n")
+        heads_found = any("->" in line for line in lines)
 
         if heads_found:
             print("❌ Found pending migration heads:")

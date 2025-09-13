@@ -1,8 +1,8 @@
 # Security module package
 
 from .jwt_config import JWTConfig, get_jwt_config
-from .webhooks import rotate_webhook_secret, sign_webhook, verify_webhook
 from .jwt_utils import _payload_scopes
+from .webhooks import rotate_webhook_secret, sign_webhook, verify_webhook
 
 # Import jwt_decode from the main security module (app.security)
 try:
@@ -30,19 +30,33 @@ except ImportError:
 
     import jwt as _pyjwt  # type: ignore
 
-    def jwt_decode(token: str, key: str | bytes | None = None, algorithms: list[str] | None = None, **kwargs: _Any) -> dict:
+    def jwt_decode(
+        token: str,
+        key: str | bytes | None = None,
+        algorithms: list[str] | None = None,
+        **kwargs: _Any,
+    ) -> dict:
         algs = algorithms or ["HS256"]
         return _pyjwt.decode(token, key, algorithms=algs, **kwargs)  # type: ignore[arg-type]
 
     def decode_jwt(token: str) -> dict | None:
         try:
             from .jwt_config import get_jwt_config as _get
+
             cfg = _get()
             if cfg.alg == "HS256":
-                return _pyjwt.decode(token, cfg.secret, algorithms=["HS256"], options={"verify_aud": bool(cfg.audience)}, audience=cfg.audience, issuer=cfg.issuer)  # type: ignore[arg-type]
+                return _pyjwt.decode(
+                    token,
+                    cfg.secret,
+                    algorithms=["HS256"],
+                    options={"verify_aud": bool(cfg.audience)},
+                    audience=cfg.audience,
+                    issuer=cfg.issuer,
+                )  # type: ignore[arg-type]
             return None
         except Exception:
             return None
+
     get_rate_limit_snapshot = None
     _get_request_payload = None
     verify_token = None

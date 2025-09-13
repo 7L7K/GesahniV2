@@ -13,7 +13,7 @@ and maintain data integrity after the SQLite→PostgreSQL migration.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import text
@@ -33,57 +33,71 @@ class TestAuthDatabaseBehavior:
             email = f"test_{user_id}@example.com"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Initialize user stats
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO users.user_stats (user_id, login_count, last_login)
                     VALUES (:user_id, 0, NULL)
-                """),
-                {"user_id": user_id}
+                """
+                ),
+                {"user_id": user_id},
             )
 
             # Get initial login count
             result = conn.execute(
-                text("SELECT login_count FROM users.user_stats WHERE user_id = :user_id"),
-                {"user_id": user_id}
+                text(
+                    "SELECT login_count FROM users.user_stats WHERE user_id = :user_id"
+                ),
+                {"user_id": user_id},
             )
             initial_count = result.scalar()
 
             # Simulate login (increment count)
             conn.execute(
-                text("""
+                text(
+                    """
                     UPDATE users.user_stats
                     SET login_count = login_count + 1, last_login = :last_login
                     WHERE user_id = :user_id
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
-                    "last_login": datetime.now(timezone.utc),
-                }
+                    "last_login": datetime.now(UTC),
+                },
             )
 
             # Verify count increased
             result = conn.execute(
-                text("SELECT login_count FROM users.user_stats WHERE user_id = :user_id"),
-                {"user_id": user_id}
+                text(
+                    "SELECT login_count FROM users.user_stats WHERE user_id = :user_id"
+                ),
+                {"user_id": user_id},
             )
             final_count = result.scalar()
 
-            assert final_count > initial_count, "login_count should increase after login"
-            assert final_count == initial_count + 1, "login_count should increment by exactly 1"
+            assert (
+                final_count > initial_count
+            ), "login_count should increase after login"
+            assert (
+                final_count == initial_count + 1
+            ), "login_count should increment by exactly 1"
 
     def test_device_session_row_created(self):
         """Verify device session row is created during login."""
@@ -93,17 +107,19 @@ class TestAuthDatabaseBehavior:
             email = f"test_{user_id}@example.com"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Create device session (simulating login)
@@ -112,29 +128,33 @@ class TestAuthDatabaseBehavior:
             ip_hash = f"ip_{user_id}"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.device_sessions (sid, user_id, device_name, ua_hash, ip_hash, created_at, last_seen_at)
                     VALUES (:sid, :user_id, :device_name, :ua_hash, :ip_hash, :created_at, :last_seen_at)
-                """),
+                """
+                ),
                 {
                     "sid": session_id,
                     "user_id": user_id,
                     "device_name": "Test Device",
                     "ua_hash": ua_hash,
                     "ip_hash": ip_hash,
-                    "created_at": datetime.now(timezone.utc),
-                    "last_seen_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                    "last_seen_at": datetime.now(UTC),
+                },
             )
 
             # Verify device session was created
             result = conn.execute(
-                text("""
+                text(
+                    """
                     SELECT sid, user_id, device_name, ua_hash, ip_hash
                     FROM auth.device_sessions
                     WHERE user_id = :user_id
-                """),
-                {"user_id": user_id}
+                """
+                ),
+                {"user_id": user_id},
             )
             row = result.mappings().first()
 
@@ -153,17 +173,19 @@ class TestAuthDatabaseBehavior:
             email = f"test_{user_id}@example.com"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Create device session
@@ -172,54 +194,60 @@ class TestAuthDatabaseBehavior:
             ip_hash = f"ip_{user_id}"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.device_sessions (sid, user_id, device_name, ua_hash, ip_hash, created_at, last_seen_at)
                     VALUES (:sid, :user_id, :device_name, :ua_hash, :ip_hash, :created_at, :last_seen_at)
-                """),
+                """
+                ),
                 {
                     "sid": session_id,
                     "user_id": user_id,
                     "device_name": "Test Device",
                     "ua_hash": ua_hash,
                     "ip_hash": ip_hash,
-                    "created_at": datetime.now(timezone.utc),
-                    "last_seen_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                    "last_seen_at": datetime.now(UTC),
+                },
             )
 
             # Create audit log entries (simulate user actions)
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO audit.audit_log (user_id, session_id, event_type, meta, created_at)
                     VALUES (:user_id, :session_id, :event_type, :meta, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "session_id": session_id,
                     "event_type": "login",
                     "meta": '{"action": "login", "device": "test"}',
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO audit.audit_log (user_id, session_id, event_type, meta, created_at)
                     VALUES (:user_id, :session_id, :event_type, :meta, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "session_id": session_id,
                     "event_type": "page_view",
                     "meta": '{"page": "/dashboard", "duration": 30}',
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Verify audit rows were created
             result = conn.execute(
                 text("SELECT COUNT(*) FROM audit.audit_log WHERE user_id = :user_id"),
-                {"user_id": user_id}
+                {"user_id": user_id},
             )
             audit_count = result.scalar()
 
@@ -227,13 +255,15 @@ class TestAuthDatabaseBehavior:
 
             # Verify audit rows have correct data
             result = conn.execute(
-                text("""
+                text(
+                    """
                     SELECT event_type, meta
                     FROM audit.audit_log
                     WHERE user_id = :user_id
                     ORDER BY created_at
-                """),
-                {"user_id": user_id}
+                """
+                ),
+                {"user_id": user_id},
             )
             rows = result.mappings().all()
 
@@ -254,17 +284,19 @@ class TestMusicDatabaseBehavior:
             email = f"test_{user_id}@example.com"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Create music session first (required for music state)
@@ -272,46 +304,54 @@ class TestMusicDatabaseBehavior:
             device_id = f"device_{user_id}"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO music.music_sessions (session_id, user_id, room, provider, device_id, started_at)
                     VALUES (:session_id, :user_id, :room, :provider, :device_id, :started_at)
-                """),
+                """
+                ),
                 {
                     "session_id": session_id,
                     "user_id": user_id,
                     "room": "living_room",
                     "provider": "spotify",
                     "device_id": device_id,
-                    "started_at": datetime.now(timezone.utc),
-                }
+                    "started_at": datetime.now(UTC),
+                },
             )
 
             # Create music state
-            initial_time = datetime.now(timezone.utc)
+            initial_time = datetime.now(UTC)
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO music.music_states (session_id, state, updated_at)
                     VALUES (:session_id, :state, :updated_at)
-                """),
+                """
+                ),
                 {
                     "session_id": session_id,
                     "state": '{"playing": false, "volume": 50}',
                     "updated_at": initial_time,
-                }
+                },
             )
 
             # Verify exactly one state exists for this user
             result = conn.execute(
-                text("""
+                text(
+                    """
                     SELECT COUNT(*) FROM music.music_states ms
                     JOIN music.music_sessions sess ON ms.session_id = sess.session_id
                     WHERE sess.user_id = :user_id
-                """),
-                {"user_id": user_id}
+                """
+                ),
+                {"user_id": user_id},
             )
             state_count = result.scalar()
 
-            assert state_count == 1, f"Should have exactly 1 music state per user, found {state_count}"
+            assert (
+                state_count == 1
+            ), f"Should have exactly 1 music state per user, found {state_count}"
 
     def test_updated_at_touched(self):
         """Verify updated_at is modified when music state changes."""
@@ -321,84 +361,101 @@ class TestMusicDatabaseBehavior:
             email = f"test_{user_id}@example.com"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Create music session
             session_id = str(uuid.uuid4())
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO music.music_sessions (session_id, user_id, room, provider, device_id, started_at)
                     VALUES (:session_id, :user_id, :room, :provider, :device_id, :started_at)
-                """),
+                """
+                ),
                 {
                     "session_id": session_id,
                     "user_id": user_id,
                     "room": "living_room",
                     "provider": "spotify",
                     "device_id": "device_123",
-                    "started_at": datetime.now(timezone.utc),
-                }
+                    "started_at": datetime.now(UTC),
+                },
             )
 
             # Create initial music state
-            initial_time = datetime.now(timezone.utc)
+            initial_time = datetime.now(UTC)
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO music.music_states (session_id, state, updated_at)
                     VALUES (:session_id, :state, :updated_at)
-                """),
+                """
+                ),
                 {
                     "session_id": session_id,
                     "state": '{"playing": false, "volume": 50}',
                     "updated_at": initial_time,
-                }
+                },
             )
 
             # Get initial updated_at
             result = conn.execute(
-                text("SELECT updated_at FROM music.music_states WHERE session_id = :session_id"),
-                {"session_id": session_id}
+                text(
+                    "SELECT updated_at FROM music.music_states WHERE session_id = :session_id"
+                ),
+                {"session_id": session_id},
             )
             initial_updated_at = result.scalar()
 
             # Wait a moment and update the state
             import time
+
             time.sleep(0.001)  # Small delay to ensure timestamp difference
 
-            new_time = datetime.now(timezone.utc)
+            new_time = datetime.now(UTC)
             conn.execute(
-                text("""
+                text(
+                    """
                     UPDATE music.music_states
                     SET state = :state, updated_at = :updated_at
                     WHERE session_id = :session_id
-                """),
+                """
+                ),
                 {
                     "session_id": session_id,
                     "state": '{"playing": true, "volume": 75}',
                     "updated_at": new_time,
-                }
+                },
             )
 
             # Verify updated_at was touched
             result = conn.execute(
-                text("SELECT updated_at FROM music.music_states WHERE session_id = :session_id"),
-                {"session_id": session_id}
+                text(
+                    "SELECT updated_at FROM music.music_states WHERE session_id = :session_id"
+                ),
+                {"session_id": session_id},
             )
             final_updated_at = result.scalar()
 
-            assert final_updated_at > initial_updated_at, "updated_at should be modified when state changes"
-            assert final_updated_at == new_time, "updated_at should match the update time"
+            assert (
+                final_updated_at > initial_updated_at
+            ), "updated_at should be modified when state changes"
+            assert (
+                final_updated_at == new_time
+            ), "updated_at should match the update time"
 
 
 @pytest.mark.smoke
@@ -413,17 +470,19 @@ class TestStorageDatabaseBehavior:
             email = f"test_{user_id}@example.com"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Test idempotent key with unique identifier
@@ -432,84 +491,98 @@ class TestStorageDatabaseBehavior:
 
             # First write
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO storage.ledger (user_id, idempotency_key, operation, amount, metadata, created_at)
                     VALUES (:user_id, :idempotency_key, :operation, NULL, :metadata, :created_at)
                     ON CONFLICT (user_id, idempotency_key) DO NOTHING
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "idempotency_key": idempotency_key,
                     "operation": operation,
                     "metadata": '{"source": "test", "action": "first_write"}',
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Second write with same idempotency key (should be ignored)
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO storage.ledger (user_id, idempotency_key, operation, amount, metadata, created_at)
                     VALUES (:user_id, :idempotency_key, :operation, NULL, :metadata, :created_at)
                     ON CONFLICT (user_id, idempotency_key) DO NOTHING
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "idempotency_key": idempotency_key,
                     "operation": operation,
                     "metadata": '{"source": "test", "action": "second_write"}',
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Third write with same idempotency key (should be ignored)
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO storage.ledger (user_id, idempotency_key, operation, amount, metadata, created_at)
                     VALUES (:user_id, :idempotency_key, :operation, NULL, :metadata, :created_at)
                     ON CONFLICT (user_id, idempotency_key) DO NOTHING
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "idempotency_key": idempotency_key,
                     "operation": operation,
                     "metadata": '{"source": "test", "action": "third_write"}',
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Verify exactly one row exists
             result = conn.execute(
-                text("""
+                text(
+                    """
                     SELECT COUNT(*) FROM storage.ledger
                     WHERE user_id = :user_id AND idempotency_key = :idempotency_key
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "idempotency_key": idempotency_key,
-                }
+                },
             )
             row_count = result.scalar()
 
-            assert row_count == 1, f"Should have exactly 1 row for idempotent write, found {row_count}"
+            assert (
+                row_count == 1
+            ), f"Should have exactly 1 row for idempotent write, found {row_count}"
 
             # Verify the row contains the correct data
             result = conn.execute(
-                text("""
+                text(
+                    """
                     SELECT operation, metadata FROM storage.ledger
                     WHERE user_id = :user_id AND idempotency_key = :idempotency_key
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "idempotency_key": idempotency_key,
-                }
+                },
             )
             row = result.mappings().first()
 
             assert row["operation"] == operation, "Operation should match"
             # The metadata should contain the first write's data due to ON CONFLICT DO NOTHING
             # Since it's stored as JSONB, it comes back as a dict
-            assert row["metadata"]["action"] == "first_write", "Should contain first write metadata"
+            assert (
+                row["metadata"]["action"] == "first_write"
+            ), "Should contain first write metadata"
 
 
 @pytest.mark.smoke
@@ -526,37 +599,41 @@ class TestTokensDatabaseBehavior:
 
         with sync_engine.begin() as conn:
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
         # Test the UNIQUE constraint by trying to insert duplicate in separate transaction
         with sync_engine.begin() as conn:
             # First insert - should succeed
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO tokens.third_party_tokens (user_id, provider, access_token, refresh_token, scope, expires_at, updated_at, provider_sub)
                     VALUES (:user_id, :provider, :access_token, :refresh_token, :scope, :expires_at, :updated_at, :provider_sub)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "provider": provider,
                     "access_token": "token1",
                     "refresh_token": "refresh1",
                     "scope": "email",
-                    "expires_at": datetime.now(timezone.utc),
-                    "updated_at": datetime.now(timezone.utc),
+                    "expires_at": datetime.now(UTC),
+                    "updated_at": datetime.now(UTC),
                     "provider_sub": provider_sub,
-                }
+                },
             )
 
         # Second insert with same triplet - should fail due to UNIQUE constraint (in separate transaction)
@@ -564,57 +641,71 @@ class TestTokensDatabaseBehavior:
         try:
             with sync_engine.begin() as conn:
                 conn.execute(
-                    text("""
+                    text(
+                        """
                         INSERT INTO tokens.third_party_tokens (user_id, provider, access_token, refresh_token, scope, expires_at, updated_at, provider_sub)
                         VALUES (:user_id, :provider, :access_token, :refresh_token, :scope, :expires_at, :updated_at, :provider_sub)
-                    """),
+                    """
+                    ),
                     {
                         "user_id": user_id,
                         "provider": provider,
                         "access_token": "token2",
                         "refresh_token": "refresh2",
                         "scope": "profile",
-                        "expires_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc),
+                        "expires_at": datetime.now(UTC),
+                        "updated_at": datetime.now(UTC),
                         "provider_sub": provider_sub,
-                    }
+                    },
                 )
         except Exception as e:
             # Expected - UNIQUE constraint violation
-            if "unique" in str(e).lower() or "duplicate" in str(e).lower() or "pk_third_party_tokens" in str(e):
+            if (
+                "unique" in str(e).lower()
+                or "duplicate" in str(e).lower()
+                or "pk_third_party_tokens" in str(e)
+            ):
                 constraint_violation_caught = True
             else:
                 raise  # Re-raise unexpected exceptions
 
-        assert constraint_violation_caught, "UNIQUE constraint on (user_id, provider, provider_sub) should prevent duplicate inserts"
+        assert (
+            constraint_violation_caught
+        ), "UNIQUE constraint on (user_id, provider, provider_sub) should prevent duplicate inserts"
 
         # Third insert with different provider_sub - should succeed
         with sync_engine.begin() as conn:
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO tokens.third_party_tokens (user_id, provider, access_token, refresh_token, scope, expires_at, updated_at, provider_sub)
                     VALUES (:user_id, :provider, :access_token, :refresh_token, :scope, :expires_at, :updated_at, :provider_sub)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "provider": provider,
                     "access_token": "token3",
                     "refresh_token": "refresh3",
                     "scope": "openid",
-                    "expires_at": datetime.now(timezone.utc),
-                    "updated_at": datetime.now(timezone.utc),
+                    "expires_at": datetime.now(UTC),
+                    "updated_at": datetime.now(UTC),
                     "provider_sub": f"{provider_sub}_different",
-                }
+                },
             )
 
         # Verify we have exactly 2 rows total for this user
         with sync_engine.begin() as conn:
             result = conn.execute(
-                text("SELECT COUNT(*) FROM tokens.third_party_tokens WHERE user_id = :user_id"),
-                {"user_id": user_id}
+                text(
+                    "SELECT COUNT(*) FROM tokens.third_party_tokens WHERE user_id = :user_id"
+                ),
+                {"user_id": user_id},
             )
             total_count = result.scalar()
-            assert total_count == 2, f"Should have exactly 2 rows (one for each unique triplet), found {total_count}"
+            assert (
+                total_count == 2
+            ), f"Should have exactly 2 rows (one for each unique triplet), found {total_count}"
 
     def test_provider_sub_required_not_null(self):
         """Verify provider_sub column is NOT NULL and required."""
@@ -624,17 +715,19 @@ class TestTokensDatabaseBehavior:
 
         with sync_engine.begin() as conn:
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
         # Try to insert without provider_sub - should fail due to NOT NULL constraint (in separate transaction)
@@ -642,24 +735,30 @@ class TestTokensDatabaseBehavior:
         try:
             with sync_engine.begin() as conn:
                 conn.execute(
-                    text("""
+                    text(
+                        """
                         INSERT INTO tokens.third_party_tokens (user_id, provider, access_token, refresh_token, scope, expires_at, updated_at)
                         VALUES (:user_id, :provider, :access_token, :refresh_token, :scope, :expires_at, :updated_at)
-                    """),
+                    """
+                    ),
                     {
                         "user_id": user_id,
                         "provider": "spotify",
                         "access_token": "token1",
                         "refresh_token": "refresh1",
                         "scope": "music",
-                        "expires_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc),
+                        "expires_at": datetime.now(UTC),
+                        "updated_at": datetime.now(UTC),
                         # Note: provider_sub is omitted
-                    }
+                    },
                 )
         except Exception as e:
             # Expected - NOT NULL constraint violation
-            if "null" in str(e).lower() or "not-null" in str(e).lower() or "not null" in str(e).lower():
+            if (
+                "null" in str(e).lower()
+                or "not-null" in str(e).lower()
+                or "not null" in str(e).lower()
+            ):
                 not_null_violation_caught = True
             else:
                 raise  # Re-raise unexpected exceptions
@@ -674,17 +773,19 @@ class TestTokensDatabaseBehavior:
             email = f"test_{user_id}@example.com"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Test data with unique identifiers
@@ -695,7 +796,8 @@ class TestTokensDatabaseBehavior:
 
             # First insert
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO tokens.third_party_tokens (user_id, provider, access_token, refresh_token, scope, expires_at, updated_at, provider_sub)
                     VALUES (:user_id, :provider, :access_token, :refresh_token, :scope, :expires_at, :updated_at, :provider_sub)
                     ON CONFLICT (user_id, provider, provider_sub) DO UPDATE SET
@@ -704,22 +806,24 @@ class TestTokensDatabaseBehavior:
                         scope = EXCLUDED.scope,
                         expires_at = EXCLUDED.expires_at,
                         updated_at = EXCLUDED.updated_at
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "provider": provider,
                     "access_token": access_token,
                     "refresh_token": refresh_token,
                     "scope": "email profile",
-                    "expires_at": datetime.now(timezone.utc),
-                    "updated_at": datetime.now(timezone.utc),
+                    "expires_at": datetime.now(UTC),
+                    "updated_at": datetime.now(UTC),
                     "provider_sub": provider_sub,
-                }
+                },
             )
 
             # Second insert with same (user_id, provider, provider_sub) - should update, not insert
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO tokens.third_party_tokens (user_id, provider, access_token, refresh_token, scope, expires_at, updated_at, provider_sub)
                     VALUES (:user_id, :provider, :access_token, :refresh_token, :scope, :expires_at, :updated_at, :provider_sub)
                     ON CONFLICT (user_id, provider, provider_sub) DO UPDATE SET
@@ -728,51 +832,62 @@ class TestTokensDatabaseBehavior:
                         scope = EXCLUDED.scope,
                         expires_at = EXCLUDED.expires_at,
                         updated_at = EXCLUDED.updated_at
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "provider": provider,
                     "access_token": "updated_access_token",
                     "refresh_token": "updated_refresh_token",
                     "scope": "email profile openid",
-                    "expires_at": datetime.now(timezone.utc),
-                    "updated_at": datetime.now(timezone.utc),
+                    "expires_at": datetime.now(UTC),
+                    "updated_at": datetime.now(UTC),
                     "provider_sub": provider_sub,
-                }
+                },
             )
 
             # Verify exactly one row exists for this (user_id, provider, provider_sub) tuple
             result = conn.execute(
-                text("""
+                text(
+                    """
                     SELECT COUNT(*) FROM tokens.third_party_tokens
                     WHERE user_id = :user_id AND provider = :provider AND provider_sub = :provider_sub
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "provider": provider,
                     "provider_sub": provider_sub,
-                }
+                },
             )
             row_count = result.scalar()
 
-            assert row_count == 1, f"Should have exactly 1 row per (user_id, provider, provider_sub), found {row_count}"
+            assert (
+                row_count == 1
+            ), f"Should have exactly 1 row per (user_id, provider, provider_sub), found {row_count}"
 
             # Verify the row contains updated data
             result = conn.execute(
-                text("""
+                text(
+                    """
                     SELECT access_token, scope FROM tokens.third_party_tokens
                     WHERE user_id = :user_id AND provider = :provider AND provider_sub = :provider_sub
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "provider": provider,
                     "provider_sub": provider_sub,
-                }
+                },
             )
             row = result.mappings().first()
 
-            assert bytes(row["access_token"]) == b"updated_access_token", "Should contain updated access token"
-            assert row["scope"] == "email profile openid", "Should contain updated scope"
+            assert (
+                bytes(row["access_token"]) == b"updated_access_token"
+            ), "Should contain updated access token"
+            assert (
+                row["scope"] == "email profile openid"
+            ), "Should contain updated scope"
 
     def test_hash_is_set(self):
         """Verify hash field is set for tokens."""
@@ -782,46 +897,54 @@ class TestTokensDatabaseBehavior:
             email = f"test_{user_id}@example.com"
 
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.users (id, email, password_hash, name, created_at)
                     VALUES (:user_id, :email, :password_hash, :name, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "email": email,
                     "password_hash": "test_hash",
                     "name": "Test User",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Insert token with unique hash
             token_hash = f"hashed_token_{user_id}"
             conn.execute(
-                text("""
+                text(
+                    """
                     INSERT INTO auth.pat_tokens (user_id, name, token_hash, scopes, created_at)
                     VALUES (:user_id, :name, :token_hash, :scopes, :created_at)
-                """),
+                """
+                ),
                 {
                     "user_id": user_id,
                     "name": "Test Token",
                     "token_hash": token_hash,
                     "scopes": "read write",
-                    "created_at": datetime.now(timezone.utc),
-                }
+                    "created_at": datetime.now(UTC),
+                },
             )
 
             # Verify hash is set and not empty
             result = conn.execute(
-                text("""
+                text(
+                    """
                     SELECT token_hash FROM auth.pat_tokens
                     WHERE user_id = :user_id
-                """),
-                {"user_id": user_id}
+                """
+                ),
+                {"user_id": user_id},
             )
             row = result.mappings().first()
 
             assert row is not None, "Token row should exist"
             assert row["token_hash"] is not None, "token_hash should not be NULL"
-            assert row["token_hash"] == token_hash, "token_hash should match the set value"
+            assert (
+                row["token_hash"] == token_hash
+            ), "token_hash should match the set value"
             assert len(row["token_hash"]) > 0, "token_hash should not be empty"

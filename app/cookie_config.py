@@ -45,7 +45,12 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
 
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     # Consider USE_DEV_PROXY an explicit signal that we're running local dev
-    dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"} or os.getenv("USE_DEV_PROXY", "0").lower() in {"1", "true", "yes", "on"}
+    dev_mode = os.getenv("DEV_MODE", "0").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    } or os.getenv("USE_DEV_PROXY", "0").lower() in {"1", "true", "yes", "on"}
 
     # Development mode detection: prefer dev-friendly defaults
     dev_env_detected = dev_mode or _is_dev_environment(request)
@@ -237,9 +242,26 @@ def format_cookie_header(
         # Prefer centralized web cookie names when available
         from .web.cookies import NAMES as WEB_COOKIE_NAMES
 
-        priority_names = {WEB_COOKIE_NAMES.access, WEB_COOKIE_NAMES.refresh, WEB_COOKIE_NAMES.session, "access_token", "refresh_token", "__session", "GSNH_AT", "GSNH_RT", "GSNH_SESS"}
+        priority_names = {
+            WEB_COOKIE_NAMES.access,
+            WEB_COOKIE_NAMES.refresh,
+            WEB_COOKIE_NAMES.session,
+            "access_token",
+            "refresh_token",
+            "__session",
+            "GSNH_AT",
+            "GSNH_RT",
+            "GSNH_SESS",
+        }
     except Exception:
-        priority_names = {"access_token", "refresh_token", "__session", "GSNH_AT", "GSNH_RT", "GSNH_SESS"}
+        priority_names = {
+            "access_token",
+            "refresh_token",
+            "__session",
+            "GSNH_AT",
+            "GSNH_RT",
+            "GSNH_SESS",
+        }
     if key in priority_names:
         parts.append("Priority=High")
 

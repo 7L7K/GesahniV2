@@ -8,13 +8,11 @@ Tests state synchronization and delta emission:
 - State hash updates correctly
 """
 
-import asyncio
 import json
 import os
-import pytest
 import time
-from unittest.mock import patch
 
+import pytest
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -78,7 +76,7 @@ async def test_ws_music_play_deltas():
             "proto_ver": 1,
             "req_id": "play-test-123",
             "entity_id": "track1",
-            "entity_type": "track"
+            "entity_type": "track",
         }
         ws.send_text(json.dumps(play_payload))
 
@@ -113,7 +111,7 @@ async def test_ws_music_pause_ticks_slow():
             "proto_ver": 1,
             "req_id": "play-test-123",
             "entity_id": "track1",
-            "entity_type": "track"
+            "entity_type": "track",
         }
         ws.send_text(json.dumps(play_payload))
         ws.receive_text()  # ack
@@ -140,11 +138,7 @@ async def test_ws_music_pause_ticks_slow():
         assert tick_received, "Should receive position tick when playing"
 
         # Now pause
-        pause_payload = {
-            "type": "pause",
-            "proto_ver": 1,
-            "req_id": "pause-test-123"
-        }
+        pause_payload = {"type": "pause", "proto_ver": 1, "req_id": "pause-test-123"}
         ws.send_text(json.dumps(pause_payload))
         ws.receive_text()  # ack
         ws.receive_text()  # state delta
@@ -164,7 +158,9 @@ async def test_ws_music_pause_ticks_slow():
                 pass
 
         # Should not receive tick quickly when paused
-        assert not tick_received_after_pause, "Should not receive position tick quickly when paused"
+        assert (
+            not tick_received_after_pause
+        ), "Should not receive position tick quickly when paused"
 
 
 @pytest.mark.asyncio
@@ -189,7 +185,7 @@ async def test_ws_music_state_hash_updates():
             "proto_ver": 1,
             "req_id": "play-test-123",
             "entity_id": "track1",
-            "entity_type": "track"
+            "entity_type": "track",
         }
         ws.send_text(json.dumps(play_payload))
         ws.receive_text()  # ack
@@ -202,11 +198,7 @@ async def test_ws_music_state_hash_updates():
         assert play_hash != initial_hash
 
         # Pause
-        pause_payload = {
-            "type": "pause",
-            "proto_ver": 1,
-            "req_id": "pause-test-123"
-        }
+        pause_payload = {"type": "pause", "proto_ver": 1, "req_id": "pause-test-123"}
         ws.send_text(json.dumps(pause_payload))
         ws.receive_text()  # ack
 
@@ -235,7 +227,7 @@ async def test_ws_music_refresh_state():
         refresh_payload = {
             "type": "refreshState",
             "proto_ver": 1,
-            "req_id": "refresh-test-123"
+            "req_id": "refresh-test-123",
         }
         ws.send_text(json.dumps(refresh_payload))
 
@@ -271,7 +263,7 @@ async def test_ws_music_multiple_commands():
             "proto_ver": 1,
             "req_id": "play-test-123",
             "entity_id": "track1",
-            "entity_type": "track"
+            "entity_type": "track",
         }
         ws.send_text(json.dumps(play_payload))
         ws.receive_text()  # ack
@@ -283,7 +275,7 @@ async def test_ws_music_multiple_commands():
             "type": "setVolume",
             "proto_ver": 1,
             "req_id": "volume-test-123",
-            "level": 75
+            "level": 75,
         }
         ws.send_text(json.dumps(volume_payload))
         ws.receive_text()  # ack
@@ -295,7 +287,7 @@ async def test_ws_music_multiple_commands():
             "type": "seek",
             "proto_ver": 1,
             "req_id": "seek-test-123",
-            "position_ms": 60000
+            "position_ms": 60000,
         }
         ws.send_text(json.dumps(seek_payload))
         ws.receive_text()  # ack

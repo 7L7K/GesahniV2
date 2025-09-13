@@ -129,4 +129,3 @@ echo "3. Verify all responses have the correct JSON structure"
 echo "4. Check browser console for any error details"
 echo
 echo "Test complete! All chat routes now return standardized error JSON."
-
