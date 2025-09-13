@@ -119,16 +119,24 @@ ensure_redis() {
 
 # Start Redis (optional but recommended for stable sessions)
 if command -v redis-server >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
-    ensure_redis
+    if ensure_redis; then
+        echo "✅ Redis available"
+    else
+        echo "⚠️  Redis startup failed - using in-memory session store"
+    fi
 else
-    echo "⚠️  Neither Redis nor Docker available for Redis startup"
+    echo "ℹ️  Redis not available - using in-memory session store"
 fi
 
 # Start Qdrant if Docker is available
 if command -v docker >/dev/null 2>&1; then
-    ensure_qdrant
+    if ensure_qdrant; then
+        echo "✅ Qdrant available"
+    else
+        echo "⚠️  Qdrant startup failed - using fallback vector store"
+    fi
 else
-    echo "⚠️  Docker not available, assuming Qdrant is running externally"
+    echo "ℹ️  Docker not available - using fallback vector store"
 fi
 
 # Setup frontend environment
@@ -178,20 +186,27 @@ source .venv/bin/activate
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload &
 BACKEND_PID=$!
 
-# Wait for backend to be ready
+# Health probe with timeout - fail fast instead of zombie waiting
 echo "⏳ Waiting for backend to be ready..."
-timeout=30  # Increased timeout for slower machines
-counter=0
-while ! curl -s http://localhost:8000/healthz/ready >/dev/null 2>&1; do
-  if [ $counter -ge $timeout ]; then
-    echo "⚠️  Backend taking longer than expected, but continuing..."
+for i in {1..20}; do
+  # Check if process is still running
+  if ! kill -0 "$BACKEND_PID" 2>/dev/null; then
+    echo "❌ Backend process died. Check logs above."
+    exit 1
+  fi
+  # Check health endpoint
+  if curl -sf http://127.0.0.1:8000/healthz/ready >/dev/null; then
+    echo "✅ Backend ready"
     break
   fi
-  sleep 1
-  counter=$((counter + 1))
-  echo "   … still waiting ($counter/$timeout)"
+  sleep 0.5
 done
-echo "✅ Backend ready at http://localhost:8000"
+
+# Final health check - fail if not ready
+if ! curl -sf http://127.0.0.1:8000/healthz/ready >/dev/null; then
+  echo "❌ Backend not ready in time"
+  exit 1
+fi
 
 # Start frontend
 echo "🎨 Starting frontend (bound to 127.0.0.1)..."

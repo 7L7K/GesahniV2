@@ -120,13 +120,17 @@ def connect_endpoint(request: Request):
     """Compatibility endpoint for tests expecting /connect instead of /auth/google/login_url."""
     # Generate a simple OAuth URL for testing (similar to the real endpoint)
     import secrets
+
     state = secrets.token_urlsafe(32)
 
     # Use test OAuth config
     client_id = os.getenv("GOOGLE_CLIENT_ID", "test-client-id")
-    redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "http://localhost:8000/v1/google/auth/callback")
+    redirect_uri = os.getenv(
+        "GOOGLE_REDIRECT_URI", "http://localhost:8000/v1/google/auth/callback"
+    )
 
     from urllib.parse import urlencode
+
     params = {
         "client_id": client_id,
         "redirect_uri": redirect_uri,
@@ -134,7 +138,7 @@ def connect_endpoint(request: Request):
         "response_type": "code",
         "state": state,
         "access_type": "offline",
-        "prompt": "consent"
+        "prompt": "consent",
     }
 
     oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
@@ -147,17 +151,17 @@ def connect_endpoint(request: Request):
     response_data = {"authorize_url": oauth_url}
 
     http_response = Response(
-        content=json.dumps(response_data),
-        media_type="application/json"
+        content=json.dumps(response_data), media_type="application/json"
     )
 
     # Use centralized OAuth state cookie helper
     from app.web.cookies import set_oauth_state_cookies
+
     set_oauth_state_cookies(
         resp=http_response,
         state=state,
         ttl=300,  # 5 minutes
-        request=request
+        request=request,
     )
 
     return http_response
@@ -218,7 +222,12 @@ def gmail_send(payload: SendEmailIn, request: Request):
         if not row:
             from ..error_envelope import raise_enveloped
 
-            raise_enveloped("needs_reconnect", "No Google account linked", hint="Connect Google in Settings", status=400)
+            raise_enveloped(
+                "needs_reconnect",
+                "No Google account linked",
+                hint="Connect Google in Settings",
+                status=400,
+            )
         creds = oauth.record_to_creds(row)
         # Lazy import to avoid heavy dependency at module import time
         from .services import gmail_service
@@ -293,7 +302,12 @@ def calendar_create(evt: CreateEventIn, request: Request):
         if not row:
             from ..error_envelope import raise_enveloped
 
-            raise_enveloped("needs_reconnect", "No Google account linked", hint="Connect Google in Settings", status=400)
+            raise_enveloped(
+                "needs_reconnect",
+                "No Google account linked",
+                hint="Connect Google in Settings",
+                status=400,
+            )
         creds = oauth.record_to_creds(row)
         # Lazy import to avoid heavy dependency at module import time
         from .services import calendar_service

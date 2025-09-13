@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.api.music import PROVIDER_SPOTIFY
@@ -24,13 +25,14 @@ from app.models.music_state import MusicVibe, load_state, save_state
 from app.music.orchestrator import MusicOrchestrator
 from app.music.providers.spotify_provider import SpotifyProvider
 
-router = APIRouter(tags=["Music"])  # mounted under /v1
+router = APIRouter(prefix="/music", tags=["Music"])  # mounted under /v1
 logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
 # Feature flags and env
 # ---------------------------------------------------------------------------
+
 
 def is_test_mode() -> bool:
     """Evaluate test mode dynamically at runtime so tests can set env after import."""
@@ -39,7 +41,8 @@ def is_test_mode() -> bool:
         or os.getenv("PYTEST_RUNNING")
         or os.getenv("TEST_MODE", "").strip() == "1"
         or os.getenv("ENV", "").strip().lower() == "test"
-        or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower() in {"1", "true", "yes", "on"}
+        or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower()
+        in {"1", "true", "yes", "on"}
     )
 
 
@@ -50,9 +53,26 @@ def is_provider_spotify() -> bool:
     """
     if is_test_mode():
         return False
-    return os.getenv("PROVIDER_SPOTIFY", "true").strip().lower() in {"1", "true", "yes", "on"}
-MUSIC_FALLBACK_RADIO = os.getenv("MUSIC_FALLBACK_RADIO", "false").strip().lower() in {"1", "true", "yes", "on"}
-EXPLICIT_DEFAULT = os.getenv("EXPLICIT_DEFAULT", "true").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("PROVIDER_SPOTIFY", "true").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+MUSIC_FALLBACK_RADIO = os.getenv("MUSIC_FALLBACK_RADIO", "false").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
+EXPLICIT_DEFAULT = os.getenv("EXPLICIT_DEFAULT", "true").strip().lower() in {
+    "1",
+    "true",
+    "yes",
+    "on",
+}
 
 QUIET_START = os.getenv("QUIET_HOURS_START", "22:00")
 QUIET_END = os.getenv("QUIET_HOURS_END", "07:00")
@@ -65,7 +85,9 @@ RADIO_URL = os.getenv("FALLBACK_RADIO_URL", "")
 DEFAULT_VIBES: dict[str, MusicVibe] = {
     "Calm Night": MusicVibe(name="Calm Night", energy=0.25, tempo=80, explicit=False),
     "Turn Up": MusicVibe(name="Turn Up", energy=0.9, tempo=128, explicit=False),
-    "Uplift Morning": MusicVibe(name="Uplift Morning", energy=0.6, tempo=110, explicit=False),
+    "Uplift Morning": MusicVibe(
+        name="Uplift Morning", energy=0.6, tempo=110, explicit=False
+    ),
 }
 
 
@@ -148,7 +170,9 @@ def _attach_cache_headers(response: Response, etag: str) -> None:
 
 def _maybe_304(request: Request, response: Response, etag: str) -> Response | None:
     try:
-        inm = request.headers.get("if-none-match") or request.headers.get("If-None-Match")
+        inm = request.headers.get("if-none-match") or request.headers.get(
+            "If-None-Match"
+        )
         if inm and inm.strip() == etag:
             _attach_cache_headers(response, etag)
             return Response(status_code=304, headers=dict(response.headers))
@@ -157,7 +181,9 @@ def _maybe_304(request: Request, response: Response, etag: str) -> Response | No
     return None
 
 
-_PAUSE_POLL_AFTER_NO_PLAY_S = int(os.getenv("MUSIC_POLL_PAUSE_AFTER_NO_PLAY_S", str(5 * 60)))
+_PAUSE_POLL_AFTER_NO_PLAY_S = int(
+    os.getenv("MUSIC_POLL_PAUSE_AFTER_NO_PLAY_S", str(5 * 60))
+)
 MARKET = os.getenv("SPOTIFY_MARKET", "US")
 _last_play_ts: dict[str, float] = {}
 
@@ -310,7 +336,9 @@ async def _provider_recommendations(
 
 _RECS_CACHE: dict[tuple, tuple[float, list[dict]]] = {}
 _RECS_CACHE_TTL_S: int = int(os.getenv("RECS_CACHE_TTL", "180") or 180)
-_RECS_STATE_TTL_S: int = int(os.getenv("RECS_STATE_TTL_S", os.getenv("RECS_STATE_TTL", "0")) or 0)
+_RECS_STATE_TTL_S: int = int(
+    os.getenv("RECS_STATE_TTL_S", os.getenv("RECS_STATE_TTL", "0")) or 0
+)
 
 
 def _recs_cache_key(user_id: str, seeds: list[str] | None, vibe: MusicVibe) -> tuple:
@@ -370,7 +398,11 @@ class MusicCommand(BaseModel):
     device_id: str | None = None
     temporary: bool = False
 
-    model_config = ConfigDict(json_schema_extra={"example": {"command": "volume", "volume": 20, "temporary": True}})
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"command": "volume", "volume": 20, "temporary": True}
+        }
+    )
 
 
 class VibeBody(BaseModel):
@@ -381,7 +413,12 @@ class VibeBody(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {"name": "Calm Night", "energy": 0.3, "tempo": 85, "explicit": False}
+            "example": {
+                "name": "Calm Night",
+                "energy": 0.3,
+                "tempo": 85,
+                "explicit": False,
+            }
         }
     )
 
@@ -419,7 +456,14 @@ async def _build_state_payload(user_id: str) -> StateResponse:
         track_id = item.get("id")
         state.last_track_id = track_id or state.last_track_id
         images = (item.get("album") or {}).get("images") or []
-        art_url = next((img.get("url") for img in images if isinstance(img, dict) and img.get("url")), None)
+        art_url = next(
+            (
+                img.get("url")
+                for img in images
+                if isinstance(img, dict) and img.get("url")
+            ),
+            None,
+        )
         if art_url and track_id:
             _cached = _ensure_album_cached(art_url, track_id)
             cached = await _cached if inspect.isawaitable(_cached) else _cached
@@ -435,14 +479,23 @@ async def _build_state_payload(user_id: str) -> StateResponse:
         progress_ms = sp.get("progress_ms")
         is_playing = sp.get("is_playing")
     elif MUSIC_FALLBACK_RADIO and not is_provider_spotify():
-        track = {"id": "radio", "name": "Local Radio", "artists": "—", "art_url": "/placeholder.png"}
+        track = {
+            "id": "radio",
+            "name": "Local Radio",
+            "artists": "—",
+            "art_url": "/placeholder.png",
+        }
         is_playing = state.radio_playing
 
     state.quiet_hours = quiet
     state.explicit_allowed = _explicit_allowed(state.vibe)
     save_state(user_id, state)
 
-    provider = "spotify" if is_provider_spotify() else ("radio" if MUSIC_FALLBACK_RADIO else None)
+    provider = (
+        "spotify"
+        if is_provider_spotify()
+        else ("radio" if MUSIC_FALLBACK_RADIO else None)
+    )
     return StateResponse(
         vibe=asdict(state.vibe),
         volume=state.volume,
@@ -454,7 +507,11 @@ async def _build_state_payload(user_id: str) -> StateResponse:
         explicit_allowed=state.explicit_allowed,
         provider=provider,
         radio_url=RADIO_URL or None,
-        radio_playing=(state.radio_playing if (not is_provider_spotify() and MUSIC_FALLBACK_RADIO) else None),
+        radio_playing=(
+            state.radio_playing
+            if (not is_provider_spotify() and MUSIC_FALLBACK_RADIO)
+            else None
+        ),
     )
 
 
@@ -554,12 +611,13 @@ class VibeResponse(BaseModel):
     vibe: dict
 
     model_config = ConfigDict(
-        title="VibeResponse",
-        json_schema_extra={"title": "VibeResponse"}
+        title="VibeResponse", json_schema_extra={"title": "VibeResponse"}
     )
 
 
-@router.post("/vibe", response_model=VibeResponse, responses={200: {"model": VibeResponse}})
+@router.post(
+    "/vibe", response_model=VibeResponse, responses={200: {"model": VibeResponse}}
+)
 async def set_vibe(
     body: VibeBody,
     user_id: str = Depends(get_current_user_id),
@@ -574,7 +632,9 @@ async def set_vibe(
             name=body.name or vibe.name,
             energy=float(body.energy) if body.energy is not None else vibe.energy,
             tempo=float(body.tempo) if body.tempo is not None else vibe.tempo,
-            explicit=(bool(body.explicit) if body.explicit is not None else vibe.explicit),
+            explicit=(
+                bool(body.explicit) if body.explicit is not None else vibe.explicit
+            ),
         )
     quiet = _in_quiet_hours()
     cap = _volume_cap_for(state.vibe, quiet)
@@ -587,9 +647,12 @@ async def set_vibe(
     return {"status": "ok", "vibe": asdict(state.vibe)}
 
 
-@router.get("/state", response_model=StateResponse)
-async def music_state(request: Request, response: Response, user_id: str = Depends(get_current_user_id)):
+@router.get("/state", response_model=StateResponse, deprecated=True)
+async def music_state(
+    request: Request, response: Response, user_id: str = Depends(get_current_user_id)
+):
     payload = await _build_state_payload(user_id)
+
     def _state_fingerprint(state) -> dict:
         # Handle both StateResponse objects and dict inputs
         if isinstance(state, dict):
@@ -616,6 +679,7 @@ async def music_state(request: Request, response: Response, user_id: str = Depen
                 "vt": int(float(vibe.get("tempo", 0) or 0)),
                 "e": bool(vibe.get("explicit", False)),
             }
+
     finger = _state_fingerprint(payload.model_dump())
     etag = _strong_etag("state", user_id, finger)
     maybe = _maybe_304(request, response, etag)
@@ -625,7 +689,9 @@ async def music_state(request: Request, response: Response, user_id: str = Depen
     return payload
 
 
-@router.post("/restore_volume", response_model=OkResponse, responses={200: {"model": OkResponse}})
+@router.post(
+    "/restore_volume", response_model=OkResponse, responses={200: {"model": OkResponse}}
+)
 async def restore_volume(user_id: str = Depends(get_current_user_id)):
     state = load_state(user_id)
     if getattr(state, "duck_from", None) is not None:
@@ -665,7 +731,9 @@ async def recommendations(user_id: str = Depends(get_current_user_id)):
         except Exception:
             items = []
     else:
-        items = await _provider_recommendations(user_id, seed_tracks=seeds, vibe=vibe, limit=20)
+        items = await _provider_recommendations(
+            user_id, seed_tracks=seeds, vibe=vibe, limit=20
+        )
     _recs_set_cached(key, items)
     return {"items": items}
 
@@ -694,17 +762,29 @@ class TransferBody(BaseModel):
     device_id: str | None = None
 
 
-@router.put("/music/device", response_model=CommonOkResponse, responses={200: {"model": CommonOkResponse}, 400: {"description": "Missing device_id"}})
+@router.put(
+    "/music/device",
+    response_model=CommonOkResponse,
+    responses={
+        200: {"model": CommonOkResponse},
+        400: {"description": "Missing device_id"},
+    },
+)
 async def put_music_device(body: TransferBody):
     """Simple PUT handler for music device endpoint that validates device_id presence."""
     device_id = (body.device_id or "").strip()
     if not device_id:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=400, detail="missing device_id")
     return {"status": "ok"}
 
 
-@router.post("/music/device", response_model=CommonOkResponse, responses={200: {"model": CommonOkResponse}})
+@router.post(
+    "/music/device",
+    response_model=CommonOkResponse,
+    responses={200: {"model": CommonOkResponse}},
+)
 async def transfer_playback_device(
     body: TransferBody,
     user_id: str = Depends(get_current_user_id),
@@ -731,4 +811,13 @@ async def transfer_playback_device(
         return {"status": "ok"}
 
 
-__all__ = ["router", "_build_state_payload"]
+# Legacy redirect router for backward compatibility
+# This should be mounted at /v1 level (not under /music)
+redirect_router = APIRouter()
+
+@redirect_router.get("/legacy/state", include_in_schema=True, deprecated=True)
+async def legacy_music_state_redirect():
+    """Redirect legacy /v1/legacy/state calls to new /v1/state endpoint."""
+    return RedirectResponse(url="/v1/state", status_code=307)
+
+__all__ = ["router", "redirect_router", "_build_state_payload"]

@@ -13,6 +13,7 @@ import WsBootstrap from "@/components/WsBootstrap";
 import AuthProvider from "@/components/AuthProvider";
 import ClientOnly from "@/components/ClientOnly";
 import { ConfigValidator } from "@/components/ConfigValidator";
+import AuthHud from "@/components/AuthHUD";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -68,6 +69,7 @@ export default function RootLayout({
                 <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
                   {children}
                 </div>
+                {process.env.NODE_ENV !== 'production' ? <AuthHud /> : null}
               </div>
             </AuthProvider>
             <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-right" />

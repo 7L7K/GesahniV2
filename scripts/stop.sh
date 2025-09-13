@@ -5,7 +5,7 @@ set -euo pipefail
 echo "🛑 Stopping Gesahni Development Environment"
 
 # Patterns to look for (full command match via pgrep -f)
-patterns=("uvicorn app.main:app" "next dev" "pnpm dev" "npm run dev")
+patterns=("uvicorn app.main:app" "next dev" "next-server" "pnpm dev" "npm run dev" "node.*next")
 
 any=false
 for pat in "${patterns[@]}"; do

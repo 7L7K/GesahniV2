@@ -2,8 +2,8 @@ from __future__ import annotations
 
 # app/skills/news_skill.py
 import re
-import defusedxml.ElementTree as ET
 
+import defusedxml.ElementTree as ET
 import httpx
 
 from .base import Skill

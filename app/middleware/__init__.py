@@ -9,7 +9,6 @@ rate limiting, session management, and observability.
 # Strict re-exports to avoid circular imports and None values
 from ..csrf import CSRFMiddleware
 from .audit_mw import AuditMiddleware
-from .cors_cache_fix import SafariCORSCacheFixMiddleware
 from .custom import (
     EnhancedErrorHandlingMiddleware,
     ReloadEnvMiddleware,
@@ -47,7 +46,6 @@ __all__ = [
     "EnhancedErrorHandlingMiddleware",
     "SilentRefreshMiddleware",
     "ReloadEnvMiddleware",
-    "SafariCORSCacheFixMiddleware",
     "reload_env_middleware",
     "silent_refresh_middleware",
     "add_mw",

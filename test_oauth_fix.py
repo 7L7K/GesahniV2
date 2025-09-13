@@ -11,7 +11,7 @@ from unittest.mock import patch
 import jwt
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 
 def test_exchange_code_preserves_id_token():
@@ -25,14 +25,18 @@ def test_exchange_code_preserves_id_token():
         "scope": "openid email profile",
         "token_type": "Bearer",
         "expires_in": 3600,
-        "id_token": jwt.encode({
-            "sub": "123456789",
-            "iss": "https://accounts.google.com",
-            "aud": "test_client_id",
-            "exp": 2000000000,
-            "iat": 1000000000,
-            "email": "test@example.com"
-        }, "secret", algorithm="HS256")
+        "id_token": jwt.encode(
+            {
+                "sub": "123456789",
+                "iss": "https://accounts.google.com",
+                "aud": "test_client_id",
+                "exp": 2000000000,
+                "iat": 1000000000,
+                "email": "test@example.com",
+            },
+            "secret",
+            algorithm="HS256",
+        ),
     }
 
     # Mock the exchange_code_for_tokens function
@@ -40,25 +44,41 @@ def test_exchange_code_preserves_id_token():
         return mock_token_response
 
     # Patch the function
-    with patch('app.integrations.google.oauth.GoogleOAuth.exchange_code_for_tokens', side_effect=mock_exchange_code_for_tokens):
+    with patch(
+        "app.integrations.google.oauth.GoogleOAuth.exchange_code_for_tokens",
+        side_effect=mock_exchange_code_for_tokens,
+    ):
         # Import after patching
         from app.integrations.google.oauth import exchange_code
 
         # Test the exchange_code function (skip state verification for this test)
-        result = asyncio.run(exchange_code("test_code", "test_state", verify_state=False, code_verifier="test_verifier"))
+        result = asyncio.run(
+            exchange_code(
+                "test_code",
+                "test_state",
+                verify_state=False,
+                code_verifier="test_verifier",
+            )
+        )
 
         # Check if id_token is preserved
         print(f"Result type: {type(result)}")
         print(f"Has id_token attribute: {hasattr(result, 'id_token')}")
 
-        if hasattr(result, 'id_token'):
+        if hasattr(result, "id_token"):
             print(f"id_token length: {len(result.id_token)}")
-            print(f"id_token matches original: {result.id_token == mock_token_response['id_token']}")
+            print(
+                f"id_token matches original: {result.id_token == mock_token_response['id_token']}"
+            )
 
             # Test decoding the id_token
             try:
-                decoded = jwt.decode(result.id_token, options={"verify_signature": False})
-                print(f"Decoded id_token: iss={decoded.get('iss')}, sub={decoded.get('sub')}")
+                decoded = jwt.decode(
+                    result.id_token, options={"verify_signature": False}
+                )
+                print(
+                    f"Decoded id_token: iss={decoded.get('iss')}, sub={decoded.get('sub')}"
+                )
                 print("✅ id_token preservation test PASSED")
                 return True
             except Exception as e:
@@ -76,14 +96,18 @@ def test_callback_id_token_extraction():
     # Create a mock ThirdPartyToken with id_token
     from app.models.third_party_tokens import ThirdPartyToken
 
-    id_token = jwt.encode({
-        "sub": "123456789",
-        "iss": "https://accounts.google.com",
-        "aud": "test_client_id",
-        "exp": 2000000000,
-        "iat": 1000000000,
-        "email": "test@example.com"
-    }, "secret", algorithm="HS256")
+    id_token = jwt.encode(
+        {
+            "sub": "123456789",
+            "iss": "https://accounts.google.com",
+            "aud": "test_client_id",
+            "exp": 2000000000,
+            "iat": 1000000000,
+            "email": "test@example.com",
+        },
+        "secret",
+        algorithm="HS256",
+    )
 
     creds = ThirdPartyToken(
         user_id="test_user",
@@ -91,7 +115,7 @@ def test_callback_id_token_extraction():
         access_token="test_token",
         refresh_token="test_refresh",
         scopes="openid email",
-        expires_at=2000000000  # Future timestamp
+        expires_at=2000000000,  # Future timestamp
     )
 
     # Add id_token attribute (this is what our fix does)
@@ -109,7 +133,9 @@ def test_callback_id_token_extraction():
         print(f"Has id_token: {id_token_from_creds is not None}")
 
         if id_token_from_creds:
-            claims = jwt_decode(id_token_from_creds, options={"verify_signature": False})
+            claims = jwt_decode(
+                id_token_from_creds, options={"verify_signature": False}
+            )
             email = claims.get("email") or claims.get("email_address")
             provider_sub = claims.get("sub") or None
             provider_iss = claims.get("iss") or None

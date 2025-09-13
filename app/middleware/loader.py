@@ -17,8 +17,7 @@ from ..csrf import CSRFMiddleware
 
 # Import middleware classes directly to avoid circular imports
 from .audit_mw import AuditMiddleware
-from .cors import CorsPreflightMiddleware
-from .cors_cache_fix import SafariCORSCacheFixMiddleware
+# Deprecated custom CORS layers removed in favor of a single CORSMiddleware
 from .custom import (
     EnhancedErrorHandlingMiddleware,
     ReloadEnvMiddleware,
@@ -26,6 +25,7 @@ from .custom import (
 )
 from .deprecation_mw import DeprecationHeaderMiddleware
 from .error_handler import ErrorHandlerMiddleware
+from .legacy_headers import LegacyHeadersMiddleware
 from .metrics_mw import MetricsMiddleware
 from .middleware_core import (
     DedupMiddleware,
@@ -34,6 +34,7 @@ from .middleware_core import (
     RequestIDMiddleware,
     TraceRequestMiddleware,
 )
+from .auth_diag import AuthDiagMiddleware
 from .rate_limit import RateLimitMiddleware
 from .session_attach import SessionAttachMiddleware
 
@@ -80,7 +81,9 @@ def _is_truthy(v: str | None) -> bool:
     return (v or "").strip().lower() in {"1", "true", "yes", "on"}
 
 
-def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, cors_origins: list[str] | None = None) -> None:
+def register_canonical_middlewares(
+    app: FastAPI, *, csrf_enabled: bool = True, cors_origins: list[str] | None = None
+) -> None:
     """
     Register middlewares in canonical order with validation.
 
@@ -98,29 +101,43 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
     in_ci = _is_truthy(os.getenv("CI")) or "PYTEST_CURRENT_TEST" in os.environ
     rate_limit_enabled = _is_truthy(os.getenv("RATE_LIMIT_ENABLED", "1")) and not in_ci
     legacy_error_mw = _is_truthy(os.getenv("LEGACY_ERROR_MW"))
+    legacy_headers_enabled = (_is_truthy(os.getenv("GSN_ENABLE_LEGACY_GOOGLE")) or
+                             (_is_truthy(os.getenv("LEGACY_MUSIC_HTTP")) and not in_ci))
 
-    logger.info("Setting up canonical middleware stack with csrf_enabled=%s, cors_origins=%s", csrf_enabled, cors_origins)
+    logger.info(
+        "Setting up canonical middleware stack with csrf_enabled=%s, cors_origins=%s",
+        csrf_enabled,
+        cors_origins,
+    )
 
     # =========================================================================
     # CANONICAL MIDDLEWARE ORDER - OUTERMOST → INNERMOST
     # =========================================================================
 
-    # CORS layers (outermost)
-    cors_origins_list = cors_origins or ["http://localhost:3000", "http://127.0.0.1:3000"]
-    app.add_middleware(CorsPreflightMiddleware, allow_origins=cors_origins_list)
-    add_mw(app, SafariCORSCacheFixMiddleware, name="SafariCORSCacheFixMiddleware")
-
-    # CORSMiddleware from Starlette
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"]
-    )
+    # CORS: mount a single Starlette CORSMiddleware ONLY when explicit origins provided.
+    # In dev proxy (same-origin), do not mount any CORS middleware.
+    cors_enabled = bool(cors_origins and [o for o in cors_origins if o])
+    if cors_enabled:
+        # Normalize and de-dupe origins
+        allow_origins = list({o.strip().rstrip('/') for o in cors_origins or [] if o and o.strip()})
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=allow_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+            expose_headers=["X-Request-ID", "X-Error-Code", "X-Error-ID", "X-Trace-ID"],
+            max_age=3600,
+        )
 
     # Request processing chain
     add_mw(app, RequestIDMiddleware, name="RequestIDMiddleware")
+    # Dev-only diagnostic middleware: provide redacted auth/cookie summaries
+    try:
+        add_mw(app, AuthDiagMiddleware, name="AuthDiagMiddleware")
+    except Exception:
+        # Best-effort: do not fail startup if diag middleware cannot be added
+        logger.debug("AuthDiagMiddleware not added (optional)")
     add_mw(app, TraceRequestMiddleware, name="TraceRequestMiddleware")
     add_mw(app, RedactHashMiddleware, name="RedactHashMiddleware")
     add_mw(app, HealthCheckFilterMiddleware, name="HealthCheckFilterMiddleware")
@@ -140,8 +157,16 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
     # Note: Since FastAPI stores middleware in reverse order, we add Deprecation first
     # so it appears after Metrics in user_middleware (executing after Metrics)
     add_mw(app, AuditMiddleware, name="AuditMiddleware")
-    add_mw(app, DeprecationHeaderMiddleware, name="DeprecationHeaderMiddleware")  # <- Add first (appears second in user_middleware)
-    add_mw(app, MetricsMiddleware, name="MetricsMiddleware")              # <- Add second (appears first in user_middleware)
+    add_mw(
+        app, DeprecationHeaderMiddleware, name="DeprecationHeaderMiddleware"
+    )  # <- Add first (appears second in user_middleware)
+    add_mw(
+        app, MetricsMiddleware, name="MetricsMiddleware"
+    )  # <- Add second (appears first in user_middleware)
+
+    # Legacy headers (conditional)
+    if legacy_headers_enabled:
+        add_mw(app, LegacyHeadersMiddleware, name="LegacyHeadersMiddleware")
 
     # CSRF protection (conditional)
     if csrf_enabled:
@@ -149,9 +174,13 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
 
     # Legacy error middlewares (conditional)
     if legacy_error_mw:
-        add_mw(app, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
+        add_mw(
+            app, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware"
+        )
         add_mw(app, ErrorHandlerMiddleware, name="ErrorHandlerMiddleware")
-        logger.warning("Legacy error middlewares enabled (LEGACY_ERROR_MW=1) — not recommended.")
+        logger.warning(
+            "Legacy error middlewares enabled (LEGACY_ERROR_MW=1) — not recommended."
+        )
 
     # ReloadEnvMiddleware (innermost, dev/CI only)
     if dev_mode and not in_ci:
@@ -164,24 +193,24 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
     # Expected order in FastAPI's internal storage (inner→outer due to reversal)
     # Note: Due to FastAPI's reverse storage, the order here matches execution order
     EXPECTED = [
-        "ReloadEnvMiddleware",            # innermost (added last)
-        "ErrorHandlerMiddleware",         # conditional
-        "EnhancedErrorHandlingMiddleware", # conditional
-        "CSRFMiddleware",                 # conditional
-        "MetricsMiddleware",              # executes BEFORE Deprecation (critical!)
-        "DeprecationHeaderMiddleware",   # executes AFTER Metrics (critical!)
+        "ReloadEnvMiddleware",  # innermost (added last)
+        "ErrorHandlerMiddleware",  # conditional
+        "EnhancedErrorHandlingMiddleware",  # conditional
+        "CSRFMiddleware",  # conditional
+        "MetricsMiddleware",  # executes BEFORE Deprecation (critical!)
+        "DeprecationHeaderMiddleware",  # executes AFTER Metrics (critical!)
+        "LegacyHeadersMiddleware",  # conditional, executes AFTER Deprecation
         "AuditMiddleware",
         "DedupMiddleware",
         "SilentRefreshMiddleware",
-        "SessionAttachMiddleware",        # conditional
-        "RateLimitMiddleware",            # conditional
+        "SessionAttachMiddleware",  # conditional
+        "RateLimitMiddleware",  # conditional
         "HealthCheckFilterMiddleware",
         "RedactHashMiddleware",
         "TraceRequestMiddleware",
+        "AuthDiagMiddleware",
         "RequestIDMiddleware",
         "CORSMiddleware",
-        "SafariCORSCacheFixMiddleware",
-        "CorsPreflightMiddleware",        # outermost (added first)
     ]
 
     # Build actual order, skipping conditionals that weren't added
@@ -192,11 +221,20 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
             continue
         elif name == "RateLimitMiddleware" and not rate_limit_enabled:
             continue
-        elif name in ["EnhancedErrorHandlingMiddleware", "ErrorHandlerMiddleware"] and not legacy_error_mw:
+        elif (
+            name in ["EnhancedErrorHandlingMiddleware", "ErrorHandlerMiddleware"]
+            and not legacy_error_mw
+        ):
             continue
         elif name == "ReloadEnvMiddleware" and not (dev_mode and not in_ci):
             continue
-        elif name == "SessionAttachMiddleware" and not _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "0")):
+        elif name == "SessionAttachMiddleware" and not _is_truthy(
+            os.getenv("SESSION_ATTACH_ENABLED", "0")
+        ):
+            continue
+        elif name == "LegacyHeadersMiddleware" and not legacy_headers_enabled:
+            continue
+        if name == "CORSMiddleware" and not cors_enabled:
             continue
         expected_filtered.append(name)
 
@@ -222,4 +260,6 @@ def register_canonical_middlewares(app: FastAPI, *, csrf_enabled: bool = True, c
             raise RuntimeError(f"Duplicate middleware detected: {name}")
         _seen.add(name)
 
-    logger.info("✅ Canonical middleware stack validated with %d middlewares", len(actual))
+    logger.info(
+        "✅ Canonical middleware stack validated with %d middlewares", len(actual)
+    )

@@ -9,11 +9,17 @@ def run_curl(cmd):
     """Run curl command and return response."""
     try:
         # Use shell=False and pass command as list to avoid injection vulnerabilities
-        result = subprocess.run(cmd if isinstance(cmd, list) else cmd.split(),
-                               shell=False, capture_output=True, text=True, timeout=10)
+        result = subprocess.run(
+            cmd if isinstance(cmd, list) else cmd.split(),
+            shell=False,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
         return result.stdout.strip(), result.stderr.strip(), result.returncode
     except Exception as e:
         return "", str(e), 1
+
 
 def test_idempotency():
     print("=== Testing Idempotency DoD ===")
@@ -28,10 +34,10 @@ def test_idempotency():
         print(f"   Response: {stdout1}")
         try:
             data1 = json.loads(stdout1)
-            req_id_1 = data1.get('req_id', 'unknown')
+            req_id_1 = data1.get("req_id", "unknown")
             print(f"   Request ID: {req_id_1}")
         except:
-            req_id_1 = 'unknown'
+            req_id_1 = "unknown"
     else:
         print(f"   Error: {stderr1}")
         return
@@ -47,10 +53,10 @@ def test_idempotency():
         print(f"   Response: {stdout2}")
         try:
             data2 = json.loads(stdout2)
-            req_id_2 = data2.get('req_id', 'unknown')
+            req_id_2 = data2.get("req_id", "unknown")
             print(f"   Request ID: {req_id_2}")
         except:
-            req_id_2 = 'unknown'
+            req_id_2 = "unknown"
     else:
         print(f"   Error: {stderr2}")
         return
@@ -66,6 +72,7 @@ def test_idempotency():
         print("   Idempotency is not working as expected.")
         print(f"   First:  {stdout1}")
         print(f"   Second: {stdout2}")
+
 
 if __name__ == "__main__":
     test_idempotency()

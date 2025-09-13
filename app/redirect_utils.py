@@ -199,7 +199,7 @@ def sanitize_redirect_path(
         double_decoded = safe_decode_url(path, max_decodes=2)
 
         # Check if double decoding was actually needed (path changed after second decode)
-        requires_double_decode = (double_decoded != single_decoded)
+        requires_double_decode = double_decoded != single_decoded
 
         if requires_double_decode:
             if SAFE_REDIRECTS_ENFORCED:
@@ -213,7 +213,9 @@ def sanitize_redirect_path(
                         "input_len": len(raw_path),
                         "output_path": fallback,
                         "cookie_present": (
-                            get_gs_next_cookie(request) is not None if request else False
+                            get_gs_next_cookie(request) is not None
+                            if request
+                            else False
                         ),
                         "env": os.getenv("ENV", "dev"),
                         "raw_path": raw_path,
@@ -231,7 +233,9 @@ def sanitize_redirect_path(
                         "reason": "double_decode_bypass",
                         "input_len": len(raw_path),
                         "cookie_present": (
-                            get_gs_next_cookie(request) is not None if request else False
+                            get_gs_next_cookie(request) is not None
+                            if request
+                            else False
                         ),
                         "env": os.getenv("ENV", "dev"),
                         "raw_path": raw_path,
@@ -246,12 +250,22 @@ def sanitize_redirect_path(
         # Step 2: Reject absolute URLs and mobile deep links to prevent open redirects
         # Block common malicious URL schemes
         dangerous_schemes = (
-            "http://", "https://",  # Web URLs
-            "app://", "intent://", "itms-services://",  # Mobile deep links
-            "android-app://", "ios-app://",  # App-specific schemes
-            "fb://", "twitter://", "whatsapp://",  # Social app schemes
-            "tel:", "sms:", "mailto:",  # Communication schemes
-            "file://", "javascript:", "data:",  # File and script schemes
+            "http://",
+            "https://",  # Web URLs
+            "app://",
+            "intent://",
+            "itms-services://",  # Mobile deep links
+            "android-app://",
+            "ios-app://",  # App-specific schemes
+            "fb://",
+            "twitter://",
+            "whatsapp://",  # Social app schemes
+            "tel:",
+            "sms:",
+            "mailto:",  # Communication schemes
+            "file://",
+            "javascript:",
+            "data:",  # File and script schemes
         )
 
         if path.startswith(dangerous_schemes):
@@ -313,17 +327,28 @@ def sanitize_redirect_path(
         # Step 4.1: Reject obvious local filesystem paths or direct file downloads
         try:
             import re as _re
+
             lower = path.lower()
             # Common system path prefixes on macOS/Linux that should never be next targets
-            if _re.match(r"^/(var|etc|usr|private|system|library|applications|volumes)\\b", lower):
+            if _re.match(
+                r"^/(var|etc|usr|private|system|library|applications|volumes)\\b", lower
+            ):
                 AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="filesystem_path").inc()
                 logger.info(
                     "Redirect sanitization",
-                    extra={"component": "auth.redirect", "reason": "filesystem_path", "raw_path": raw_path},
+                    extra={
+                        "component": "auth.redirect",
+                        "reason": "filesystem_path",
+                        "raw_path": raw_path,
+                    },
                 )
                 return fallback
             # Reject file-like paths ending with common file extensions (e.g., screenshots)
-            if _re.search(r"\\.(png|jpe?g|gif|webp|svg|pdf|zip|dmg|mov|mp4|mp3|wav|heic|heif)(?:[?#].*)?$", path, _re.IGNORECASE):
+            if _re.search(
+                r"\\.(png|jpe?g|gif|webp|svg|pdf|zip|dmg|mov|mp4|mp3|wav|heic|heif)(?:[?#].*)?$",
+                path,
+                _re.IGNORECASE,
+            ):
                 AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="file_like_path").inc()
                 return fallback
             # Reject spaces or colon which often indicate pasted file URIs

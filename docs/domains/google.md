@@ -143,7 +143,7 @@ url = f"https://accounts.google.com/o/oauth2/v2/auth?client_id={client_id}&respo
 ```python
 # Exchange authorization code for tokens with PKCE verification
 response = await httpx.post("https://oauth2.googleapis.com/token", data={
-    "grant_type": "authorization_code", 
+    "grant_type": "authorization_code",
     "code": code,
     "redirect_uri": redirect_uri,
     "client_id": client_id,
@@ -205,7 +205,7 @@ events = service.events().list(calendarId="primary", maxResults=10).execute()
 **User Profile Access:**
 ```python
 # Get user profile information
-profile = await httpx.get("https://www.googleapis.com/oauth2/v2/userinfo", 
+profile = await httpx.get("https://www.googleapis.com/oauth2/v2/userinfo",
     headers={"Authorization": f"Bearer {access_token}"})
 ```
 

@@ -7,6 +7,7 @@ import { safeNext } from '@/lib/redirect-utils';
 import { Button } from '@/components/ui/button';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
+import { logAuth } from '@/auth/debug';
 import GoogleSignInButton from '@/components/GoogleSignInButton';
 
 function LoginPageInner() {
@@ -215,6 +216,14 @@ function LoginPageInner() {
                     authEpochBumped: true,
                     timestamp: new Date().toISOString(),
                 });
+
+                // Debug: record login OK and echo cookies from server
+                try {
+                    logAuth('LOGIN_OK', { status: response.status });
+                    const dbgRes = await apiFetch('/v1/debug/cookies', { method: 'GET', credentials: 'include' } as any);
+                    const dbg = await dbgRes.json().catch(() => ({}));
+                    logAuth('DEBUG_COOKIES', dbg);
+                } catch { /* noop */ }
 
                 // Trigger Auth Orchestrator refresh after successful login
                 const authOrchestrator = getAuthOrchestrator();

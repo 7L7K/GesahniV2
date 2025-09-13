@@ -12,10 +12,10 @@ import sys
 from unittest.mock import MagicMock, patch
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 # Set up logging to see the output
-logging.basicConfig(level=logging.INFO, format='%(levelname)s - %(name)s - %(message)s')
+logging.basicConfig(level=logging.INFO, format="%(levelname)s - %(name)s - %(message)s")
 
 
 def test_successful_token_exchange_logging():
@@ -29,14 +29,14 @@ def test_successful_token_exchange_logging():
         "scope": "openid https://www.googleapis.com/auth/userinfo.email",
         "token_type": "Bearer",
         "expires_in": 3600,
-        "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.header.payload.signature"
+        "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.header.payload.signature",
     }
 
     # Import the function
     from app.integrations.google.http_exchange import async_token_exchange
 
     # Mock httpx to return our mock response
-    with patch('httpx.AsyncClient') as mock_client:
+    with patch("httpx.AsyncClient") as mock_client:
         mock_instance = MagicMock()
         mock_client.return_value.__aenter__.return_value = mock_instance
 
@@ -47,10 +47,12 @@ def test_successful_token_exchange_logging():
         # Create an async mock for the post method
         async def async_post(*args, **kwargs):
             return mock_response_obj
+
         mock_instance.post = async_post
 
         # Call the function (this would normally be async)
         import asyncio
+
         result = asyncio.run(async_token_exchange("test_code", "test_verifier"))
 
         print("Function returned successfully!")
@@ -64,15 +66,12 @@ def test_error_token_exchange_logging():
     print("\n=== TESTING ERROR TOKEN EXCHANGE LOGGING ===")
 
     # Mock a Google error response
-    mock_error_response = {
-        "error": "invalid_grant",
-        "error_description": "Bad Request"
-    }
+    mock_error_response = {"error": "invalid_grant", "error_description": "Bad Request"}
 
     from app.integrations.google.http_exchange import async_token_exchange
 
     # Mock httpx to return an error
-    with patch('httpx.AsyncClient') as mock_client:
+    with patch("httpx.AsyncClient") as mock_client:
         mock_instance = MagicMock()
         mock_client.return_value.__aenter__.return_value = mock_instance
 
@@ -83,6 +82,7 @@ def test_error_token_exchange_logging():
 
         # Call the function (this should raise an exception)
         import asyncio
+
         try:
             result = asyncio.run(async_token_exchange("invalid_code", "test_verifier"))
         except Exception as e:
@@ -109,7 +109,9 @@ def show_expected_log_output():
     print("ERROR - Google OAuth provider_iss validation failed")
     print("  has_id_token: false")
     print("  error_detail: google_no_id_token")
-    print("  hint: Google OAuth did not return an id_token - check Cloud Console client configuration")
+    print(
+        "  hint: Google OAuth did not return an id_token - check Cloud Console client configuration"
+    )
 
 
 if __name__ == "__main__":

@@ -63,8 +63,14 @@ class TestRedirectSanitizer:
             ("///evil.com", "/evil.com"),
             # Mobile deep-link rejection
             ("app://evil.com", DEFAULT_FALLBACK),
-            ("intent://evil.com#Intent;scheme=https;action=android.intent.action.VIEW;end", DEFAULT_FALLBACK),
-            ("itms-services://?action=download-manifest&url=https://evil.com/manifest.plist", DEFAULT_FALLBACK),
+            (
+                "intent://evil.com#Intent;scheme=https;action=android.intent.action.VIEW;end",
+                DEFAULT_FALLBACK,
+            ),
+            (
+                "itms-services://?action=download-manifest&url=https://evil.com/manifest.plist",
+                DEFAULT_FALLBACK,
+            ),
             ("android-app://com.example.app", DEFAULT_FALLBACK),
             ("ios-app://123456789/com.example.app", DEFAULT_FALLBACK),
             ("fb://profile/12345", DEFAULT_FALLBACK),
@@ -176,7 +182,9 @@ class TestSafeRedirectsEnforcedFlag:
 
         # Force reload of feature flags
         import importlib
+
         import app.feature_flags
+
         importlib.reload(app.feature_flags)
         from app.feature_flags import SAFE_REDIRECTS_ENFORCED
 
@@ -188,7 +196,9 @@ class TestSafeRedirectsEnforcedFlag:
 
         # Force reload of feature flags
         import importlib
+
         import app.feature_flags
+
         importlib.reload(app.feature_flags)
         from app.feature_flags import SAFE_REDIRECTS_ENFORCED
 
@@ -200,7 +210,9 @@ class TestSafeRedirectsEnforcedFlag:
 
         # Force reload of feature flags
         import importlib
+
         import app.feature_flags
+
         importlib.reload(app.feature_flags)
         from app.feature_flags import SAFE_REDIRECTS_ENFORCED
 
@@ -212,8 +224,10 @@ class TestSafeRedirectsEnforcedFlag:
 
         # Force reload of feature flags and redirect utils
         import importlib
+
         import app.feature_flags
         import app.redirect_utils
+
         importlib.reload(app.feature_flags)
         importlib.reload(app.redirect_utils)
 
@@ -229,8 +243,10 @@ class TestSafeRedirectsEnforcedFlag:
 
         # Force reload of feature flags and redirect utils
         import importlib
+
         import app.feature_flags
         import app.redirect_utils
+
         importlib.reload(app.feature_flags)
         importlib.reload(app.redirect_utils)
 
@@ -244,8 +260,11 @@ class TestSafeRedirectsEnforcedFlag:
         assert result == "/dashboard"
 
         # Should log a warning about bypass
-        assert any("SAFE_REDIRECTS_ENFORCED disabled: allowing double-decoded redirect path" in record.message
-                  for record in caplog.records)
+        assert any(
+            "SAFE_REDIRECTS_ENFORCED disabled: allowing double-decoded redirect path"
+            in record.message
+            for record in caplog.records
+        )
 
     def test_other_security_rules_still_enforced_disabled(self, monkeypatch):
         """Test that other security rules are still enforced when flag is disabled."""
@@ -253,8 +272,10 @@ class TestSafeRedirectsEnforcedFlag:
 
         # Force reload of feature flags and redirect utils
         import importlib
+
         import app.feature_flags
         import app.redirect_utils
+
         importlib.reload(app.feature_flags)
         importlib.reload(app.redirect_utils)
 

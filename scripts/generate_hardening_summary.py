@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any
 
+
 class HardeningSummaryGenerator:
     def __init__(self):
         self.artifacts_dir = Path("./artifacts")
@@ -21,7 +22,7 @@ class HardeningSummaryGenerator:
             "run_id": os.environ.get("GITHUB_RUN_ID", "unknown"),
             "metrics": {},
             "summaries": {},
-            "status": "passing"
+            "status": "passing",
         }
 
     def collect_zap_summary(self) -> Dict[str, Any]:
@@ -33,7 +34,7 @@ class HardeningSummaryGenerator:
             "high_risk_alerts": 0,
             "medium_risk_alerts": 0,
             "low_risk_alerts": 0,
-            "status": "unknown"
+            "status": "unknown",
         }
 
         try:
@@ -56,7 +57,7 @@ class HardeningSummaryGenerator:
     def _parse_zap_alerts(self, report_file: Path) -> int:
         """Parse ZAP HTML report for alert count."""
         try:
-            with open(report_file, 'r', encoding='utf-8') as f:
+            with open(report_file, "r", encoding="utf-8") as f:
                 content = f.read()
 
             # Simple regex to count alerts (in real implementation, use proper HTML parsing)
@@ -64,9 +65,9 @@ class HardeningSummaryGenerator:
             alerts = len(re.findall(alert_pattern, content, re.IGNORECASE))
 
             # Also count by risk level
-            high_pattern = r'(?i)high.*risk|risk.*high'
-            medium_pattern = r'(?i)medium.*risk|risk.*medium'
-            low_pattern = r'(?i)low.*risk|risk.*low'
+            high_pattern = r"(?i)high.*risk|risk.*high"
+            medium_pattern = r"(?i)medium.*risk|risk.*medium"
+            low_pattern = r"(?i)low.*risk|risk.*low"
 
             return alerts
 
@@ -82,13 +83,13 @@ class HardeningSummaryGenerator:
             "high_findings": 0,
             "medium_findings": 0,
             "low_findings": 0,
-            "status": "unknown"
+            "status": "unknown",
         }
 
         try:
             semgrep_file = semgrep_dir / "semgrep-results.json"
             if semgrep_file.exists():
-                with open(semgrep_file, 'r') as f:
+                with open(semgrep_file, "r") as f:
                     data = json.load(f)
 
                 results = data.get("results", [])
@@ -96,7 +97,9 @@ class HardeningSummaryGenerator:
 
                 # Count by severity
                 for result in results:
-                    severity = result.get("extra", {}).get("severity", "unknown").upper()
+                    severity = (
+                        result.get("extra", {}).get("severity", "unknown").upper()
+                    )
                     if severity == "CRITICAL":
                         summary["critical_findings"] += 1
                     elif severity == "HIGH":
@@ -123,13 +126,13 @@ class HardeningSummaryGenerator:
             "medium_violations": 0,
             "low_violations": 0,
             "files_scanned": 0,
-            "status": "unknown"
+            "status": "unknown",
         }
 
         try:
             grep_file = grep_dir / "grep_guard_results.json"
             if grep_file.exists():
-                with open(grep_file, 'r') as f:
+                with open(grep_file, "r") as f:
                     data = json.load(f)
 
                 stats = data.get("stats", {})
@@ -147,7 +150,9 @@ class HardeningSummaryGenerator:
                     elif severity == "LOW":
                         summary["low_violations"] += 1
 
-                summary["status"] = "passing" if summary["violations"] == 0 else "failing"
+                summary["status"] = (
+                    "passing" if summary["violations"] == 0 else "failing"
+                )
 
         except Exception as e:
             summary["error"] = str(e)
@@ -168,16 +173,12 @@ class HardeningSummaryGenerator:
             "total_passed": 0,
             "total_failed": 0,
             "coverage_percentage": 0.0,
-            "status": "unknown"
+            "status": "unknown",
         }
 
         try:
             # Try to find pytest results in common locations
-            result_files = [
-                "pytest_report.xml",
-                "test-results.xml",
-                "junit.xml"
-            ]
+            result_files = ["pytest_report.xml", "test-results.xml", "junit.xml"]
 
             for result_file in result_files:
                 if os.path.exists(result_file):
@@ -186,14 +187,14 @@ class HardeningSummaryGenerator:
 
             # Calculate totals
             summary["total_passed"] = (
-                summary["unit_tests_passed"] +
-                summary["integration_tests_passed"] +
-                summary["e2e_tests_passed"]
+                summary["unit_tests_passed"]
+                + summary["integration_tests_passed"]
+                + summary["e2e_tests_passed"]
             )
             summary["total_failed"] = (
-                summary["unit_tests_failed"] +
-                summary["integration_tests_failed"] +
-                summary["e2e_tests_failed"]
+                summary["unit_tests_failed"]
+                + summary["integration_tests_failed"]
+                + summary["e2e_tests_failed"]
             )
 
             total_tests = summary["total_passed"] + summary["total_failed"]
@@ -212,16 +213,22 @@ class HardeningSummaryGenerator:
         results = {}
 
         try:
-            with open(result_file, 'r') as f:
+            with open(result_file, "r") as f:
                 content = f.read()
 
             # Extract basic metrics using regex
             # This is a simplified implementation
-            passed_match = re.search(r'testsuite[^>]*tests="(\d+)"[^>]*passed="(\d+)"', content)
+            passed_match = re.search(
+                r'testsuite[^>]*tests="(\d+)"[^>]*passed="(\d+)"', content
+            )
             if passed_match:
                 results["unit_tests_passed"] = int(passed_match.group(2))
-                results["integration_tests_passed"] = int(passed_match.group(2)) // 3  # Estimate
-                results["e2e_tests_passed"] = int(passed_match.group(2)) // 4  # Estimate
+                results["integration_tests_passed"] = (
+                    int(passed_match.group(2)) // 3
+                )  # Estimate
+                results["e2e_tests_passed"] = (
+                    int(passed_match.group(2)) // 4
+                )  # Estimate
 
         except Exception:
             pass
@@ -235,32 +242,32 @@ class HardeningSummaryGenerator:
             "mypy_errors": 0,
             "lint_violations": 0,
             "complexity_score": 0,
-            "status": "unknown"
+            "status": "unknown",
         }
 
         try:
             # Check for common lint result files
-            lint_files = [
-                "flake8_report.txt",
-                "mypy_report.txt",
-                "lint_results.json"
-            ]
+            lint_files = ["flake8_report.txt", "mypy_report.txt", "lint_results.json"]
 
             for lint_file in lint_files:
                 if os.path.exists(lint_file):
                     # Simplified parsing
-                    with open(lint_file, 'r') as f:
+                    with open(lint_file, "r") as f:
                         content = f.read()
-                        lines = content.strip().split('\n')
+                        lines = content.strip().split("\n")
                         if lint_file.startswith("flake8"):
-                            summary["flake8_violations"] = len([l for l in lines if l.strip()])
+                            summary["flake8_violations"] = len(
+                                [l for l in lines if l.strip()]
+                            )
                         elif lint_file.startswith("mypy"):
-                            summary["mypy_errors"] = len([l for l in lines if "error:" in l])
+                            summary["mypy_errors"] = len(
+                                [l for l in lines if "error:" in l]
+                            )
 
             total_violations = (
-                summary["flake8_violations"] +
-                summary["mypy_errors"] +
-                summary["lint_violations"]
+                summary["flake8_violations"]
+                + summary["mypy_errors"]
+                + summary["lint_violations"]
             )
 
             summary["status"] = "passing" if total_violations == 0 else "warning"
@@ -274,13 +281,13 @@ class HardeningSummaryGenerator:
         """Generate complete hardening summary."""
         self.summary["metrics"] = {
             "tests": self.collect_test_metrics(),
-            "quality": self.collect_flake_metrics()
+            "quality": self.collect_flake_metrics(),
         }
 
         self.summary["summaries"] = {
             "zap": self.collect_zap_summary(),
             "semgrep": self.collect_semgrep_summary(),
-            "grep_guard": self.collect_grep_guard_summary()
+            "grep_guard": self.collect_grep_guard_summary(),
         }
 
         # Determine overall status
@@ -299,6 +306,7 @@ class HardeningSummaryGenerator:
 
         return self.summary
 
+
 def main():
     generator = HardeningSummaryGenerator()
     summary = generator.generate_summary()
@@ -307,11 +315,12 @@ def main():
     os.makedirs("./artifacts", exist_ok=True)
 
     # Write summary to file
-    with open("hardening_summary.json", 'w') as f:
+    with open("hardening_summary.json", "w") as f:
         json.dump(summary, f, indent=2)
 
     # Print summary
     print(json.dumps(summary, indent=2))
+
 
 if __name__ == "__main__":
     main()

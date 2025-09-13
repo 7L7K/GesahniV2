@@ -98,6 +98,28 @@ This document tracks deprecated API endpoints and their planned removal timeline
 
 **Migration**: Use the versioned `/v1/google/oauth/callback` endpoint.
 
+### Legacy Music HTTP Routes
+
+| Deprecated Endpoint | Status | Deprecated Since | Removal Date | Replacement |
+|---------------------|--------|------------------|--------------|-------------|
+| `GET /state` | Deprecated | 2025-09-13 | 2026-03-13 | `GET /v1/music/state` |
+| `GET /v1/legacy/state` | Deprecated | 2025-09-13 | 2026-03-13 | `GET /v1/music/state` |
+
+**Migration**: Use the versioned `/v1/music/state` endpoint for music state information.
+
+#### Legacy Route Implementation Notes
+
+- **HTTP Status for Redirects**: Legacy routes use **307 Temporary Redirect** to preserve request method and body
+- **Headers**: All legacy routes return RFC 8594 compliant deprecation headers:
+  - `Deprecation: true`
+  - `Sunset: <RFC3339 timestamp 90 days from now>`
+  - `Link: </docs#legacy>; rel="deprecation"`
+- **Metrics**: Usage tracked via `legacy_hits_total` Prometheus metric with endpoint labels
+- **Kill Criteria**: Routes may be removed when `legacy_hits_total == 0` for 30 consecutive days
+- **Feature Flag**: Controlled by `LEGACY_MUSIC_HTTP=1` environment variable
+
+**See also**: [LEGACY_DEPRECATION_DECISIONS.md](LEGACY_DEPRECATION_DECISIONS.md) for detailed decision rationale and kill date planning.
+
 ## OpenAPI Documentation
 
 All deprecated endpoints are marked with `deprecated: true` in the OpenAPI specification:

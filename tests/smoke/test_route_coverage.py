@@ -27,13 +27,13 @@ class RouteCoverageAnalyzer:
         """Extract all (method, path) pairs from the FastAPI app."""
         routes = set()
         for route in self.app.routes:
-            if hasattr(route, 'methods') and hasattr(route, 'path'):
-                methods = getattr(route, 'methods', [])
+            if hasattr(route, "methods") and hasattr(route, "path"):
+                methods = getattr(route, "methods", [])
                 path = route.path
                 # Only include v1 routes and exclude OPTIONS (preflight)
-                if path.startswith('/v1/') and methods:
+                if path.startswith("/v1/") and methods:
                     for method in methods:
-                        if method.upper() != 'OPTIONS':  # Skip OPTIONS preflight
+                        if method.upper() != "OPTIONS":  # Skip OPTIONS preflight
                             routes.add((method.upper(), path))
         return routes
 
@@ -43,7 +43,7 @@ class RouteCoverageAnalyzer:
 
         # Scan all test files for route coverage markers
         tests_dir = Path(__file__).parent.parent
-        for test_file in tests_dir.rglob('test_*.py'):
+        for test_file in tests_dir.rglob("test_*.py"):
             try:
                 content = test_file.read_text()
 
@@ -51,11 +51,11 @@ class RouteCoverageAnalyzer:
                 # ("# covers: METHOD: /path") and docstring-style markers
                 # ("""covers: METHOD: /path"""). We search for the token
                 # 'covers:' anywhere in the line to be permissive.
-                for line in content.split('\n'):
-                    if 'covers:' in line:
-                        marker = line.split('covers:', 1)[1].strip()
-                        if ':' in marker:
-                            method, path = marker.split(':', 1)
+                for line in content.split("\n"):
+                    if "covers:" in line:
+                        marker = line.split("covers:", 1)[1].strip()
+                        if ":" in marker:
+                            method, path = marker.split(":", 1)
                             method = method.strip().upper()
                             path = path.strip()
 
@@ -81,12 +81,16 @@ class RouteCoverageAnalyzer:
                 uncovered_routes.add((method, path))
 
         return {
-            'total_routes': len(self.canonical_routes),
-            'covered_routes': len(covered_routes),
-            'uncovered_routes': len(uncovered_routes),
-            'coverage_percentage': (len(covered_routes) / len(self.canonical_routes)) * 100 if self.canonical_routes else 0,
-            'uncovered': sorted(list(uncovered_routes)),
-            'covered': sorted(list(covered_routes))
+            "total_routes": len(self.canonical_routes),
+            "covered_routes": len(covered_routes),
+            "uncovered_routes": len(uncovered_routes),
+            "coverage_percentage": (
+                (len(covered_routes) / len(self.canonical_routes)) * 100
+                if self.canonical_routes
+                else 0
+            ),
+            "uncovered": sorted(list(uncovered_routes)),
+            "covered": sorted(list(covered_routes)),
         }
 
     def assert_full_coverage(self):
@@ -96,8 +100,10 @@ class RouteCoverageAnalyzer:
         # test run to allow incremental rollout of coverage annotations. If the
         # environment variable FORCE_ROUTE_COVERAGE is set, keep the original
         # failing behavior.
-        if report['uncovered_routes'] > 0:
-            uncovered_list = '\n'.join([f"  {method}: {path}" for method, path in report['uncovered']])
+        if report["uncovered_routes"] > 0:
+            uncovered_list = "\n".join(
+                [f"  {method}: {path}" for method, path in report["uncovered"]]
+            )
             msg = (
                 f"Route coverage incomplete!\n"
                 f"Total routes: {report['total_routes']}\n"
@@ -123,38 +129,38 @@ class SmokeTestSuite:
     def test_auth_surface_smoke(self):
         """Smoke test auth endpoints."""
         # Test auth status endpoint (should work without auth)
-        response = self.client.get('/v1/auth/examples')
+        response = self.client.get("/v1/auth/examples")
         # Accept any status - we just want to ensure the endpoint exists and responds
         assert response.status_code in [200, 401, 403, 404, 500]
 
     def test_google_surface_smoke(self):
         """Smoke test Google OAuth endpoints."""
         # Test Google login URL endpoint
-        response = self.client.get('/v1/google/login_url')
+        response = self.client.get("/v1/google/login_url")
         assert response.status_code in [200, 302, 401, 403, 404, 500]
 
     def test_music_surface_smoke(self):
         """Smoke test music endpoints."""
         # Test music status
-        response = self.client.get('/v1/music/devices')
+        response = self.client.get("/v1/music/devices")
         assert response.status_code in [200, 401, 403, 404, 500]
 
     def test_spotify_surface_smoke(self):
         """Smoke test Spotify endpoints."""
         # Test Spotify status
-        response = self.client.get('/v1/spotify/status')
+        response = self.client.get("/v1/spotify/status")
         assert response.status_code in [200, 401, 403, 404, 500]
 
     def test_status_surface_smoke(self):
         """Smoke test status endpoints."""
         # Test main status endpoint
-        response = self.client.get('/v1/status')
+        response = self.client.get("/v1/status")
         assert response.status_code in [200, 401, 403, 404, 500]
 
     def test_admin_surface_smoke(self):
         """Smoke test admin endpoints."""
         # Test admin ping (might require auth)
-        response = self.client.get('/v1/admin/ping')
+        response = self.client.get("/v1/admin/ping")
         assert response.status_code in [200, 401, 403, 404, 500]
 
 
@@ -186,11 +192,11 @@ def test_route_coverage_report(route_analyzer, caplog):
     print(f"Uncovered routes: {report['uncovered_routes']}")
     print(f"Coverage: {report['coverage_percentage']:.1f}%")
 
-    if report['uncovered']:
+    if report["uncovered"]:
         print("\nUncovered routes:")
-        for method, path in report['uncovered'][:10]:  # Show first 10
+        for method, path in report["uncovered"][:10]:  # Show first 10
             print(f"  {method}: {path}")
-        if len(report['uncovered']) > 10:
+        if len(report["uncovered"]) > 10:
             print(f"  ... and {len(report['uncovered']) - 10} more")
 
     # This test always passes - it just reports

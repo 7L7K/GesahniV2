@@ -12,3 +12,6 @@ migration-guard:
 docs-and-links: migration-guard
 	@echo "== Docs and Links Check =="
 	@echo "✅ Docs and links hygiene check complete"
+
+auth-diag:
+	bash scripts/auth-diag.sh

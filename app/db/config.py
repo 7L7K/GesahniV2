@@ -1,17 +1,21 @@
 """
 Database configuration for GesahniV2
 """
+
 import os
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine as sa_create_async_engine
+from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import create_async_engine as sa_create_async_engine
 from sqlalchemy.orm import sessionmaker
 
 
 # Database URL configuration
 def get_database_url(async_mode: bool = False) -> str:
     """Get database URL with optional async driver"""
-    base_url = os.getenv("DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni")
+    base_url = os.getenv(
+        "DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni"
+    )
 
     if async_mode:
         # Convert to asyncpg format
@@ -31,7 +35,7 @@ def create_sync_engine():
         pool_size=10,
         max_overflow=20,
         pool_pre_ping=True,  # Verify connections before use
-        pool_recycle=1800,   # Recycle connections every 30 minutes
+        pool_recycle=1800,  # Recycle connections every 30 minutes
         future=True,
         echo=False,  # Set to True for SQL debugging
     )

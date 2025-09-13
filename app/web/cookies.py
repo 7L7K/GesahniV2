@@ -433,7 +433,28 @@ def set_auth_cookies_canon(resp, access: str, refresh: str, *, secure: bool, sam
 
 
 def set_csrf_cookie(resp, token: str, ttl: int, request=None):
-    set_csrf(resp, token, ttl=ttl)
+    """Public facade used across the codebase to set CSRF cookies consistently.
+
+    Derives cookie attributes from centralized cookie configuration when a
+    `request` is provided. Falls back to defaults when no request is available.
+    """
+    same_site = "lax"
+    domain = None
+    path = "/"
+    secure = True
+
+    try:
+        if request is not None:
+            cfg = get_cookie_config(request)
+            if cfg:
+                same_site = cfg.get("samesite", "lax")
+                domain = cfg.get("domain")
+                path = cfg.get("path", "/")
+                secure = bool(cfg.get("secure", True))
+    except Exception:
+        pass
+
+    set_csrf(resp, token, ttl=ttl, same_site=same_site.capitalize(), domain=domain, path=path, secure=secure)
 
 
 def set_oauth_state_cookie(resp, state: str, request=None, ttl: int = 600, provider: str = "oauth"):
@@ -497,15 +518,23 @@ def clear_csrf_cookie(resp, request=None):
 
 
 def read_access_cookie(req):
-    return req.cookies.get(NAMES.access)
+    """Read the access token cookie with canonical and legacy fallbacks.
+
+    Canonical name comes from NAMES.access (default: GSNH_AT). Some clients/tests
+    may still set legacy names (access_token). Read both to avoid whoami
+    failures when only legacy cookies are present.
+    """
+    return req.cookies.get(NAMES.access) or req.cookies.get("access_token")
 
 
 def read_refresh_cookie(req):
-    return req.cookies.get(NAMES.refresh)
+    """Read the refresh token cookie with canonical and legacy fallbacks."""
+    return req.cookies.get(NAMES.refresh) or req.cookies.get("refresh_token")
 
 
 def read_session_cookie(req):
-    return req.cookies.get(NAMES.session)
+    """Read the session cookie with canonical and legacy fallbacks."""
+    return req.cookies.get(NAMES.session) or req.cookies.get("__session")
 
 
 __all__ = [

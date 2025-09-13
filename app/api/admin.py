@@ -253,7 +253,9 @@ async def admin_tokens_google(user_id: str | None = None):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/users/{user_id}/identities", dependencies=[Depends(require_scope("admin:read"))])
+@router.get(
+    "/users/{user_id}/identities", dependencies=[Depends(require_scope("admin:read"))]
+)
 async def admin_user_identities(user_id: str):
     """Return identities for a given user along with last token refresh info.
 
@@ -282,7 +284,11 @@ async def admin_user_identities(user_id: str):
                     tok = await cur2.fetchone()
                 last = None
                 if tok:
-                    last = {"expires_at": tok[0], "updated_at": tok[1], "last_refresh_at": tok[2]}
+                    last = {
+                        "expires_at": tok[0],
+                        "updated_at": tok[1],
+                        "last_refresh_at": tok[2],
+                    }
                 out.append(
                     {
                         "id": identity_id,
@@ -303,8 +309,13 @@ async def admin_user_identities(user_id: str):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/users/{user_id}/identities/{identity_id}/unlink", dependencies=[Depends(require_scope("admin:write"))])
-async def admin_unlink_identity(user_id: str, identity_id: str, force: bool | None = Query(default=False)):
+@router.post(
+    "/users/{user_id}/identities/{identity_id}/unlink",
+    dependencies=[Depends(require_scope("admin:write"))],
+)
+async def admin_unlink_identity(
+    user_id: str, identity_id: str, force: bool | None = Query(default=False)
+):
     """Unlink an identity from a user with safety guards.
 
     If unlinking would remove the last usable login method for the user, require `force=true`.
@@ -316,24 +327,34 @@ async def admin_unlink_identity(user_id: str, identity_id: str, force: bool | No
 
         async with aiosqlite.connect(str(AUTH_DB())) as db:
             # Verify identity belongs to user
-            async with db.execute("SELECT provider, provider_sub FROM auth_identities WHERE id = ? AND user_id = ?", (identity_id, user_id)) as cur:
+            async with db.execute(
+                "SELECT provider, provider_sub FROM auth_identities WHERE id = ? AND user_id = ?",
+                (identity_id, user_id),
+            ) as cur:
                 row = await cur.fetchone()
             if not row:
                 raise HTTPException(status_code=404, detail="identity_not_found")
             provider = row[0]
 
             # Count remaining identities for this user
-            async with db.execute("SELECT COUNT(*) FROM auth_identities WHERE user_id = ?", (user_id,)) as cur2:
+            async with db.execute(
+                "SELECT COUNT(*) FROM auth_identities WHERE user_id = ?", (user_id,)
+            ) as cur2:
                 cnt_row = await cur2.fetchone()
             remaining = int(cnt_row[0] or 0)
 
             # Check if user has local password set
-            async with db.execute("SELECT password_hash FROM users WHERE id = ?", (user_id,)) as cur3:
+            async with db.execute(
+                "SELECT password_hash FROM users WHERE id = ?", (user_id,)
+            ) as cur3:
                 pw_row = await cur3.fetchone()
             has_password = bool(pw_row and pw_row[0])
 
             if remaining <= 1 and not has_password and not force:
-                raise HTTPException(status_code=400, detail="cannot_unlink_last_login_method_without_force")
+                raise HTTPException(
+                    status_code=400,
+                    detail="cannot_unlink_last_login_method_without_force",
+                )
 
             # Proceed to delete identity and mark tokens invalid
             await db.execute("DELETE FROM auth_identities WHERE id = ?", (identity_id,))
@@ -342,18 +363,24 @@ async def admin_unlink_identity(user_id: str, identity_id: str, force: bool | No
         # Mark tokens invalid for this identity in the tokens DB
         try:
             import sqlite3
+
             TOK_DB = os.getenv("THIRD_PARTY_TOKENS_DB", "third_party_tokens.db")
             conn = sqlite3.connect(TOK_DB)
             conn.execute("PRAGMA foreign_keys=ON")
             try:
                 cur = conn.cursor()
-                cur.execute("UPDATE third_party_tokens SET is_valid = 0, updated_at = ? WHERE identity_id = ?", (int(time.time()), identity_id))
+                cur.execute(
+                    "UPDATE third_party_tokens SET is_valid = 0, updated_at = ? WHERE identity_id = ?",
+                    (int(time.time()), identity_id),
+                )
                 conn.commit()
             finally:
                 conn.close()
         except Exception:
             # best-effort: log and continue
-            logger.exception("Failed to mark tokens invalid for identity %s", identity_id)
+            logger.exception(
+                "Failed to mark tokens invalid for identity %s", identity_id
+            )
 
         return {"ok": True}
     except HTTPException:
@@ -730,7 +757,10 @@ class AdminBootstrapResponse(BaseModel):
 @router.post(
     "/vector_store/bootstrap",
     response_model=AdminBootstrapResponse,
-    responses={202: {"model": AdminBootstrapResponse}, 403: {"description": "Forbidden"}},
+    responses={
+        202: {"model": AdminBootstrapResponse},
+        403: {"description": "Forbidden"},
+    },
     dependencies=[],
 )
 async def admin_vs_bootstrap(
@@ -1138,7 +1168,6 @@ async def admin_list_flags(
 
 # Mount new admin-inspect routes under the same router if available
 if _admin_inspect_router is not None:  # pragma: no cover - import-time wiring
-
     # include sub-router endpoints under /admin/* paths
     router.include_router(_admin_inspect_router)
 

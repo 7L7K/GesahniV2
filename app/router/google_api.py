@@ -3,6 +3,7 @@
 This module defines /v1/google/auth/* routes.
 Leaf module - no imports from app/router/__init__.py.
 """
+
 import logging
 import time
 from urllib.parse import urlencode
@@ -124,7 +125,9 @@ async def google_oauth_callback(
     try:
         # Handle OAuth errors
         if error:
-            logger.warning("google_oauth_callback.error", extra={"error": error, "state": state})
+            logger.warning(
+                "google_oauth_callback.error", extra={"error": error, "state": state}
+            )
             raise HTTPException(status_code=400, detail=f"OAuth error: {error}")
 
         if not code:
@@ -187,17 +190,20 @@ async def google_connect(request: Request):
     """
     try:
         from app.api.google_oauth import google_login_url as _login
+
         # Call underlying handler to generate URL and state cookies
         resp = await _login(request)
         # Extract body safely
         data = {}
         try:
             import json
+
             data = json.loads(getattr(resp, "body", b"{}") or b"{}")
         except Exception:
             pass
         url = data.get("auth_url") or data.get("url") or data.get("login_url")
         from fastapi.responses import JSONResponse
+
         out = JSONResponse({"authorize_url": url} if url else {"authorize_url": ""})
         # Propagate Set-Cookie headers
         try:
@@ -222,4 +228,3 @@ async def google_oauth_callback_post(request: Request):
     from fastapi.responses import RedirectResponse
 
     return RedirectResponse(url=target, status_code=303)
-

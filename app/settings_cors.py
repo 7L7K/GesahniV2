@@ -17,6 +17,15 @@ logger = logging.getLogger(__name__)
 
 def get_cors_origins() -> list[str]:
     """Get the configured CORS allowed origins."""
+    # In dev environment, disable CORS for same-origin requests (non-negotiable)
+    env = os.getenv("ENV", "dev").strip().lower()
+    if env == "dev":
+        return []
+
+    # In dev proxy mode, disable CORS for same-origin requests
+    if os.getenv("NEXT_PUBLIC_USE_DEV_PROXY", "").strip().lower() in {"1", "true", "yes", "on"}:
+        return []
+
     cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
 
     # If the Next dev proxy is enabled, be explicit and allow both localhost

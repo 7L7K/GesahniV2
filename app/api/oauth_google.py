@@ -34,4 +34,5 @@ async def legacy_google_callback_post(request: Request):
 
     return RedirectResponse(url=target, status_code=303)
 
+
 __all__ = ["router"]

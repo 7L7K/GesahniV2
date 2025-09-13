@@ -144,7 +144,7 @@ export async function apiFetch(
     timestamp: new Date().toISOString()
   });
 
-  // Note: Cache-busting removed - SafariCORSCacheFixMiddleware handles caching
+  // Note: Cache-busting removed; CORS is avoided in dev via proxy and standard caching applies
   const url = isAbsolute ? path : `${base}${path}`;
 
   console.log('🔍 URL CONSTRUCTION:', {

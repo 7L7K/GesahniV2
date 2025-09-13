@@ -11,14 +11,12 @@ Tests the redirect sanitizer under extreme conditions:
 All tests must complete without throwing, timing out, or blowing memory.
 """
 
-import logging
 import time
 from unittest.mock import patch
 
 import pytest
 
 from app.security.redirects import DEFAULT_REDIRECT, sanitize_next_path
-
 
 # Pytest markers for chaos testing
 pytestmark = [
@@ -57,11 +55,9 @@ class TestRedirectPathAbuse:
             "%C0%AF",  # Overlong /
             "%E0%80%AF",  # Even longer overlong /
             "%F0%80%80%AF",  # Maximum overlong /
-
             # Overlong dot (.)
             "%C0%AE",  # Overlong .
             "%E0%80%AE",  # Longer overlong .
-
             # Overlong double dot (..)
             "%C0%AF%C0%AE",  # Overlong /.
             "%E0%80%AF%E0%80%AE",  # Longer overlong /.
@@ -88,15 +84,12 @@ class TestRedirectPathAbuse:
             # UTF-8 encoded as UTF-16 bytes
             "%FE%FF%2F",  # UTF-16 BOM + /
             "%FF%FE%2F",  # Little endian BOM + /
-
             # Invalid UTF-16 sequences
             "%D8%00",  # High surrogate without low
             "%DC%00",  # Low surrogate without high
             "%D8%DC",  # Surrogate pair without continuation
-
             # Mixed valid/invalid UTF-16
             "%00%2F%D8%00",  # / followed by invalid surrogate
-
             # UTF-8 sequences interpreted as UTF-16
             "%C3%A9%E2%80%99",  # UTF-8 bytes that might confuse decoders
         ]
@@ -172,10 +165,8 @@ class TestRedirectPathAbuse:
             "%1",  # Incomplete hex - doesn't start with /
             "%XY",  # Invalid hex digits - doesn't start with /
             "%ZZ",  # Invalid hex digits - doesn't start with /
-
             # Percent at end of string - doesn't start with /
             "%20%XY%20/dashboard",  # Invalid hex in middle - doesn't start with /
-
             # Very long incomplete sequences - don't start with /
             "%" * 1000,
             ("%2" * 500) + ("%3" * 500),
@@ -195,18 +186,20 @@ class TestRedirectPathAbuse:
         for case in valid_structure_cases:
             result = sanitize_next_path(case)
             # These should pass through since they start with / and don't match blocklist
-            assert result.startswith("/"), f"Should preserve valid structure: {case} -> {result}"
+            assert result.startswith(
+                "/"
+            ), f"Should preserve valid structure: {case} -> {result}"
 
     def test_control_character_injection(self):
         """Test control characters that could cause parsing issues."""
         control_chars = [
             "\x00",  # Null byte
             "\x01",  # Start of heading
-            "\x1F",  # Unit separator
-            "\x7F",  # Delete
-            "\r",    # Carriage return
-            "\n",    # Line feed
-            "\t",    # Tab
+            "\x1f",  # Unit separator
+            "\x7f",  # Delete
+            "\r",  # Carriage return
+            "\n",  # Line feed
+            "\t",  # Tab
         ]
 
         for char in control_chars:
@@ -218,7 +211,9 @@ class TestRedirectPathAbuse:
 
             for payload in invalid_payloads:
                 result = sanitize_next_path(payload)
-                assert result == DEFAULT_REDIRECT, f"Control char at start not rejected: {repr(char)} in {repr(payload)}"
+                assert (
+                    result == DEFAULT_REDIRECT
+                ), f"Control char at start not rejected: {repr(char)} in {repr(payload)}"
 
             # These should pass through since they start with / (control chars in middle/end allowed)
             valid_payloads = [
@@ -228,7 +223,9 @@ class TestRedirectPathAbuse:
 
             for payload in valid_payloads:
                 result = sanitize_next_path(payload)
-                assert result.startswith("/"), f"Valid path with control char should pass: {repr(payload)} -> {result}"
+                assert result.startswith(
+                    "/"
+                ), f"Valid path with control char should pass: {repr(payload)} -> {result}"
 
     @pytest.mark.slow
     def test_memory_exhaustion_attempts(self):
@@ -251,7 +248,6 @@ class TestRedirectPathAbuse:
         dos_patterns = [
             # Complex nested query patterns - should be handled efficiently
             "?" + "&".join([f"param{i}=value{i}" for i in range(1000)]),
-
             # Fragments with many # symbols - should strip fragments
             "#" * 10000 + "/dashboard",
         ]
@@ -262,7 +258,9 @@ class TestRedirectPathAbuse:
             end_time = time.time()
 
             # These should complete quickly without DOS
-            assert end_time - start_time < 5.0, f"Regex DOS detected for pattern: {pattern[:100]}..."
+            assert (
+                end_time - start_time < 5.0
+            ), f"Regex DOS detected for pattern: {pattern[:100]}..."
 
         # Test many slashes separately - sanitizer collapses them to "/"
         many_slashes = "/" * 100000
@@ -281,19 +279,15 @@ class TestRedirectPathAbuse:
             "",
             "   ",
             "\t\n",
-
             # Non-string inputs (should be handled gracefully)
             None,
             123,
             [],
-
             # Extremely long valid paths
             "/dashboard" + "/sub" * 1000,
-
             # Paths with special characters
             "/dashboard?param=" + "%20" * 10000,  # Many spaces
             "/dashboard#" + "fragment" * 1000,
-
             # Mixed encoding types
             "/dashboard?utf8=%E2%9C%93&utf16=%FE%FF%00%2F",
         ]

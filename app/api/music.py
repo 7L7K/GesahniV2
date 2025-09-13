@@ -12,8 +12,8 @@ from ..music.store import get_idempotent, set_idempotent
 
 router = APIRouter(prefix="/api/music")
 
-# Also create a root-level router for endpoints that should be at /v1/state
-root_router = APIRouter()
+# System state router - separate from music state
+system_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
@@ -798,13 +798,22 @@ async def _get_state_impl(
     return body
 
 
-# Add state endpoint to root router for frontend compatibility
-@root_router.get("/state")
-async def get_state_root(
-    request: Request, response: Response, user_id: str = Depends(get_current_user_id)
-):
-    """Get music state for frontend compatibility at /v1/state"""
-    return await _get_state_impl(request, response, user_id)
+# System state endpoint - provides app/system level state, not music state
+@system_router.get("/state")
+async def get_system_state():
+    """Get system/app state at /v1/state"""
+    import os
+    import time
+    from datetime import datetime, UTC
+
+    return {
+        "status": "ok",
+        "timestamp": datetime.now(UTC).isoformat(),
+        "component": "system",
+        "version": os.getenv("APP_VERSION", "dev"),
+        "environment": os.getenv("ENV", "dev"),
+        "uptime": time.time()  # Will be set by startup
+    }
 
 
 @router.get("/queue")
@@ -1102,4 +1111,4 @@ async def set_device(body: DeviceBody, user_id: str = Depends(get_current_user_i
 
 
 # Export the routers for use in main.py
-__all__ = ["router", "root_router"]
+__all__ = ["router", "system_router"]

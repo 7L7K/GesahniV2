@@ -36,10 +36,28 @@ export async function fetchWhoamiWithResilience(): Promise<WhoamiResponse> {
 
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
         try {
+            // Debug: mark whoami request
+            try {
+                const { logAuth } = await import('@/auth/debug');
+                logAuth('WHOAMI_REQUEST');
+            } catch { /* noop */ }
+
             const response = await rawWhoamiFetch();
 
+            // Debug: log response status
+            try {
+                const { logAuth } = await import('@/auth/debug');
+                logAuth('WHOAMI_RESPONSE', { ok: response.ok, status: response.status });
+            } catch { /* noop */ }
+
             if (response.ok) {
-                return await response.json();
+                const data = await response.json();
+                try {
+                    const { logAuth } = await import('@/auth/debug');
+                    const userId = (data && data.user && data.user.id) ? true : false;
+                    logAuth('WHOAMI_USER', { user: userId });
+                } catch { /* noop */ }
+                return data;
             }
 
             // Distinguish error classes for orchestrator/backoff

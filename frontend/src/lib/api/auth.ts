@@ -64,7 +64,8 @@ export function requestKey(method: string, url: string, ctx?: string | string[])
 // Respect NEXT_PUBLIC_USE_DEV_PROXY so the dev server can proxy backend routes for same-origin dev
 const useDevProxy = (process.env.NEXT_PUBLIC_USE_DEV_PROXY || 'false') === 'true';
 // Single source of truth for API origin in non-proxy mode
-const apiOrigin = (process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000").replace(/\/$/, '');
+// Consolidated on NEXT_PUBLIC_API_ORIGIN (was NEXT_PUBLIC_API_BASE)
+const apiOrigin = (process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000").replace(/\/$/, '');
 export const API_URL = useDevProxy ? '' : apiOrigin; // empty means relative (same-origin) in dev proxy mode
 
 // Boot log for observability
@@ -73,7 +74,7 @@ if (typeof console !== 'undefined') {
   console.info('[API] DEBUG CONFIG:', {
     useDevProxy,
     NEXT_PUBLIC_USE_DEV_PROXY: process.env.NEXT_PUBLIC_USE_DEV_PROXY,
-    NEXT_PUBLIC_API_BASE: process.env.NEXT_PUBLIC_API_BASE,
+    NEXT_PUBLIC_API_ORIGIN: process.env.NEXT_PUBLIC_API_ORIGIN,
     apiOrigin,
     API_URL,
     isEmpty: API_URL === '',

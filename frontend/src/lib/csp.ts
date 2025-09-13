@@ -1,15 +1,18 @@
 import { buildWebSocketUrl, buildCanonicalWebSocketUrl } from '@/lib/urls'
 
-const API_URL = process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000"
+// Use consistent API_URL logic with proxy mode support
+const useDevProxy = ["1", "true", "yes", "on"].includes(String(process.env.NEXT_PUBLIC_USE_DEV_PROXY || process.env.USE_DEV_PROXY || "false").toLowerCase());
+const apiOrigin = (process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000").replace(/\/$/, '');
+const API_URL = useDevProxy ? '' : apiOrigin;
 
-// Build WebSocket URLs dynamically
-const WS_URL = buildWebSocketUrl(API_URL, '/v1/ws/care')
-const WS_HEALTH_URL = buildWebSocketUrl(API_URL, '/v1/ws/health')
+// Build WebSocket URLs dynamically (only if API_URL is not empty)
+const WS_URL = API_URL ? buildWebSocketUrl(API_URL, '/v1/ws/care') : ''
+const WS_HEALTH_URL = API_URL ? buildWebSocketUrl(API_URL, '/v1/ws/health') : ''
 
-// Build frontend WebSocket URLs for actual connections
-const FRONTEND_WS_URL = buildCanonicalWebSocketUrl(API_URL, '/v1/transcribe')
-const FRONTEND_WS_CARE_URL = buildCanonicalWebSocketUrl(API_URL, '/v1/ws/care')
-const FRONTEND_WS_HEALTH_URL = buildCanonicalWebSocketUrl(API_URL, '/v1/ws/health')
+// Build frontend WebSocket URLs for actual connections (only if API_URL is not empty)
+const FRONTEND_WS_URL = API_URL ? buildCanonicalWebSocketUrl(API_URL, '/v1/transcribe') : ''
+const FRONTEND_WS_CARE_URL = API_URL ? buildCanonicalWebSocketUrl(API_URL, '/v1/ws/care') : ''
+const FRONTEND_WS_HEALTH_URL = API_URL ? buildCanonicalWebSocketUrl(API_URL, '/v1/ws/health') : ''
 
 export function getCSPDirectives(): Record<string, string[]> {
     const isDev = process.env.NODE_ENV === 'development'
@@ -23,12 +26,12 @@ export function getCSPDirectives(): Record<string, string[]> {
             "font-src": ["'self'", "data:", "https://fonts.gstatic.com"],
             "connect-src": [
                 "'self'",
-                API_URL,
-                WS_URL,
-                WS_HEALTH_URL,
-                FRONTEND_WS_URL,
-                FRONTEND_WS_CARE_URL,
-                FRONTEND_WS_HEALTH_URL
+                ...(API_URL ? [API_URL] : []),
+                ...(WS_URL ? [WS_URL] : []),
+                ...(WS_HEALTH_URL ? [WS_HEALTH_URL] : []),
+                ...(FRONTEND_WS_URL ? [FRONTEND_WS_URL] : []),
+                ...(FRONTEND_WS_CARE_URL ? [FRONTEND_WS_CARE_URL] : []),
+                ...(FRONTEND_WS_HEALTH_URL ? [FRONTEND_WS_HEALTH_URL] : []),
             ],
             "frame-src": ["'self'"],
             "object-src": ["'none'"],

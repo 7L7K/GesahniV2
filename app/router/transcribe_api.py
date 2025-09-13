@@ -3,6 +3,7 @@
 These call into `app.api.transcribe` when available and otherwise provide the
 lightweight queued response shape used by alias fallbacks.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -20,5 +21,3 @@ async def transcribe_job(job_id: str) -> dict[str, Any]:
         # In CI/tests the canonical transcribe API may be unavailable; return
         # a lightweight accepted shape so callers see 202-like behavior.
         return {"status": "accepted"}
-
-

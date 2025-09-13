@@ -2,11 +2,11 @@
 const nextConfig = {
     async rewrites() {
         // Enable a dev proxy when USE_DEV_PROXY is set to 'true' in the environment.
-        // This lets the Next dev server proxy `/api/*` to the backend at 127.0.0.1:8000
+        // This lets the Next dev server proxy `/v1/*` to the backend at 127.0.0.1:8000
         // so the frontend and backend appear same-origin during local development.
         if (process.env.USE_DEV_PROXY === 'true') {
             return [
-                { source: '/api/:path*', destination: 'http://127.0.0.1:8000/:path*' },
+                { source: '/v1/:path*', destination: 'http://127.0.0.1:8000/v1/:path*' },
             ];
         }
         return [];

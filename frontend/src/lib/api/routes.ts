@@ -47,7 +47,8 @@ export const API_ROUTES = {
 
     // Other endpoints (keeping existing structure)
     ASK: '/v1/ask',
-    STATE: '/v1/state',
+    STATE: '/v1/state',  // System/app state
+    MUSIC_STATE: '/v1/music/state',  // Music device/queue state
     BUDGET: '/v1/budget',
     MUSIC: '/v1/music',
     VIBE: '/v1/vibe',

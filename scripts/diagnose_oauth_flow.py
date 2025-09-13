@@ -14,7 +14,7 @@ import requests
 from urllib.parse import urlencode, parse_qs, urlparse
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 
 def get_oauth_url():
@@ -23,6 +23,7 @@ def get_oauth_url():
 
     try:
         from app.integrations.google.oauth import GoogleOAuth
+
         oauth = GoogleOAuth()
         auth_url = oauth.get_authorization_url("test_state_123")
 
@@ -39,14 +40,14 @@ def get_oauth_url():
             print(f"  {key}: {values[0] if values else ''}")
 
         print()
-        if 'scope' in params:
-            scopes = params['scope'][0].split()
+        if "scope" in params:
+            scopes = params["scope"][0].split()
             print("Scopes in URL:")
             for scope in scopes:
                 print(f"  ✓ {scope}")
             print()
 
-            if 'openid' in scopes:
+            if "openid" in scopes:
                 print("✓ 'openid' scope is present - Google should issue ID tokens")
             else:
                 print("✗ 'openid' scope is MISSING - Google will NOT issue ID tokens!")
@@ -73,7 +74,7 @@ def test_token_exchange_simulation():
         "scope": "openid https://www.googleapis.com/auth/userinfo.email",
         "token_type": "Bearer",
         "expires_in": 3600,
-        "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.header..."
+        "id_token": "eyJhbGciOiJSUzI1NiIsImtpZCI6IjEifQ.header...",
     }
     print(json.dumps(mock_response, indent=2))
     print()

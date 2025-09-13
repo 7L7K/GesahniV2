@@ -94,11 +94,21 @@ export function buildWebSocketUrl(apiOrigin: string, path: string): string {
 
 /**
  * Build a WebSocket URL using the canonical frontend origin for consistent origin validation
- * @param apiOrigin - API origin (e.g., 'http://localhost:8000')
+ * @param apiOrigin - API origin (e.g., 'http://localhost:8000') or empty string for proxy mode
  * @param path - WebSocket path
  * @returns WebSocket URL
  */
 export function buildCanonicalWebSocketUrl(apiOrigin: string, path: string): string {
+    // Handle proxy mode where apiOrigin is empty - use current window location
+    if (!apiOrigin && typeof window !== 'undefined') {
+        const currentOrigin = window.location.origin;
+        const parsed = new URL(currentOrigin);
+        const wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+        const wsBase = `${wsScheme}//${parsed.host}`;
+        const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+        return `${wsBase}${normalizedPath}`;
+    }
+
     // Use the API origin for WebSocket connections, not frontend origin
     const parsed = new URL(apiOrigin);
     const wsScheme = parsed.protocol === 'https:' ? 'wss:' : 'ws:';

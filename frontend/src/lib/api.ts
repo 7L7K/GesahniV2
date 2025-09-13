@@ -9,9 +9,6 @@ import { getToken, getAuthNamespace } from './api/auth';
 import { getAuthOrchestrator } from '../services/authOrchestrator';
 import { sanitizeRedirectPath } from './redirect-utils';
 
-// Simple API function for cookie mode
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE!;
-
 export async function api(path: string, init: RequestInit = {}) {
     // Deprecated: use apiFetch for all new code; keep this shim for legacy callers
     const { apiFetch } = await import('./api/fetch');
@@ -58,8 +55,8 @@ export function authHeaders(): Record<string, string> {
 export async function getMusicState(): Promise<any> {
     const device = getActiveDeviceId();
     const ctx = device ? [`device:${device}`] : undefined;
-    // Deduplicate concurrent requests to /v1/state
-    const json = await _dedup(`/v1/state`, ctx);
+    // Deduplicate concurrent requests to /v1/music/state
+    const json = await _dedup(API_ROUTES.MUSIC_STATE, ctx);
     return json;
 }
 
@@ -85,7 +82,7 @@ export async function sendPrompt(
     if (isJson) {
         const body = await res.json().catch(() => null) as any;
         // Be defensive: some backends may return null or a different shape
-        const candidate = body && (body.response ?? body.result ?? body.text);
+        const candidate = body && (body.response ?? body.result ?? body.text ?? body.answer);
         if (typeof candidate === 'string') return candidate;
         const rawDetail = body && (body.detail || body.error || body.message);
         const msg = rawDetail ? String(rawDetail) : (res.statusText || `HTTP ${res.status}`);

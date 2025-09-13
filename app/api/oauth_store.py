@@ -22,12 +22,17 @@ logger = logging.getLogger(__name__)
 _store: dict[str, tuple[dict[str, Any], float]] = {}
 
 # File-based store for cross-process sharing during testing
-_store_file = os.path.join(os.path.dirname(__file__), '..', '..', 'oauth_store.json')
+_store_file = os.path.join(os.path.dirname(__file__), "..", "..", "oauth_store.json")
+
 
 def _is_dev_env() -> bool:
     """Check if we're in a development/testing environment."""
     env = os.getenv("ENV", "").strip().lower()
-    return env in {"dev", "development", "test", "testing", "ci"} or os.getenv("DEV_MODE", "0") == "1"
+    return (
+        env in {"dev", "development", "test", "testing", "ci"}
+        or os.getenv("DEV_MODE", "0") == "1"
+    )
+
 
 def _load_store():
     """Load store from file if it exists and we're in dev environment."""
@@ -38,13 +43,14 @@ def _load_store():
 
     try:
         if os.path.exists(_store_file):
-            with open(_store_file, 'r') as f:
+            with open(_store_file) as f:
                 # Convert JSON data back to tuple format
                 json_data = json.load(f)
                 _store = {k: (v[0], v[1]) for k, v in json_data.items()}
                 logger.info(f"OAuth store: Loaded {len(_store)} items from file")
     except Exception as e:
         logger.warning(f"OAuth store: Failed to load from file: {e}")
+
 
 def _save_store():
     """Save store to file if we're in dev environment."""
@@ -55,16 +61,18 @@ def _save_store():
     try:
         # Convert tuples to lists for JSON serialization
         json_data = {k: [v[0], v[1]] for k, v in _store.items()}
-        with open(_store_file, 'w') as f:
+        with open(_store_file, "w") as f:
             json.dump(json_data, f, indent=2)
         logger.debug("OAuth store: Saved to file")
     except Exception as e:
         logger.warning(f"OAuth store: Failed to save to file: {e}")
 
+
 # Load store on import (only in dev environments)
 _load_store()
 
 _redis = None
+
 
 def _get_redis_sync():
     global _redis
@@ -117,17 +125,22 @@ def put_tx(tx_id: str, data: dict[str, Any], ttl_seconds: int = 600) -> None:
         _store[tx_id] = (data, expiry_time)
         _save_store()  # Save to file for cross-process sharing
 
-    logger.info("🔐 OAuth TX STORED", extra={
-        "meta": {
-            "tx_id": tx_id,
-            "data_keys": list(data.keys()),
-            "user_id": data.get("user_id", "unknown"),
-            "has_code_verifier": "code_verifier" in data,
-            "ttl_seconds": ttl_seconds,
-            "expires_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(expiry_time)),
-            "store_size": len(_store)
-        }
-    })
+    logger.info(
+        "🔐 OAuth TX STORED",
+        extra={
+            "meta": {
+                "tx_id": tx_id,
+                "data_keys": list(data.keys()),
+                "user_id": data.get("user_id", "unknown"),
+                "has_code_verifier": "code_verifier" in data,
+                "ttl_seconds": ttl_seconds,
+                "expires_at": time.strftime(
+                    "%Y-%m-%d %H:%M:%S", time.localtime(expiry_time)
+                ),
+                "store_size": len(_store),
+            }
+        },
+    )
 
 
 def pop_tx(tx_id: str) -> dict[str, Any] | None:
@@ -196,13 +209,18 @@ def pop_tx(tx_id: str) -> dict[str, Any] | None:
 
     row = _store.pop(tx_id, None)
     if not row:
-        logger.warning("🔐 OAuth TX NOT FOUND", extra={
-            "meta": {
-                "tx_id": tx_id,
-                "store_size": len(_store),
-                "available_tx_ids": list(_store.keys())[:5]  # Show first 5 for debugging
-            }
-        })
+        logger.warning(
+            "🔐 OAuth TX NOT FOUND",
+            extra={
+                "meta": {
+                    "tx_id": tx_id,
+                    "store_size": len(_store),
+                    "available_tx_ids": list(_store.keys())[
+                        :5
+                    ],  # Show first 5 for debugging
+                }
+            },
+        )
         return None
 
     # Save updated store to file
@@ -213,26 +231,34 @@ def pop_tx(tx_id: str) -> dict[str, Any] | None:
     is_expired = current_time > exp
 
     if is_expired:
-        logger.warning("🔐 OAuth TX EXPIRED", extra={
+        logger.warning(
+            "🔐 OAuth TX EXPIRED",
+            extra={
+                "meta": {
+                    "tx_id": tx_id,
+                    "user_id": data.get("user_id", "unknown"),
+                    "expired_seconds_ago": int(current_time - exp),
+                    "expiry_time": time.strftime(
+                        "%Y-%m-%d %H:%M:%S", time.localtime(exp)
+                    ),
+                }
+            },
+        )
+        return None
+
+    logger.info(
+        "🔐 OAuth TX POPPED",
+        extra={
             "meta": {
                 "tx_id": tx_id,
                 "user_id": data.get("user_id", "unknown"),
-                "expired_seconds_ago": int(current_time - exp),
-                "expiry_time": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(exp))
+                "data_keys": list(data.keys()),
+                "has_code_verifier": "code_verifier" in data,
+                "seconds_until_expiry": int(exp - current_time),
+                "store_size": len(_store),
             }
-        })
-        return None
-
-    logger.info("🔐 OAuth TX POPPED", extra={
-        "meta": {
-            "tx_id": tx_id,
-            "user_id": data.get("user_id", "unknown"),
-            "data_keys": list(data.keys()),
-            "has_code_verifier": "code_verifier" in data,
-            "seconds_until_expiry": int(exp - current_time),
-            "store_size": len(_store)
-        }
-    })
+        },
+    )
 
     return data
 
@@ -244,8 +270,11 @@ def debug_store() -> dict[str, Any]:
         "store_size": len(_store),
         "tx_ids": list(_store.keys())[:10],  # Show first 10 tx_ids
         "store_file_exists": os.path.exists(_store_file),
-        "store_file_size": os.path.getsize(_store_file) if os.path.exists(_store_file) else 0
+        "store_file_size": (
+            os.path.getsize(_store_file) if os.path.exists(_store_file) else 0
+        ),
     }
+
 
 def get_tx(tx_id: str) -> dict[str, Any] | None:
     """
@@ -265,7 +294,8 @@ def get_tx(tx_id: str) -> dict[str, Any] | None:
             raw = r.get(key)
             if not raw:
                 logger.debug(
-                    "🔐 OAuth TX GET - NOT FOUND", extra={"meta": {"tx_id": tx_id, "store": "redis"}}
+                    "🔐 OAuth TX GET - NOT FOUND",
+                    extra={"meta": {"tx_id": tx_id, "store": "redis"}},
                 )
                 return None
             try:
@@ -283,12 +313,10 @@ def get_tx(tx_id: str) -> dict[str, Any] | None:
 
     row = _store.get(tx_id)
     if not row:
-        logger.debug("🔐 OAuth TX GET - NOT FOUND", extra={
-            "meta": {
-                "tx_id": tx_id,
-                "store_size": len(_store)
-            }
-        })
+        logger.debug(
+            "🔐 OAuth TX GET - NOT FOUND",
+            extra={"meta": {"tx_id": tx_id, "store_size": len(_store)}},
+        )
         return None
 
     data, exp = row
@@ -296,24 +324,30 @@ def get_tx(tx_id: str) -> dict[str, Any] | None:
     is_expired = current_time > exp
 
     if is_expired:
-        logger.warning("🔐 OAuth TX GET - EXPIRED", extra={
-            "meta": {
-                "tx_id": tx_id,
-                "user_id": data.get("user_id", "unknown"),
-                "expired_seconds_ago": int(current_time - exp)
-            }
-        })
+        logger.warning(
+            "🔐 OAuth TX GET - EXPIRED",
+            extra={
+                "meta": {
+                    "tx_id": tx_id,
+                    "user_id": data.get("user_id", "unknown"),
+                    "expired_seconds_ago": int(current_time - exp),
+                }
+            },
+        )
         # Expired - clean it up
         _store.pop(tx_id, None)
         return None
 
-    logger.debug("🔐 OAuth TX GET - SUCCESS", extra={
-        "meta": {
-            "tx_id": tx_id,
-            "user_id": data.get("user_id", "unknown"),
-            "seconds_until_expiry": int(exp - current_time)
-        }
-    })
+    logger.debug(
+        "🔐 OAuth TX GET - SUCCESS",
+        extra={
+            "meta": {
+                "tx_id": tx_id,
+                "user_id": data.get("user_id", "unknown"),
+                "seconds_until_expiry": int(exp - current_time),
+            }
+        },
+    )
 
     return data
 
@@ -324,31 +358,37 @@ def cleanup_expired() -> None:
     expired = [tx_id for tx_id, (_, exp) in _store.items() if now > exp]
 
     if expired:
-        logger.info("🧹 OAuth TX CLEANUP", extra={
-            "meta": {
-                "expired_count": len(expired),
-                "expired_tx_ids": expired[:10],  # Show first 10
-                "store_size_before": len(_store)
-            }
-        })
+        logger.info(
+            "🧹 OAuth TX CLEANUP",
+            extra={
+                "meta": {
+                    "expired_count": len(expired),
+                    "expired_tx_ids": expired[:10],  # Show first 10
+                    "store_size_before": len(_store),
+                }
+            },
+        )
 
         for tx_id in expired:
             data, exp = _store[tx_id]
-            logger.debug("🗑️  OAuth TX CLEANED", extra={
-                "meta": {
-                    "tx_id": tx_id,
-                    "user_id": data.get("user_id", "unknown"),
-                    "expired_seconds_ago": int(now - exp)
-                }
-            })
+            logger.debug(
+                "🗑️  OAuth TX CLEANED",
+                extra={
+                    "meta": {
+                        "tx_id": tx_id,
+                        "user_id": data.get("user_id", "unknown"),
+                        "expired_seconds_ago": int(now - exp),
+                    }
+                },
+            )
             _store.pop(tx_id, None)
 
-        logger.info("✅ OAuth TX CLEANUP COMPLETE", extra={
-            "meta": {
-                "cleaned_count": len(expired),
-                "store_size_after": len(_store)
-            }
-        })
+        logger.info(
+            "✅ OAuth TX CLEANUP COMPLETE",
+            extra={
+                "meta": {"cleaned_count": len(expired), "store_size_after": len(_store)}
+            },
+        )
     else:
         logger.debug("🧹 OAuth TX CLEANUP - No expired transactions")
 
@@ -356,10 +396,7 @@ def cleanup_expired() -> None:
 def dump_store() -> dict[str, Any]:
     """Debug function to dump current store state."""
     now = time.time()
-    result = {
-        "store_size": len(_store),
-        "transactions": {}
-    }
+    result = {"store_size": len(_store), "transactions": {}}
 
     for tx_id, (data, exp) in _store.items():
         result["transactions"][tx_id] = {
@@ -367,11 +404,9 @@ def dump_store() -> dict[str, Any]:
             "data_keys": list(data.keys()),
             "expires_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(exp)),
             "seconds_until_expiry": max(0, int(exp - now)),
-            "is_expired": now > exp
+            "is_expired": now > exp,
         }
 
-    logger.info("📊 OAuth TX STORE DUMP", extra={
-        "meta": result
-    })
+    logger.info("📊 OAuth TX STORE DUMP", extra={"meta": result})
 
     return result

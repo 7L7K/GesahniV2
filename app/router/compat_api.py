@@ -16,34 +16,15 @@ router = APIRouter(tags=["Compat"])
 
 @router.get("/whoami", deprecated=True)
 async def whoami_compat(request: Request):
-    """Call into app.router.auth_api.whoami if available, else return 401 fallback.
-    """
-    def _attach_deprecation(resp: Response | JSONResponse | None, *, status: int | None = None, payload: dict | None = None) -> Response:
-        if resp is not None:
-            # Ensure Deprecation header present
-            try:
-                resp.headers["Deprecation"] = "true"
-            except Exception:
-                pass
-            return resp
-        # Build a JSON response with deprecation header
-        return JSONResponse(payload or {"status": "ok"}, status_code=status or 200, headers={"Deprecation": "true"})
+    """Redirect legacy /whoami to canonical /v1/whoami with 308 and Deprecation header."""
+    from fastapi.responses import RedirectResponse
 
+    resp = RedirectResponse(url="/v1/whoami", status_code=308)
     try:
-        from app.router.auth_api import whoami as real_whoami
+        resp.headers["Deprecation"] = "true"
     except Exception:
-        # Return 401 with Deprecation header rather than raising, so header is preserved
-        return _attach_deprecation(None, status=401, payload={"error": "not_authenticated"})
-
-    maybe = real_whoami(request)
-    if inspect.isawaitable(maybe):
-        res = await maybe
-    else:
-        res = maybe
-    # If downstream returned a Response, attach header; if dict, wrap into JSON
-    if isinstance(res, Response | JSONResponse):
-        return _attach_deprecation(res)
-    return _attach_deprecation(None, payload=res)
+        pass
+    return resp
 
 
 @router.get("/spotify/status", deprecated=True)

@@ -35,6 +35,8 @@ from .oauth_store import pop_tx, put_tx
 def _jwt_decode(token: str, secret: str, algorithms=None) -> dict:
     """Decode JWT token for test compatibility."""
     return jwt_decode(token, secret, algorithms=algorithms or ["HS256"])
+
+
 from ..metrics import OAUTH_CALLBACK, OAUTH_START
 
 logger = logging.getLogger(__name__)
@@ -45,49 +47,62 @@ integrations_router = APIRouter(prefix="/integrations/spotify")
 
 
 @integrations_router.get("/status")
-async def integrations_spotify_status(request: Request, user_id: str = Depends(get_current_user_id)) -> dict:
+async def integrations_spotify_status(
+    request: Request, user_id: str = Depends(get_current_user_id)
+) -> dict:
     """Get Spotify integration status for frontend polling.
 
     Returns status information that frontend can use to determine if reconnect is needed.
     """
-    logger.info("🎵 SPOTIFY INTEGRATIONS STATUS: Request started", extra={
-        "meta": {
-            "user_id": user_id,
-            "endpoint": "/v1/integrations/spotify/status"
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY INTEGRATIONS STATUS: Request started",
+        extra={
+            "meta": {"user_id": user_id, "endpoint": "/v1/integrations/spotify/status"}
+        },
+    )
 
     now = int(time.time())
 
     # Get token from store
     try:
         from ..auth_store_tokens import get_token
+
         token = await get_token(user_id, "spotify")
-        logger.info("🎵 SPOTIFY INTEGRATIONS STATUS: Token retrieved", extra={
-            "meta": {
-                "user_id": user_id,
-                "token_found": token is not None,
-                "token_id": getattr(token, 'id', None) if token else None,
-                "identity_id": getattr(token, 'identity_id', None) if token else None,
-                "expires_at": getattr(token, 'expires_at', None) if token else None,
-                "last_refresh_at": getattr(token, 'last_refresh_at', None) if token else None,
-                "scopes": getattr(token, 'scopes', None) if token else None
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY INTEGRATIONS STATUS: Token retrieved",
+            extra={
+                "meta": {
+                    "user_id": user_id,
+                    "token_found": token is not None,
+                    "token_id": getattr(token, "id", None) if token else None,
+                    "identity_id": (
+                        getattr(token, "identity_id", None) if token else None
+                    ),
+                    "expires_at": getattr(token, "expires_at", None) if token else None,
+                    "last_refresh_at": (
+                        getattr(token, "last_refresh_at", None) if token else None
+                    ),
+                    "scopes": getattr(token, "scopes", None) if token else None,
+                }
+            },
+        )
     except Exception as e:
-        logger.error("🎵 SPOTIFY INTEGRATIONS STATUS: Failed to get token", extra={
-            "meta": {
-                "user_id": user_id,
-                "error": str(e),
-                "error_type": type(e).__name__
-            }
-        })
+        logger.error(
+            "🎵 SPOTIFY INTEGRATIONS STATUS: Failed to get token",
+            extra={
+                "meta": {
+                    "user_id": user_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            },
+        )
         return {
             "connected": False,
             "expires_at": None,
             "last_refresh_at": None,
             "refreshed": False,
-            "scopes": []
+            "scopes": [],
         }
 
     # Check if connected (token exists and expires_at > now)
@@ -111,22 +126,26 @@ async def integrations_spotify_status(request: Request, user_id: str = Depends(g
         "expires_at": token.expires_at if token else None,
         "last_refresh_at": token.last_refresh_at if token else None,
         "refreshed": refreshed,
-        "scopes": scopes
+        "scopes": scopes,
     }
 
-    logger.info("🎵 SPOTIFY INTEGRATIONS STATUS: Returning status", extra={
-        "meta": {
-            "user_id": user_id,
-            "connected": connected,
-            "expires_at": token.expires_at if token else None,
-            "last_refresh_at": token.last_refresh_at if token else None,
-            "refreshed": refreshed,
-            "scopes_count": len(scopes),
-            "needs_reconnect": not connected
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY INTEGRATIONS STATUS: Returning status",
+        extra={
+            "meta": {
+                "user_id": user_id,
+                "connected": connected,
+                "expires_at": token.expires_at if token else None,
+                "last_refresh_at": token.last_refresh_at if token else None,
+                "refreshed": refreshed,
+                "scopes_count": len(scopes),
+                "needs_reconnect": not connected,
+            }
+        },
+    )
 
     return result
+
 
 SPOTIFY_AUTH = "https://accounts.spotify.com/authorize"
 SPOTIFY_TOKEN = "https://accounts.spotify.com/api/token"
@@ -139,54 +158,73 @@ def _pkce_challenge() -> SpotifyPKCE:
 
 
 if os.getenv("SPOTIFY_LOGIN_LEGACY", "0") == "1":
+
     @router.get("/login")
-    async def spotify_login(request: Request, user_id: str = Depends(get_current_user_id)) -> Response:
+    async def spotify_login(
+        request: Request, user_id: str = Depends(get_current_user_id)
+    ) -> Response:
         """Legacy Spotify login endpoint (enabled only when SPOTIFY_LOGIN_LEGACY=1).
 
         This route is intentionally excluded from import/mount when the
         feature flag is not set to reduce attack surface. The implementation
         is deprecated and kept behind the explicit opt-in.
         """
-        logger.info("🎵 SPOTIFY LOGIN: Starting Spotify OAuth flow", extra={
-            "meta": {
-                "user_id": user_id,
-                "client_ip": request.client.host if request.client else "unknown",
-                "user_agent": request.headers.get("User-Agent", "unknown"),
-                "has_cookies": len(request.cookies) > 0,
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY LOGIN: Starting Spotify OAuth flow",
+            extra={
+                "meta": {
+                    "user_id": user_id,
+                    "client_ip": request.client.host if request.client else "unknown",
+                    "user_agent": request.headers.get("User-Agent", "unknown"),
+                    "has_cookies": len(request.cookies) > 0,
+                }
+            },
+        )
 
         # Generate PKCE and authorization URL via helper
         logger.info("🎵 SPOTIFY LOGIN: Generating PKCE challenge...")
         state, challenge, verifier = await make_authorize_url.prepare_pkce()
-        logger.info("🎵 SPOTIFY LOGIN: PKCE generated", extra={
-            "meta": {
-                "state_length": len(state),
-                "challenge_length": len(challenge),
-                "verifier_length": len(verifier),
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY LOGIN: PKCE generated",
+            extra={
+                "meta": {
+                    "state_length": len(state),
+                    "challenge_length": len(challenge),
+                    "verifier_length": len(verifier),
+                }
+            },
+        )
 
         # Store verifier tied to the session (session id from cookie or resolved)
         sid = resolve_session_id(request=request)
-        logger.info("🎵 SPOTIFY LOGIN: Storing PKCE challenge", extra={
-            "meta": {
-                "session_id": sid,
-                "session_id_length": len(sid) if sid else 0,
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY LOGIN: Storing PKCE challenge",
+            extra={
+                "meta": {
+                    "session_id": sid,
+                    "session_id_length": len(sid) if sid else 0,
+                }
+            },
+        )
 
-        pkce_data = SpotifyPKCE(verifier=verifier, challenge=challenge, state=state, created_at=time.time())
+        pkce_data = SpotifyPKCE(
+            verifier=verifier, challenge=challenge, state=state, created_at=time.time()
+        )
         store_pkce_challenge(sid, pkce_data)
 
         logger.info("🎵 SPOTIFY LOGIN: Building authorization URL...")
         auth_url = make_authorize_url.build(state=state, code_challenge=challenge)
-        logger.info("🎵 SPOTIFY LOGIN: Authorization URL built", extra={"meta": {"auth_url_length": len(auth_url)}})
+        logger.info(
+            "🎵 SPOTIFY LOGIN: Authorization URL built",
+            extra={"meta": {"auth_url_length": len(auth_url)}},
+        )
 
         # Return JSON response with the auth URL
         from fastapi.responses import JSONResponse
 
-        response = JSONResponse(content={"ok": True, "authorize_url": auth_url, "session_id": sid})
+        response = JSONResponse(
+            content={"ok": True, "authorize_url": auth_url, "session_id": sid}
+        )
 
         # NOTE: legacy route sets a temporary cookie from bearer/header; retain behavior
         # only when explicitly enabled via the SPOTIFY_LOGIN_LEGACY flag.
@@ -207,9 +245,20 @@ if os.getenv("SPOTIFY_LOGIN_LEGACY", "0") == "1":
                 path="/",
                 samesite="lax",
             )
-            logger.info("🎵 SPOTIFY LOGIN: Set spotify_oauth_jwt cookie", extra={"meta": {"token_length": len(jwt_token)}})
+            logger.info(
+                "🎵 SPOTIFY LOGIN: Set spotify_oauth_jwt cookie",
+                extra={"meta": {"token_length": len(jwt_token)}},
+            )
 
-        logger.info("🎵 SPOTIFY LOGIN: Returning response", extra={"meta": {"has_authorize_url": bool(auth_url), "authorize_url_length": len(auth_url)}})
+        logger.info(
+            "🎵 SPOTIFY LOGIN: Returning response",
+            extra={
+                "meta": {
+                    "has_authorize_url": bool(auth_url),
+                    "authorize_url_length": len(auth_url),
+                }
+            },
+        )
         return response
 
 
@@ -223,6 +272,7 @@ async def spotify_debug(request: Request):
         logger.error(f"Debug auth error: {e}")
         return {"status": "error", "error": str(e), "authenticated": False}
 
+
 from fastapi import Depends
 
 
@@ -230,6 +280,7 @@ from fastapi import Depends
 async def debug_oauth_store():
     """Debug endpoint to check OAuth store contents."""
     return debug_store()
+
 
 @router.post("/test/store_tx")
 async def test_store_tx():
@@ -242,16 +293,13 @@ async def test_store_tx():
     tx_data = {
         "user_id": "testuser",
         "code_verifier": f"test_verifier_{secrets.token_hex(16)}",
-        "ts": int(time.time())
+        "ts": int(time.time()),
     }
 
     put_tx(tx_id, tx_data, ttl_seconds=600)
 
-    return {
-        "tx_id": tx_id,
-        "stored": True,
-        "user_id": "testuser"
-    }
+    return {"tx_id": tx_id, "stored": True, "user_id": "testuser"}
+
 
 @router.post("/test/full_flow")
 async def test_full_flow():
@@ -267,7 +315,7 @@ async def test_full_flow():
     tx_data = {
         "user_id": "testuser",
         "code_verifier": f"test_verifier_{secrets.token_hex(16)}",
-        "ts": int(time.time())
+        "ts": int(time.time()),
     }
 
     put_tx(tx_id, tx_data, ttl_seconds=600)
@@ -287,8 +335,9 @@ async def test_full_flow():
         "tx_id": tx_id,
         "state": state,
         "stored": True,
-        "callback_url": f"http://127.0.0.1:8000/v1/spotify/callback?code=fake&state={state}"
+        "callback_url": f"http://127.0.0.1:8000/v1/spotify/callback?code=fake&state={state}",
     }
+
 
 @router.get("/connect")
 async def spotify_connect(request: Request) -> Response:
@@ -306,21 +355,30 @@ async def spotify_connect(request: Request) -> Response:
         user_id = "anon"
 
     # Enhanced logging for debugging
-    logger.info("🎵 SPOTIFY CONNECT: Request started", extra={
-        "meta": {
-            "user_id": user_id,
-            "cookies_count": len(request.cookies),
-            "has_access_token": bool(request.cookies.get("access_token")),
-            "authorization_header": bool(request.headers.get("Authorization")),
-            "host": request.headers.get("host"),
-            "origin": request.headers.get("origin")
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY CONNECT: Request started",
+        extra={
+            "meta": {
+                "user_id": user_id,
+                "cookies_count": len(request.cookies),
+                "has_access_token": bool(request.cookies.get("access_token")),
+                "authorization_header": bool(request.headers.get("Authorization")),
+                "host": request.headers.get("host"),
+                "origin": request.headers.get("origin"),
+            }
+        },
+    )
     import uuid
 
     # Basic CSRF hardening: validate Origin/Referer against allowed origins
     try:
-        allowed = [o.strip() for o in (os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000") or "").split(",") if o.strip()]
+        allowed = [
+            o.strip()
+            for o in (
+                os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000") or ""
+            ).split(",")
+            if o.strip()
+        ]
         # Always allow same-origin calls to backend (when called directly)
         try:
             backend_origin = f"{request.url.scheme}://{request.headers.get('host','').split(',')[0]}".lower()
@@ -340,7 +398,12 @@ async def spotify_connect(request: Request) -> Response:
                     ref_origin = f"{p.scheme}://{p.netloc}".lower()
             except Exception:
                 ref_origin = ""
-        if origin and origin not in allowed and ref_origin and ref_origin not in allowed:
+        if (
+            origin
+            and origin not in allowed
+            and ref_origin
+            and ref_origin not in allowed
+        ):
             raise HTTPException(status_code=403, detail="origin_not_allowed")
     except HTTPException:
         raise
@@ -357,17 +420,29 @@ async def spotify_connect(request: Request) -> Response:
     # Per-user rate limiting to avoid TX spam (disabled in tests unless explicitly enabled)
     try:
         import os as _os
+
         def _rl_enabled():
             if (_os.getenv("RATE_LIMIT_MODE") or "").strip().lower() == "off":
                 return False
-            in_test = (_os.getenv("ENV","" ).strip().lower()=="test") or bool(_os.getenv("PYTEST_RUNNING") or _os.getenv("PYTEST_CURRENT_TEST"))
-            if in_test and (_os.getenv("ENABLE_RATE_LIMIT_IN_TESTS","0").strip().lower() not in {"1","true","yes","on"}):
+            in_test = (_os.getenv("ENV", "").strip().lower() == "test") or bool(
+                _os.getenv("PYTEST_RUNNING") or _os.getenv("PYTEST_CURRENT_TEST")
+            )
+            if in_test and (
+                _os.getenv("ENABLE_RATE_LIMIT_IN_TESTS", "0").strip().lower()
+                not in {"1", "true", "yes", "on"}
+            ):
                 return False
             return True
+
         if _rl_enabled():
             from ..token_store import incr_login_counter
-            minute = await incr_login_counter(f"rl:spotify_connect:user:{user_id}:m", 60)
-            hour = await incr_login_counter(f"rl:spotify_connect:user:{user_id}:h", 3600)
+
+            minute = await incr_login_counter(
+                f"rl:spotify_connect:user:{user_id}:m", 60
+            )
+            hour = await incr_login_counter(
+                f"rl:spotify_connect:user:{user_id}:h", 3600
+            )
             if minute > 10 or hour > 100:
                 raise HTTPException(status_code=429, detail="too_many_requests")
     except HTTPException:
@@ -383,44 +458,48 @@ async def spotify_connect(request: Request) -> Response:
         logger.error("Spotify connect: unauthenticated request")
         from ..http_errors import unauthorized
 
-        raise unauthorized(code="authentication_failed", message="authentication failed", hint="reconnect Spotify account")
+        raise unauthorized(
+            code="authentication_failed",
+            message="authentication failed",
+            hint="reconnect Spotify account",
+        )
     logger.info(f"Spotify connect: authenticated user_id='{user_id}'")
 
-    logger.info("🎵 SPOTIFY CONNECT: Preparing stateless OAuth flow", extra={
-        "meta": {
-            "user_id": user_id,
-            "component": "spotify_connect"
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY CONNECT: Preparing stateless OAuth flow",
+        extra={"meta": {"user_id": user_id, "component": "spotify_connect"}},
+    )
 
     # Generate PKCE challenge
     logger.info("🎵 SPOTIFY CONNECT: Generating PKCE challenge...")
     state_raw, challenge, verifier = await make_authorize_url.prepare_pkce()
     tx_id = uuid.uuid4().hex
 
-    logger.info("🎵 SPOTIFY CONNECT: PKCE challenge generated", extra={
-        "meta": {
-            "tx_id": tx_id,
-            "challenge_length": len(challenge),
-            "verifier_length": len(verifier)
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY CONNECT: PKCE challenge generated",
+        extra={
+            "meta": {
+                "tx_id": tx_id,
+                "challenge_length": len(challenge),
+                "verifier_length": len(verifier),
+            }
+        },
+    )
 
     # Persist PKCE + user for 10 minutes
-    tx_data = {
-        "user_id": user_id,
-        "code_verifier": verifier,
-        "ts": int(time.time())
-    }
+    tx_data = {"user_id": user_id, "code_verifier": verifier, "ts": int(time.time())}
 
-    logger.info("🎵 SPOTIFY CONNECT: Storing transaction data", extra={
-        "meta": {
-            "tx_id": tx_id,
-            "user_id": user_id,
-            "tx_data_keys": list(tx_data.keys()),
-            "ttl_seconds": 600
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY CONNECT: Storing transaction data",
+        extra={
+            "meta": {
+                "tx_id": tx_id,
+                "user_id": user_id,
+                "tx_data_keys": list(tx_data.keys()),
+                "ttl_seconds": 600,
+            }
+        },
+    )
 
     put_tx(tx_id, tx_data, ttl_seconds=600)
 
@@ -457,15 +536,18 @@ async def spotify_connect(request: Request) -> Response:
     # Encode state JWT (no logging of token contents anywhere)
     state = jwt.encode(state_payload, secret, algorithm="HS256", headers=headers)
 
-    logger.info("🎵 SPOTIFY CONNECT: JWT state created", extra={
-        "meta": {
-            "state_length": len(state),
-            "payload_tx": tx_id,
-            "payload_uid": user_id,
-            "payload_exp": state_payload["exp"],
-            "expires_in_minutes": 10
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY CONNECT: JWT state created",
+        extra={
+            "meta": {
+                "state_length": len(state),
+                "payload_tx": tx_id,
+                "payload_uid": user_id,
+                "payload_exp": state_payload["exp"],
+                "expires_in_minutes": 10,
+            }
+        },
+    )
 
     # Metrics: oauth start
     try:
@@ -473,23 +555,21 @@ async def spotify_connect(request: Request) -> Response:
     except Exception:
         pass
 
-    logger.info("🎵 SPOTIFY CONNECT: Stateless OAuth tx saved", extra={
-        "meta": {
-            "tx_id": tx_id,
-            "user_id": user_id,
-            "state_jwt_length": len(state)
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY CONNECT: Stateless OAuth tx saved",
+        extra={
+            "meta": {"tx_id": tx_id, "user_id": user_id, "state_jwt_length": len(state)}
+        },
+    )
 
     logger.info("🎵 SPOTIFY CONNECT: Building authorization URL...")
     auth_url = make_authorize_url.build(state=state, code_challenge=challenge)
 
     # Never log the URL itself; log only metadata
-    logger.info("🎵 SPOTIFY CONNECT: Authorization URL built", extra={
-        "meta": {
-            "auth_url_length": len(auth_url)
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY CONNECT: Authorization URL built",
+        extra={"meta": {"auth_url_length": len(auth_url)}},
+    )
 
     # If in test mode, short-circuit to backend callback for deterministic e2e tests
     if os.getenv("SPOTIFY_TEST_MODE", "0") == "1":
@@ -497,18 +577,20 @@ async def spotify_connect(request: Request) -> Response:
         original_url = auth_url
         auth_url = f"{backend}/v1/spotify/callback?code=fake&state={state}"
 
-        logger.info("🎵 SPOTIFY CONNECT: TEST MODE - Using short-circuit URL", extra={
-            "meta": {
-                "backend": backend
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY CONNECT: TEST MODE - Using short-circuit URL",
+            extra={"meta": {"backend": backend}},
+        )
 
     # Return JSON response with the auth URL
     from fastapi.responses import JSONResponse
-    response = JSONResponse(content={
-        "ok": True,
-        "authorize_url": auth_url,
-    })
+
+    response = JSONResponse(
+        content={
+            "ok": True,
+            "authorize_url": auth_url,
+        }
+    )
 
     # For front-end compatibility in tests, set a temporary cookie carrying the
     # caller-provided bearer token (when present) so callback can correlate.
@@ -517,6 +599,7 @@ async def spotify_connect(request: Request) -> Response:
         if authz.lower().startswith("bearer "):
             jwt_token = authz.split(" ", 1)[1]
             from ..web.cookies import set_named_cookie
+
             set_named_cookie(
                 resp=response,
                 name="spotify_oauth_jwt",
@@ -536,14 +619,17 @@ async def spotify_connect(request: Request) -> Response:
     except Exception:
         user_id = "anon"
 
-    logger.info("🎵 SPOTIFY CONNECT: Stateless flow complete", extra={
-        "meta": {
-            "no_cookies_set": True,
-            "stateless_flow": True,
-            "tx_id": tx_id,
-            "user_id": user_id
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY CONNECT: Stateless flow complete",
+        extra={
+            "meta": {
+                "no_cookies_set": True,
+                "stateless_flow": True,
+                "tx_id": tx_id,
+                "user_id": user_id,
+            }
+        },
+    )
 
     return response
 
@@ -552,12 +638,15 @@ async def spotify_connect(request: Request) -> Response:
 async def spotify_callback_test(request: Request):
     """Simple test callback."""
     from fastapi.responses import JSONResponse
-    return JSONResponse(content={
-        "status": "ok",
-        "message": "Test callback works",
-        "params": dict(request.query_params),
-        "cookies": list(request.cookies.keys())
-    })
+
+    return JSONResponse(
+        content={
+            "status": "ok",
+            "message": "Test callback works",
+            "params": dict(request.query_params),
+            "cookies": list(request.cookies.keys()),
+        }
+    )
 
 
 @router.get("/health")
@@ -567,16 +656,25 @@ async def spotify_health(request: Request):
     Returns basic config flags without exposing secrets.
     """
     from fastapi.responses import JSONResponse
+
     try:
         client_id_set = bool(os.getenv("SPOTIFY_CLIENT_ID"))
         redirect_set = bool(os.getenv("SPOTIFY_REDIRECT_URI"))
-        test_mode = os.getenv("SPOTIFY_TEST_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
-        return JSONResponse({
-            "ok": True,
-            "client_id_set": client_id_set,
-            "redirect_set": redirect_set,
-            "test_mode": test_mode,
-        }, status_code=200)
+        test_mode = os.getenv("SPOTIFY_TEST_MODE", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        return JSONResponse(
+            {
+                "ok": True,
+                "client_id_set": client_id_set,
+                "redirect_set": redirect_set,
+                "test_mode": test_mode,
+            },
+            status_code=200,
+        )
     except Exception as e:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=500)
 
@@ -588,10 +686,14 @@ async def spotify_debug_cookie(request: Request) -> dict:
         return {"cookies": list(request.cookies.keys())}
     raise HTTPException(status_code=404, detail="not_found")
 
+
 @router.post("/callback")
-async def spotify_callback_post(request: Request, code: str | None = None, state: str | None = None) -> Response:
+async def spotify_callback_post(
+    request: Request, code: str | None = None, state: str | None = None
+) -> Response:
     """POST shim for Spotify callback that redirects to GET canonical endpoint."""
     from starlette.responses import RedirectResponse
+
     # Build the GET URL with the same query parameters
     query_params = []
     if code:
@@ -600,7 +702,7 @@ async def spotify_callback_post(request: Request, code: str | None = None, state
         query_params.append(f"state={state}")
     query_string = "&".join(query_params) if query_params else ""
 
-    get_url = f"/v1/spotify/callback"
+    get_url = "/v1/spotify/callback"
     if query_string:
         get_url += f"?{query_string}"
 
@@ -608,7 +710,9 @@ async def spotify_callback_post(request: Request, code: str | None = None, state
 
 
 @router.get("/callback")
-async def spotify_callback(request: Request, code: str | None = None, state: str | None = None) -> Response:
+async def spotify_callback(
+    request: Request, code: str | None = None, state: str | None = None
+) -> Response:
     """Handle Spotify OAuth callback with stateless JWT state.
 
     Recovers user_id + PKCE code_verifier from JWT state + server store.
@@ -617,7 +721,12 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     import jwt
     from starlette.responses import RedirectResponse
 
-    logger.info("🎵 SPOTIFY CALLBACK: start has_code=%s has_state=%s, code='%s'", bool(code), bool(state), code)
+    logger.info(
+        "🎵 SPOTIFY CALLBACK: start has_code=%s has_state=%s, code='%s'",
+        bool(code),
+        bool(state),
+        code,
+    )
     # Pre-decode diagnostics for `state` integrity without leaking secrets
     try:
         raw = state or ""
@@ -635,14 +744,18 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                 sec_len = len(sec or "")
             except Exception:
                 sec_len = 0
-            state_diag.update({
-                "jwt_iss_set": bool(iss),
-                "jwt_aud_set": bool(aud),
-                "jwt_secret_len": sec_len,
-            })
+            state_diag.update(
+                {
+                    "jwt_iss_set": bool(iss),
+                    "jwt_aud_set": bool(aud),
+                    "jwt_secret_len": sec_len,
+                }
+            )
         except Exception:
             pass
-        logger.info("🎵 SPOTIFY CALLBACK: state diagnostics", extra={"meta": state_diag})
+        logger.info(
+            "🎵 SPOTIFY CALLBACK: state diagnostics", extra={"meta": state_diag}
+        )
     except Exception:
         pass
     # Compatibility log markers expected by tests
@@ -656,22 +769,41 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         accept = request.headers.get("Accept", "")
         user_agent = request.headers.get("User-Agent", "")
         # API clients or programmatic requests get 400, browsers get redirect
-        if accept.startswith("application/json") or not user_agent or "testclient" in user_agent.lower():
+        if (
+            accept.startswith("application/json")
+            or not user_agent
+            or "testclient" in user_agent.lower()
+        ):
             raise HTTPException(status_code=400, detail="missing_state")
         from starlette.responses import RedirectResponse
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302)
+
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302
+        )
     if not code:
         logger.error("🎵 SPOTIFY CALLBACK: Missing authorization code")
         # Return 400 for API calls, redirect for browser-like requests
         accept = request.headers.get("Accept", "")
         user_agent = request.headers.get("User-Agent", "")
         # API clients or programmatic requests get 400, browsers get redirect
-        if accept.startswith("application/json") or not user_agent or "testclient" in user_agent.lower():
+        if (
+            accept.startswith("application/json")
+            or not user_agent
+            or "testclient" in user_agent.lower()
+        ):
             raise HTTPException(status_code=400, detail="missing_code")
         from starlette.responses import RedirectResponse
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=missing_code", status_code=302)
+
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=missing_code",
+            status_code=302,
+        )
     try:
         secret = _jwt_secret()
         # Use centralized decode function to honour issuer/audience/leeway and
@@ -688,23 +820,43 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         # Compatibility marker for tests that assert logging order
         logger.info("spotify.callback:jwt_ok")
     except jwt.ExpiredSignatureError as e:
-        logger.error("🎵 SPOTIFY CALLBACK: JWT state expired", extra={
-            "meta": {"error_type": "ExpiredSignatureError", "error_message": str(e)}
-        })
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=expired_state", status_code=302)
+        logger.error(
+            "🎵 SPOTIFY CALLBACK: JWT state expired",
+            extra={
+                "meta": {"error_type": "ExpiredSignatureError", "error_message": str(e)}
+            },
+        )
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=expired_state",
+            status_code=302,
+        )
     except jwt.InvalidTokenError as e:
-        logger.error("🎵 SPOTIFY CALLBACK: Invalid JWT state", extra={
-            "meta": {"error_type": "InvalidTokenError", "error_message": str(e)}
-        })
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302)
+        logger.error(
+            "🎵 SPOTIFY CALLBACK: Invalid JWT state",
+            extra={
+                "meta": {"error_type": "InvalidTokenError", "error_message": str(e)}
+            },
+        )
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302
+        )
     except Exception as e:
-        logger.error("🎵 SPOTIFY CALLBACK: JWT decode error", extra={
-            "meta": {"error_type": type(e).__name__, "error_message": str(e)}
-        })
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302)
+        logger.error(
+            "🎵 SPOTIFY CALLBACK: JWT decode error",
+            extra={"meta": {"error_type": type(e).__name__, "error_message": str(e)}},
+        )
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=bad_state", status_code=302
+        )
 
     # 2) Recover PKCE + user from server store. We prefer the stateless tx_id
     # flow, but fall back to session-based PKCE storage when tx is not present
@@ -719,7 +871,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         tx = {
             "user_id": uid,
             "code_verifier": "test_verifier_fake_code",
-            "ts": int(time.time())
+            "ts": int(time.time()),
         }
     elif tx_id:
         tx = pop_tx(tx_id)  # atomically fetch & delete
@@ -734,7 +886,7 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                 tx = {
                     "user_id": uid,
                     "code_verifier": pkce.verifier,
-                    "ts": getattr(pkce, "created_at", int(time.time()))
+                    "ts": getattr(pkce, "created_at", int(time.time())),
                 }
                 try:
                     clear_pkce_challenge_by_state(session_id, state)
@@ -742,29 +894,45 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                     pass
 
     if not tx:
-        logger.error("🎵 SPOTIFY CALLBACK: No transaction found in store", extra={
+        logger.error(
+            "🎵 SPOTIFY CALLBACK: No transaction found in store",
+            extra={
                 "meta": {
-                "tx_id": tx_id,
-                "session_id": payload.get("sid"),
-                "user_id": uid,
-                "store_empty": True
-            }
-        })
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=expired_txn", status_code=302)
+                    "tx_id": tx_id,
+                    "session_id": payload.get("sid"),
+                    "user_id": uid,
+                    "store_empty": True,
+                }
+            },
+        )
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=expired_txn",
+            status_code=302,
+        )
 
     if tx.get("user_id") != uid:
-        logger.error("🎵 SPOTIFY CALLBACK: User ID mismatch in transaction", extra={
-            "meta": {
-                "tx_id": tx_id,
-                "session_id": payload.get("sid"),
-                "expected_user": uid,
-                "stored_user": tx.get("user_id"),
-                "user_mismatch": True
-            }
-        })
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=user_mismatch", status_code=302)
+        logger.error(
+            "🎵 SPOTIFY CALLBACK: User ID mismatch in transaction",
+            extra={
+                "meta": {
+                    "tx_id": tx_id,
+                    "session_id": payload.get("sid"),
+                    "expected_user": uid,
+                    "stored_user": tx.get("user_id"),
+                    "user_mismatch": True,
+                }
+            },
+        )
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=user_mismatch",
+            status_code=302,
+        )
 
     # The code_verifier is sensitive; never log or include previews. Only use it
     # for the token exchange and keep it out of logs and responses.
@@ -774,7 +942,9 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
     logger.info("🎵 SPOTIFY CALLBACK: transaction recovered tx=%s uid=%s", tx_id, uid)
 
     # 3) Exchange code → tokens
-    logger.info("🎵 SPOTIFY CALLBACK: Step 3 - Exchanging authorization code for tokens...")
+    logger.info(
+        "🎵 SPOTIFY CALLBACK: Step 3 - Exchanging authorization code for tokens..."
+    )
     try:
         logger.debug("🎵 SPOTIFY CALLBACK: calling token endpoint tx=%s", tx_id)
 
@@ -785,7 +955,11 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         # processing.
         if isinstance(token_data, dict):
             now = int(time.time())
-            expires_at = int(token_data.get("expires_at", now + int(token_data.get("expires_in", 3600))))
+            expires_at = int(
+                token_data.get(
+                    "expires_at", now + int(token_data.get("expires_in", 3600))
+                )
+            )
             token_data = ThirdPartyToken(
                 id=f"spotify:{secrets.token_hex(8)}",
                 user_id=uid,
@@ -816,18 +990,27 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
             from .. import auth_store as auth_store
 
             # Check if this is a test mode token (starts with "fake_")
-            if token_data.access_token and token_data.access_token.startswith("fake_access_"):
+            if token_data.access_token and token_data.access_token.startswith(
+                "fake_access_"
+            ):
                 # Test mode: use fake profile data
                 provider_sub = f"test_user_{secrets.token_hex(4)}"
                 email_norm = f"{provider_sub}@test.spotify.com"
-                logger.info("🎵 SPOTIFY CALLBACK: Using test mode profile data", extra={
-                    "meta": {"provider_sub": provider_sub, "email": email_norm}
-                })
+                logger.info(
+                    "🎵 SPOTIFY CALLBACK: Using test mode profile data",
+                    extra={"meta": {"provider_sub": provider_sub, "email": email_norm}},
+                )
             else:
                 # Production mode: fetch real profile from Spotify API
                 import httpx
-                async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as cli:
-                    resp = await cli.get("https://api.spotify.com/v1/me", headers={"Authorization": f"Bearer {token_data.access_token}"})
+
+                async with httpx.AsyncClient(
+                    timeout=httpx.Timeout(10.0, connect=5.0)
+                ) as cli:
+                    resp = await cli.get(
+                        "https://api.spotify.com/v1/me",
+                        headers={"Authorization": f"Bearer {token_data.access_token}"},
+                    )
                 if resp.status_code == 200:
                     profile = resp.json()
                     provider_sub = profile.get("id")
@@ -835,7 +1018,13 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
 
             # Try to find existing identity
             try:
-                existing_ident = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub)) if provider_sub else None
+                existing_ident = (
+                    await auth_store.get_oauth_identity_by_provider(
+                        "spotify", "https://accounts.spotify.com", str(provider_sub)
+                    )
+                    if provider_sub
+                    else None
+                )
             except Exception:
                 existing_ident = None
             if existing_ident and existing_ident.get("id"):
@@ -853,22 +1042,31 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                         provider_iss="https://accounts.spotify.com",
                     )
                     identity_id_used = new_id
-                    logger.info("🎵 SPOTIFY CALLBACK: Created new identity", extra={
-                        "meta": {"identity_id": identity_id_used, "provider_sub": provider_sub}
-                    })
+                    logger.info(
+                        "🎵 SPOTIFY CALLBACK: Created new identity",
+                        extra={
+                            "meta": {
+                                "identity_id": identity_id_used,
+                                "provider_sub": provider_sub,
+                            }
+                        },
+                    )
                 except Exception:
                     # Race condition: fetch existing identity
                     try:
-                        re = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub))
+                        re = await auth_store.get_oauth_identity_by_provider(
+                            "spotify", "https://accounts.spotify.com", str(provider_sub)
+                        )
                         if re:
                             identity_id_used = re.get("id")
                     except Exception:
                         identity_id_used = None
         except Exception as e:
             # Best-effort only; proceed even if profile lookup/link fails
-            logger.warning("🎵 SPOTIFY CALLBACK: Identity linking failed", extra={
-                "meta": {"error": str(e), "error_type": type(e).__name__}
-            })
+            logger.warning(
+                "🎵 SPOTIFY CALLBACK: Identity linking failed",
+                extra={"meta": {"error": str(e), "error_type": type(e).__name__}},
+            )
             provider_sub = None
             identity_id_used = None
 
@@ -878,31 +1076,50 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         if identity_id_used:
             token_data.identity_id = identity_id_used
 
-        logger.info("🎵 SPOTIFY CALLBACK: Identity linking complete", extra={
-            "meta": {
-                "provider_sub": getattr(token_data, 'provider_sub', None),
-                "identity_id": getattr(token_data, 'identity_id', None),
-                "user_id": getattr(token_data, 'user_id', None),
-                "tx_id": tx_id
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY CALLBACK: Identity linking complete",
+            extra={
+                "meta": {
+                    "provider_sub": getattr(token_data, "provider_sub", None),
+                    "identity_id": getattr(token_data, "identity_id", None),
+                    "user_id": getattr(token_data, "user_id", None),
+                    "tx_id": tx_id,
+                }
+            },
+        )
 
         logger.info("🎵 SPOTIFY CALLBACK: token exchange successful tx=%s", tx_id)
     except Exception as e:
-        logger.error("🎵 SPOTIFY CALLBACK: Token exchange failed", extra={
-            "meta": {
-                "error_type": type(e).__name__,
-                "error_message": str(e),
-                "user_id": uid,
-                "tx_id": tx_id,
-                "code_provided": bool(code),
-                "code_verifier_provided": bool(code_verifier),
-                "token_data_type": type(token_data).__name__ if 'token_data' in locals() else 'undefined',
-                "token_data_attributes": list(vars(token_data).keys()) if 'token_data' in locals() and hasattr(token_data, '__dict__') else 'N/A'
-            }
-        })
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=token_exchange_failed", status_code=302)
+        logger.error(
+            "🎵 SPOTIFY CALLBACK: Token exchange failed",
+            extra={
+                "meta": {
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "user_id": uid,
+                    "tx_id": tx_id,
+                    "code_provided": bool(code),
+                    "code_verifier_provided": bool(code_verifier),
+                    "token_data_type": (
+                        type(token_data).__name__
+                        if "token_data" in locals()
+                        else "undefined"
+                    ),
+                    "token_data_attributes": (
+                        list(vars(token_data).keys())
+                        if "token_data" in locals() and hasattr(token_data, "__dict__")
+                        else "N/A"
+                    ),
+                }
+            },
+        )
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=token_exchange_failed",
+            status_code=302,
+        )
 
     # 4) Persist tokens for user
     logger.info("🎵 SPOTIFY CALLBACK: Step 4 - Persisting tokens to database...")
@@ -922,15 +1139,26 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
 
             from .. import auth_store as auth_store
 
-            async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as cli:
-                resp = await cli.get("https://api.spotify.com/v1/me", headers={"Authorization": f"Bearer {access_token}"})
+            async with httpx.AsyncClient(
+                timeout=httpx.Timeout(10.0, connect=5.0)
+            ) as cli:
+                resp = await cli.get(
+                    "https://api.spotify.com/v1/me",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
             if resp.status_code == 200:
                 profile = resp.json()
                 provider_sub = profile.get("id")
                 email_norm = (profile.get("email") or "").lower()
                 # Try to find existing identity
                 try:
-                    existing_ident = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub)) if provider_sub else None
+                    existing_ident = (
+                        await auth_store.get_oauth_identity_by_provider(
+                            "spotify", "https://accounts.spotify.com", str(provider_sub)
+                        )
+                        if provider_sub
+                        else None
+                    )
                 except Exception:
                     existing_ident = None
                 if existing_ident and existing_ident.get("id"):
@@ -951,7 +1179,11 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                     except Exception:
                         # Race condition: fetch existing identity
                         try:
-                            re = await auth_store.get_oauth_identity_by_provider("spotify", "https://accounts.spotify.com", str(provider_sub))
+                            re = await auth_store.get_oauth_identity_by_provider(
+                                "spotify",
+                                "https://accounts.spotify.com",
+                                str(provider_sub),
+                            )
                             if re:
                                 identity_id_used = re.get("id")
                         except Exception:
@@ -962,33 +1194,47 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
             identity_id_used = None
 
         # Use the token_data object directly (already has user_id, provider_sub, identity_id set)
-        logger.info("🎵 SPOTIFY CALLBACK: About to call upsert_token", extra={
-            "meta": {
-                "token_id": getattr(token_data, 'id', None),
-                "user_id": getattr(token_data, 'user_id', None),
-                "identity_id": getattr(token_data, 'identity_id', None),
-                "provider": getattr(token_data, 'provider', None)
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY CALLBACK: About to call upsert_token",
+            extra={
+                "meta": {
+                    "token_id": getattr(token_data, "id", None),
+                    "user_id": getattr(token_data, "user_id", None),
+                    "identity_id": getattr(token_data, "identity_id", None),
+                    "provider": getattr(token_data, "provider", None),
+                }
+            },
+        )
 
         persisted = await upsert_token(token_data)
 
         logger.info(
             "🎵 SPOTIFY CALLBACK: upsert_token returned",
-            extra={"meta": {"tx_id": tx_id, "user_id": uid, "persisted": bool(persisted)}},
+            extra={
+                "meta": {"tx_id": tx_id, "user_id": uid, "persisted": bool(persisted)}
+            },
         )
 
         # Double-check if token was actually created
         if persisted:
             from ..auth_store_tokens import get_token
+
             check_token = await get_token(uid, "spotify")
             logger.info(
                 "🎵 SPOTIFY CALLBACK: Token verification after upsert",
-                extra={"meta": {
-                    "found_token": check_token is not None,
-                    "token_id": getattr(check_token, 'id', None) if check_token else None,
-                    "token_identity_id": getattr(check_token, 'identity_id', None) if check_token else None
-                }}
+                extra={
+                    "meta": {
+                        "found_token": check_token is not None,
+                        "token_id": (
+                            getattr(check_token, "id", None) if check_token else None
+                        ),
+                        "token_identity_id": (
+                            getattr(check_token, "identity_id", None)
+                            if check_token
+                            else None
+                        ),
+                    }
+                },
             )
         # Compatibility marker for tests that assert logging order
         logger.info("spotify.callback:tokens_persisted")
@@ -1004,9 +1250,9 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
         has_at = False
         has_rt = False
         try:
-            if 'token_data' in locals() and token_data is not None:
-                has_at = bool(getattr(token_data, 'access_token', None))
-                has_rt = bool(getattr(token_data, 'refresh_token', None))
+            if "token_data" in locals() and token_data is not None:
+                has_at = bool(getattr(token_data, "access_token", None))
+                has_rt = bool(getattr(token_data, "refresh_token", None))
         except Exception:
             has_at = False
             has_rt = False
@@ -1023,8 +1269,13 @@ async def spotify_callback(request: Request, code: str | None = None, state: str
                 }
             },
         )
-        frontend_url = os.getenv("FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000"))
-        return RedirectResponse(f"{frontend_url}/settings#spotify?spotify_error=token_save_failed", status_code=302)
+        frontend_url = os.getenv(
+            "FRONTEND_URL", os.getenv("GESAHNI_FRONTEND_URL", "http://localhost:3000")
+        )
+        return RedirectResponse(
+            f"{frontend_url}/settings#spotify?spotify_error=token_save_failed",
+            status_code=302,
+        )
 
     # 5) Redirect to UI success
     frontend_url = os.getenv("FRONTEND_URL", "http://localhost:3000")
@@ -1050,7 +1301,10 @@ async def spotify_disconnect(request: Request) -> dict:
     except Exception:
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
 
     # Mark tokens invalid and record revocation timestamp using async DAO
     success = await SpotifyClient(user_id).disconnect()
@@ -1061,7 +1315,10 @@ async def spotify_disconnect(request: Request) -> dict:
 
             await mark_token_invalid(user_id, "spotify")
         except Exception as e:
-            logger.warning("🎵 SPOTIFY DISCONNECT: failed to mark token invalid via DAO", extra={"meta": {"error": str(e)}})
+            logger.warning(
+                "🎵 SPOTIFY DISCONNECT: failed to mark token invalid via DAO",
+                extra={"meta": {"error": str(e)}},
+            )
 
     return {"ok": success}
 
@@ -1075,48 +1332,57 @@ async def spotify_status(request: Request) -> dict:
     """
     from fastapi.responses import JSONResponse
 
-    logger.info("🎵 SPOTIFY STATUS: Request started", extra={
-        "meta": {
-            "headers": dict(request.headers),
-            "cookies_count": len(request.cookies),
-            "has_authorization": bool(request.headers.get("Authorization"))
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY STATUS: Request started",
+        extra={
+            "meta": {
+                "headers": dict(request.headers),
+                "cookies_count": len(request.cookies),
+                "has_authorization": bool(request.headers.get("Authorization")),
+            }
+        },
+    )
 
     # Check if user is authenticated
     current_user = None
     try:
         current_user = get_current_user_id(request=request)
-        logger.info("🎵 SPOTIFY STATUS: User authentication", extra={
-            "meta": {
-                "user_id": current_user,
-                "is_authenticated": current_user is not None and current_user != "anon"
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY STATUS: User authentication",
+            extra={
+                "meta": {
+                    "user_id": current_user,
+                    "is_authenticated": current_user is not None
+                    and current_user != "anon",
+                }
+            },
+        )
     except Exception as e:
-        logger.warning("🎵 SPOTIFY STATUS: Authentication error", extra={
-            "meta": {
-                "error": str(e),
-                "error_type": type(e).__name__
-            }
-        })
+        logger.warning(
+            "🎵 SPOTIFY STATUS: Authentication error",
+            extra={"meta": {"error": str(e), "error_type": type(e).__name__}},
+        )
 
     if not current_user or current_user == "anon":
-        logger.info("🎵 SPOTIFY STATUS: Unauthenticated user", extra={
-            "meta": {
-                "user_id": current_user,
-                "returning_not_authenticated": True
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY STATUS: Unauthenticated user",
+            extra={
+                "meta": {"user_id": current_user, "returning_not_authenticated": True}
+            },
+        )
         # Return status for unauthenticated users - not connected
-        body: dict = {"connected": False, "devices_ok": False, "state_ok": False, "reason": "not_authenticated"}
+        body: dict = {
+            "connected": False,
+            "devices_ok": False,
+            "state_ok": False,
+            "reason": "not_authenticated",
+        }
         return JSONResponse(body, status_code=200)
 
-    logger.info("🎵 SPOTIFY STATUS: Creating Spotify client", extra={
-        "meta": {
-            "user_id": current_user
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY STATUS: Creating Spotify client",
+        extra={"meta": {"user_id": current_user}},
+    )
 
     client = SpotifyClient(current_user)
 
@@ -1129,105 +1395,124 @@ async def spotify_status(request: Request) -> dict:
     state_ok = False
     required_scopes_ok: bool | None = None
 
-    logger.info("🎵 SPOTIFY STATUS: Starting connectivity probe", extra={
-        "meta": {
-            "user_id": current_user,
-            "probe_endpoint": "/me"
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY STATUS: Starting connectivity probe",
+        extra={"meta": {"user_id": current_user, "probe_endpoint": "/me"}},
+    )
 
     try:
         # Lightweight probe: user profile
-        logger.info("🎵 SPOTIFY STATUS: Calling get_user_profile", extra={
-            "meta": {
-                "user_id": current_user
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY STATUS: Calling get_user_profile",
+            extra={"meta": {"user_id": current_user}},
+        )
 
         profile = await client.get_user_profile()
 
-        logger.info("🎵 SPOTIFY STATUS: get_user_profile result", extra={
-            "meta": {
-                "user_id": current_user,
-                "profile_received": profile is not None,
-                "profile_keys": list(profile.keys()) if profile else None
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY STATUS: get_user_profile result",
+            extra={
+                "meta": {
+                    "user_id": current_user,
+                    "profile_received": profile is not None,
+                    "profile_keys": list(profile.keys()) if profile else None,
+                }
+            },
+        )
 
         if profile is not None:
             connected = True
-            logger.info("🎵 SPOTIFY STATUS: Profile found, marking as connected", extra={
-                "meta": {
-                    "user_id": current_user,
-                    "connected": True
-                }
-            })
+            logger.info(
+                "🎵 SPOTIFY STATUS: Profile found, marking as connected",
+                extra={"meta": {"user_id": current_user, "connected": True}},
+            )
         else:
             connected = False
-            logger.warning("🎵 SPOTIFY STATUS: Profile is None, marking as not connected", extra={
+            logger.warning(
+                "🎵 SPOTIFY STATUS: Profile is None, marking as not connected",
+                extra={"meta": {"user_id": current_user, "connected": False}},
+            )
+    except Exception as e:
+        logger.error(
+            "🎵 SPOTIFY STATUS: Exception during connectivity probe",
+            extra={
                 "meta": {
                     "user_id": current_user,
-                    "connected": False
+                    "error": str(e),
+                    "error_type": type(e).__name__,
                 }
-            })
-    except Exception as e:
-        logger.error("🎵 SPOTIFY STATUS: Exception during connectivity probe", extra={
-            "meta": {
-                "user_id": current_user,
-                "error": str(e),
-                "error_type": type(e).__name__
-            }
-        })
+            },
+        )
 
         # If we get an auth-related error, mark tokens invalid so frontend knows to reauth
         try:
             from ..auth_store_tokens import mark_invalid
-            from ..integrations.spotify.client import SpotifyAuthError, SpotifyPremiumRequiredError
+            from ..integrations.spotify.client import (
+                SpotifyAuthError,
+                SpotifyPremiumRequiredError,
+            )
 
-            logger.info("🎵 SPOTIFY STATUS: Checking exception type", extra={
-                "meta": {
-                    "user_id": current_user,
-                    "is_spotify_auth_error": isinstance(e, SpotifyAuthError),
-                    "is_premium_required": isinstance(e, SpotifyPremiumRequiredError),
-                    "error_contains_401": str(e).lower().find('401') != -1,
-                    "error_contains_needs_reauth": str(e).lower().find('needs_reauth') != -1
-                }
-            })
-
-            if isinstance(e, SpotifyAuthError) or isinstance(e, SpotifyPremiumRequiredError) or str(e).lower().find('401') != -1 or str(e).lower().find('needs_reauth') != -1:
-                logger.info("🎵 SPOTIFY STATUS: Auth error detected, invalidating tokens", extra={
+            logger.info(
+                "🎵 SPOTIFY STATUS: Checking exception type",
+                extra={
                     "meta": {
-                        "user_id": current_user
+                        "user_id": current_user,
+                        "is_spotify_auth_error": isinstance(e, SpotifyAuthError),
+                        "is_premium_required": isinstance(
+                            e, SpotifyPremiumRequiredError
+                        ),
+                        "error_contains_401": str(e).lower().find("401") != -1,
+                        "error_contains_needs_reauth": str(e)
+                        .lower()
+                        .find("needs_reauth")
+                        != -1,
                     }
-                })
+                },
+            )
+
+            if (
+                isinstance(e, SpotifyAuthError)
+                or isinstance(e, SpotifyPremiumRequiredError)
+                or str(e).lower().find("401") != -1
+                or str(e).lower().find("needs_reauth") != -1
+            ):
+                logger.info(
+                    "🎵 SPOTIFY STATUS: Auth error detected, invalidating tokens",
+                    extra={"meta": {"user_id": current_user}},
+                )
                 # Invalidate tokens to avoid false-positive "connected" UX
                 try:
-                    await mark_invalid(current_user, 'spotify')
-                    logger.info("🎵 SPOTIFY STATUS: Tokens marked invalid", extra={
-                        "meta": {
-                            "user_id": current_user
-                        }
-                    })
+                    await mark_invalid(current_user, "spotify")
+                    logger.info(
+                        "🎵 SPOTIFY STATUS: Tokens marked invalid",
+                        extra={"meta": {"user_id": current_user}},
+                    )
                 except Exception as mark_error:
-                    logger.warning("🎵 SPOTIFY STATUS: failed to mark token invalid", extra={
-                        "meta": {
-                            "user_id": current_user,
-                            "mark_error": str(mark_error)
-                        }
-                    })
+                    logger.warning(
+                        "🎵 SPOTIFY STATUS: failed to mark token invalid",
+                        extra={
+                            "meta": {
+                                "user_id": current_user,
+                                "mark_error": str(mark_error),
+                            }
+                        },
+                    )
                 connected = False
-                reason = 'needs_reauth'
+                reason = "needs_reauth"
             else:
                 connected = False
                 reason = str(e)
         except Exception as inner_e:
-            logger.error("🎵 SPOTIFY STATUS: Exception in exception handler", extra={
-                "meta": {
-                    "user_id": current_user,
-                    "original_error": str(e),
-                    "inner_error": str(inner_e)
-                }
-            })
+            logger.error(
+                "🎵 SPOTIFY STATUS: Exception in exception handler",
+                extra={
+                    "meta": {
+                        "user_id": current_user,
+                        "original_error": str(e),
+                        "inner_error": str(inner_e),
+                    }
+                },
+            )
             connected = False
             reason = str(e)
 
@@ -1249,59 +1534,75 @@ async def spotify_status(request: Request) -> dict:
             toks = await client._get_tokens()
             tok_scope = (toks.scope or "") if toks else ""
             token_scopes = set(s for s in tok_scope.split() if s)
-            required = {"user-read-playback-state", "user-modify-playback-state", "user-read-currently-playing"}
+            required = {
+                "user-read-playback-state",
+                "user-modify-playback-state",
+                "user-read-currently-playing",
+            }
             required_scopes_ok = required.issubset(token_scopes)
         except Exception:
             required_scopes_ok = None
 
-    body: dict = {"connected": connected, "devices_ok": devices_ok, "state_ok": state_ok}
+    body: dict = {
+        "connected": connected,
+        "devices_ok": devices_ok,
+        "state_ok": state_ok,
+    }
 
-    logger.info("🎵 SPOTIFY STATUS: Building response", extra={
-        "meta": {
-            "user_id": current_user,
-            "connected": connected,
-            "devices_ok": devices_ok,
-            "state_ok": state_ok,
-            "reason": reason,
-            "required_scopes_ok": required_scopes_ok
-        }
-    })
+    logger.info(
+        "🎵 SPOTIFY STATUS: Building response",
+        extra={
+            "meta": {
+                "user_id": current_user,
+                "connected": connected,
+                "devices_ok": devices_ok,
+                "state_ok": state_ok,
+                "reason": reason,
+                "required_scopes_ok": required_scopes_ok,
+            }
+        },
+    )
 
     if not connected and reason:
         body["reason"] = reason
-        logger.info("🎵 SPOTIFY STATUS: Adding reason to response", extra={
-            "meta": {
-                "user_id": current_user,
-                "reason": reason
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY STATUS: Adding reason to response",
+            extra={"meta": {"user_id": current_user, "reason": reason}},
+        )
 
     if required_scopes_ok is not None:
         body["required_scopes_ok"] = required_scopes_ok
-        logger.info("🎵 SPOTIFY STATUS: Adding scopes info", extra={
-            "meta": {
-                "user_id": current_user,
-                "required_scopes_ok": required_scopes_ok
-            }
-        })
-
-        if toks := (await client._get_tokens() if required_scopes_ok is not None else None):
-            body["scopes"] = (toks.scope or "").split()
-            body["expires_at"] = toks.expires_at
-            logger.info("🎵 SPOTIFY STATUS: Adding token details", extra={
+        logger.info(
+            "🎵 SPOTIFY STATUS: Adding scopes info",
+            extra={
                 "meta": {
                     "user_id": current_user,
-                    "scopes": (toks.scope or "").split(),
-                    "expires_at": toks.expires_at
+                    "required_scopes_ok": required_scopes_ok,
                 }
-            })
+            },
+        )
 
-    logger.info("🎵 SPOTIFY STATUS: Returning response", extra={
-        "meta": {
-            "user_id": current_user,
-            "response_body": body,
-            "status_code": 200
-        }
-    })
+        if toks := (
+            await client._get_tokens() if required_scopes_ok is not None else None
+        ):
+            body["scopes"] = (toks.scope or "").split()
+            body["expires_at"] = toks.expires_at
+            logger.info(
+                "🎵 SPOTIFY STATUS: Adding token details",
+                extra={
+                    "meta": {
+                        "user_id": current_user,
+                        "scopes": (toks.scope or "").split(),
+                        "expires_at": toks.expires_at,
+                    }
+                },
+            )
+
+    logger.info(
+        "🎵 SPOTIFY STATUS: Returning response",
+        extra={
+            "meta": {"user_id": current_user, "response_body": body, "status_code": 200}
+        },
+    )
 
     return JSONResponse(body, status_code=200)

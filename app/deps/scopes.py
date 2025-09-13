@@ -260,7 +260,10 @@ def require_scope(scope: str) -> Callable[[Request], bool]:
 
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
 
         # Check if the required scope is satisfied
         scope_satisfied = scope in scopes
@@ -341,7 +344,10 @@ def require_any_scopes(
             logger.warning("rbac.unauthorized", user_id=user_id or "anonymous")
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
 
         if not (req & scopes):
             logger.warning(
@@ -392,9 +398,15 @@ def require_admin_optional() -> Callable[[Request], str | None]:
 
         # If no scopes at all (completely unauthenticated), raise 401
         if scopes is None:
-            logger.warning("rbac.unauthorized", extra={"user_id": user_id or "anonymous"})
+            logger.warning(
+                "rbac.unauthorized", extra={"user_id": user_id or "anonymous"}
+            )
             from ..http_errors import unauthorized
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
 
         # Check if any admin scope is present
         admin_scopes = {"admin", "admin:write", "admin:read"}
@@ -408,7 +420,7 @@ def require_admin_optional() -> Callable[[Request], str | None]:
                     "user_id": user_id or "anonymous",
                     "required_scopes": sorted(admin_scopes),
                     "available_scopes": sorted(scopes),
-                }
+                },
             )
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -502,7 +514,8 @@ def require_scope(required: str) -> Callable[[Request], None]:
         if (
             os.getenv("PYTEST_RUNNING", "").lower() in {"1", "true", "yes"}
             or os.getenv("TEST_MODE", "").strip() == "1"
-            or os.getenv("JWT_OPTIONAL_IN_TESTS", "").lower() in {"1", "true", "yes", "on"}
+            or os.getenv("JWT_OPTIONAL_IN_TESTS", "").lower()
+            in {"1", "true", "yes", "on"}
         ):
             try:
                 if _extract_payload(request) is None:
@@ -519,7 +532,10 @@ def require_scope(required: str) -> Callable[[Request], None]:
             logger.warning("deny: missing_scope scope=<%s> reason=no_payload", required)
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
 
         # Check if the required scope is satisfied
         scope_satisfied = required in scopes
@@ -581,7 +597,10 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
             )
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
@@ -652,7 +671,10 @@ def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
             )
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
@@ -689,7 +711,10 @@ def require_any_scopes(required: Iterable[str]) -> Callable[[Request], None]:
             )
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
@@ -715,7 +740,10 @@ def require_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None]:
             # For WS, map to 4401-equivalent by raising HTTPException which FastAPI will map to 403-ish close.
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="authenticate before opening WebSocket")
+            raise unauthorized(
+                message="authentication required",
+                hint="authenticate before opening WebSocket",
+            )
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
@@ -735,7 +763,10 @@ def require_any_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None
         if not isinstance(payload, dict):
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="authenticate before opening WebSocket")
+            raise unauthorized(
+                message="authentication required",
+                hint="authenticate before opening WebSocket",
+            )
         scopes = payload.get("scope") or payload.get("scopes") or []
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]

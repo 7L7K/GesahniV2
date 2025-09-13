@@ -3,6 +3,7 @@
 Controls which external services are enabled via environment variables.
 When disabled, services are skipped at startup and routes return 404.
 """
+
 import os
 
 

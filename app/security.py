@@ -21,7 +21,14 @@ from fastapi import Header
 logger = logging.getLogger(__name__)
 
 import jwt
-from fastapi import Depends, HTTPException, Request, Response, WebSocket, WebSocketException
+from fastapi import (
+    Depends,
+    HTTPException,
+    Request,
+    Response,
+    WebSocket,
+    WebSocketException,
+)
 from jwt import ExpiredSignatureError, PyJWTError
 
 from app.security.jwt_config import get_jwt_config
@@ -138,7 +145,9 @@ class _DynamicRateLimitConfig:
                 try:
                     self._cache[key] = int(env_value)
                 except ValueError:
-                    self._cache[key] = int(default) if isinstance(default, str) else default
+                    self._cache[key] = (
+                        int(default) if isinstance(default, str) else default
+                    )
             else:
                 self._cache[key] = int(default) if isinstance(default, str) else default
         return self._cache[key]
@@ -159,7 +168,9 @@ class _DynamicRateLimitConfig:
     @property
     def rate_limit(self) -> int:
         """Get current RATE_LIMIT value."""
-        return self._get_env_int("RATE_LIMIT_PER_MIN", self._get_env_int("RATE_LIMIT", 60))
+        return self._get_env_int(
+            "RATE_LIMIT_PER_MIN", self._get_env_int("RATE_LIMIT", 60)
+        )
 
     @property
     def rate_limit_burst(self) -> int:
@@ -172,6 +183,7 @@ _dynamic_config = _DynamicRateLimitConfig()
 
 # Total requests allowed per long window (defaults retained for back-compat)
 # Use sane import-time defaults; prefer env when present
+
 
 class _RateLimitConstants:
     """Container for rate limit constants that can be updated dynamically."""
@@ -209,17 +221,21 @@ class _RateLimitConstants:
         self._rate_limit = None
         self._rate_limit_burst = None
 
+
 # Global constants container
 _rate_limit_constants = _RateLimitConstants()
+
 
 # For backward compatibility - these will be module-level attributes that refresh from env
 def _get_current_rate_limit():
     """Get current rate limit, checking environment for changes."""
     return _dynamic_config.rate_limit
 
+
 def _get_current_rate_limit_burst():
     """Get current rate limit burst, checking environment for changes."""
     return _dynamic_config.rate_limit_burst
+
 
 # Set initial values, but they can be refreshed
 RATE_LIMIT = _get_current_rate_limit()
@@ -227,6 +243,7 @@ RATE_LIMIT = _get_current_rate_limit()
 _window = float(os.getenv("RATE_LIMIT_WINDOW_S", "60"))
 # Short burst bucket
 RATE_LIMIT_BURST = _get_current_rate_limit_burst()
+
 
 # Test helper function to refresh rate limit constants from environment
 def _refresh_rate_limit_constants():
@@ -236,6 +253,8 @@ def _refresh_rate_limit_constants():
     _dynamic_config.clear_cache()
     RATE_LIMIT = _get_current_rate_limit()
     RATE_LIMIT_BURST = _get_current_rate_limit_burst()
+
+
 # Default burst window to 60s (was 10s); accept either *_S or legacy var for compatibility
 _burst_window = float(
     os.getenv("RATE_LIMIT_BURST_WINDOW_S", os.getenv("RATE_LIMIT_BURST_WINDOW", "60"))
@@ -393,7 +412,11 @@ def jwt_decode(
     if algorithms is None:
         try:
             algs_env = os.getenv("JWT_ALGS")
-            algorithms = [a.strip() for a in algs_env.split(",") if a.strip()] if algs_env else ["HS256"]
+            algorithms = (
+                [a.strip() for a in algs_env.split(",") if a.strip()]
+                if algs_env
+                else ["HS256"]
+            )
         except Exception:
             algorithms = ["HS256"]
     opts = kwargs.pop("options", {"require": ["exp"]})
@@ -410,6 +433,7 @@ def jwt_decode(
 
     return jwt.decode(token, key, algorithms=algorithms, options=opts, **kwargs)  # type: ignore[arg-type]
 
+
 # Backwards-compat alias; prefer jwt_decode going forward.
 _jwt_decode = jwt_decode
 
@@ -420,9 +444,13 @@ def decode_jwt(token: str) -> dict | None:
     try:
         if cfg.alg == "HS256":
             return jwt.decode(
-                token, cfg.secret, algorithms=["HS256"],
+                token,
+                cfg.secret,
+                algorithms=["HS256"],
                 options={"verify_aud": bool(cfg.audience)},
-                audience=cfg.audience, issuer=cfg.issuer)
+                audience=cfg.audience,
+                issuer=cfg.issuer,
+            )
         else:
             headers = jwt.get_unverified_header(token)
             kid = headers.get("kid")
@@ -431,17 +459,25 @@ def decode_jwt(token: str) -> dict | None:
                 for k in cfg.public_keys.values():
                     try:
                         return jwt.decode(
-                            token, k, algorithms=[cfg.alg],
+                            token,
+                            k,
+                            algorithms=[cfg.alg],
                             options={"verify_aud": bool(cfg.audience)},
-                            audience=cfg.audience, issuer=cfg.issuer)
+                            audience=cfg.audience,
+                            issuer=cfg.issuer,
+                        )
                     except Exception:
                         continue
                 return None
             key = cfg.public_keys[kid]
             return jwt.decode(
-                token, key, algorithms=[cfg.alg],
+                token,
+                key,
+                algorithms=[cfg.alg],
                 options={"verify_aud": bool(cfg.audience)},
-                audience=cfg.audience, issuer=cfg.issuer)
+                audience=cfg.audience,
+                issuer=cfg.issuer,
+            )
     except (ExpiredSignatureError, PyJWTError):
         return None
 
@@ -992,11 +1028,11 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
                 token_source = (
                     "authorization_header"
                     if src == "authorization"
-                    else "access_token_cookie"
-                    if src == "access_cookie"
-                    else "__session_cookie"
-                    if src == "session"
-                    else "none"
+                    else (
+                        "access_token_cookie"
+                        if src == "access_cookie"
+                        else "__session_cookie" if src == "session" else "none"
+                    )
                 )
         except Exception:
             pass
@@ -1014,11 +1050,14 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
         )
         logger.info("verify_token: cookie=%s, found=%s", token_source, bool(token))
     else:
-        logger.info("verify_token: cookie=missing, expired=false, reason=no_token_found")
+        logger.info(
+            "verify_token: cookie=missing, expired=false, reason=no_token_found"
+        )
 
     if not token:
         # If JWT is required, enforce 401 even under tests
         from .auth_core import CFG as _CFG
+
         if require_jwt or (_CFG.strict and request.method.upper() != "OPTIONS"):
             try:
                 record_privileged_call_blocked(
@@ -1031,7 +1070,10 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
             logger.warning("deny: missing_token")
             from .http_errors import unauthorized
 
-            raise unauthorized(message="missing token", hint="send Authorization: Bearer <jwt> or include auth cookies")
+            raise unauthorized(
+                message="missing token",
+                hint="send Authorization: Bearer <jwt> or include auth cookies",
+            )
         # Otherwise allow anonymous when tests indicate JWT is optional OR when scopes enforcement is disabled.
         if test_bypass or os.getenv("ENFORCE_JWT_SCOPES", "1").strip() in {
             "0",
@@ -1048,7 +1090,9 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
         logger.warning("deny: missing_token")
         from .http_errors import unauthorized
 
-        raise unauthorized(message="missing token", hint="authenticate to access this endpoint")
+        raise unauthorized(
+            message="missing token", hint="authenticate to access this endpoint"
+        )
 
     # 3) Try traditional JWT first (only for non-session cookies)
     # __session cookies contain opaque session IDs only, never JWTs
@@ -1083,10 +1127,17 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
             if AUTH_FAIL:
                 AUTH_FAIL.labels(reason="expired").inc()
             logger.warning("deny: token_expired")
-            logger.debug("verify_token: cookie=%s, expired=true, reason=token_expired", token_source)
+            logger.debug(
+                "verify_token: cookie=%s, expired=true, reason=token_expired",
+                token_source,
+            )
             from .http_errors import unauthorized
 
-            raise unauthorized(code="token_expired", message="token expired", hint="refresh your session or use refresh token")
+            raise unauthorized(
+                code="token_expired",
+                message="token expired",
+                hint="refresh your session or use refresh token",
+            )
         except jwt.PyJWTError:
             # Traditional JWT failed, try Clerk if enabled and appropriate
             pass
@@ -1158,11 +1209,18 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
                                     return True
 
                             window = get_lazy_refresh_window_s()
-                            if (not at) or _is_expiring_soon(getattr(request.state, "jwt_payload", {}) or {}, window):
-                                uid = str(rt_claims.get("sub") or rt_claims.get("user_id") or getattr(request.state, "user_id", ""))
+                            if (not at) or _is_expiring_soon(
+                                getattr(request.state, "jwt_payload", {}) or {}, window
+                            ):
+                                uid = str(
+                                    rt_claims.get("sub")
+                                    or rt_claims.get("user_id")
+                                    or getattr(request.state, "user_id", "")
+                                )
                                 access_ttl, _ = get_token_ttls()
                                 new_at = make_access({"user_id": uid}, ttl_s=access_ttl)
                                 from .cookies import read_session_cookie
+
                                 sid = read_session_cookie(request)
                                 set_auth_cookies(
                                     response,
@@ -1177,7 +1235,9 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
                                 try:
                                     from .metrics import AUTH_LAZY_REFRESH
 
-                                    AUTH_LAZY_REFRESH.labels(source="verify", result="minted").inc()
+                                    AUTH_LAZY_REFRESH.labels(
+                                        source="verify", result="minted"
+                                    ).inc()
                                 except Exception:
                                     pass
                             else:
@@ -1185,7 +1245,9 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
                                 try:
                                     from .metrics import AUTH_LAZY_REFRESH
 
-                                    AUTH_LAZY_REFRESH.labels(source="verify", result="skipped").inc()
+                                    AUTH_LAZY_REFRESH.labels(
+                                        source="verify", result="skipped"
+                                    ).inc()
                                 except Exception:
                                     pass
             except Exception:
@@ -1195,7 +1257,11 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
         if getattr(request.state, "session_store_unavailable", False):
             raise HTTPException(
                 status_code=503,
-                detail={"code": "session_store_unavailable", "message": "Temporary outage", "hint": "retry"},
+                detail={
+                    "code": "session_store_unavailable",
+                    "message": "Temporary outage",
+                    "hint": "retry",
+                },
                 headers={"Retry-After": "5"},
             )
         # Otherwise fall through to Clerk/invalid handling
@@ -1236,11 +1302,15 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
     if AUTH_FAIL:
         AUTH_FAIL.labels(reason="invalid").inc()
     logger.warning("deny: invalid_token")
-    logger.debug("verify_token: cookie=%s, expired=false, reason=invalid_token", token_source)
+    logger.debug(
+        "verify_token: cookie=%s, expired=false, reason=invalid_token", token_source
+    )
     # Emit standardized unauthorized error
     from .http_errors import unauthorized
 
-    raise unauthorized(message="invalid token", hint="provide a valid bearer token or auth cookies")
+    raise unauthorized(
+        message="invalid token", hint="provide a valid bearer token or auth cookies"
+    )
 
 
 async def verify_token_strict(request: Request) -> None:
@@ -1277,7 +1347,9 @@ async def verify_token_strict(request: Request) -> None:
         logger.warning("deny: missing_token_strict")
         from .http_errors import unauthorized
 
-        raise unauthorized(message="missing token", hint="send Authorization: Bearer <jwt>")
+        raise unauthorized(
+            message="missing token", hint="send Authorization: Bearer <jwt>"
+        )
     try:
         payload = jwt_decode(token, secret, algorithms=["HS256"])  # type: ignore[arg-type]
         request.state.jwt_payload = payload
@@ -1293,7 +1365,10 @@ async def verify_token_strict(request: Request) -> None:
         logger.warning("deny: invalid_token_strict")
         from .http_errors import unauthorized
 
-        raise unauthorized(message="invalid token", hint="provide a valid bearer token in Authorization header")
+        raise unauthorized(
+            message="invalid token",
+            hint="provide a valid bearer token in Authorization header",
+        )
 
 
 def _compose_key(base: str, request: Request | None) -> str:
@@ -1417,7 +1492,8 @@ async def verify_ws(websocket: WebSocket) -> None:
         logger.warning("deny: origin_not_allowed origin=<%s>", origin)
         # WebSocket requirement: Close with crisp code/reason for origin mismatch
         await websocket.close(
-            code=4403, reason="origin_not_allowed"  # Forbidden - origin not allowed
+            code=4403,
+            reason="origin_not_allowed",  # Forbidden - origin not allowed
         )
         return
 
@@ -1453,7 +1529,8 @@ async def verify_ws(websocket: WebSocket) -> None:
         # Close connection for missing token - require authentication
         logger.warning("deny: missing_token")
         await websocket.close(
-            code=4401, reason="missing_token"  # Unauthorized - missing token
+            code=4401,
+            reason="missing_token",  # Unauthorized - missing token
         )
         return
 
@@ -1478,7 +1555,8 @@ async def verify_ws(websocket: WebSocket) -> None:
         # Close connection for invalid token
         logger.warning("deny: invalid_token error=<%s>", str(e))
         await websocket.close(
-            code=4401, reason="invalid_token"  # Unauthorized - invalid token
+            code=4401,
+            reason="invalid_token",  # Unauthorized - invalid token
         )
         return
 
@@ -1784,7 +1862,11 @@ async def verify_webhook(
         if abs(now - ts_val) > max_skew:
             from .http_errors import unauthorized
 
-            raise unauthorized(code="stale_timestamp", message="stale timestamp", hint="adjust sender clock or increase skew")
+            raise unauthorized(
+                code="stale_timestamp",
+                message="stale timestamp",
+                hint="adjust sender clock or increase skew",
+            )
     # Verify signature (new contract first: includes timestamp)
     if ts_val is not None:
         for s in secrets:
@@ -1811,7 +1893,11 @@ async def verify_webhook(
             return body
     from .http_errors import unauthorized
 
-    raise unauthorized(code="invalid_signature", message="invalid signature", hint="verify secret and signature format")
+    raise unauthorized(
+        code="invalid_signature",
+        message="invalid signature",
+        hint="verify secret and signature format",
+    )
 
 
 def rotate_webhook_secret() -> str:

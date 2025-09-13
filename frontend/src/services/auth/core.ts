@@ -216,13 +216,21 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             return;
         }
 
-        // Check if we have any tokens to work with
-        const hasToken = Boolean(localStorage.getItem('auth:access'));
-        if (!hasToken) {
-            console.warn('AUTH Orchestrator: refreshAuth called but no token available');
-            // Don't clear tokens or redirect - let the auth flow handle it
-            return;
+        // Check auth mode
+        const isCookieMode = process.env.NEXT_PUBLIC_HEADER_AUTH_MODE !== '1';
+
+        if (!isCookieMode) {
+            // Header mode: Check if we have localStorage tokens
+            const hasToken = Boolean(localStorage.getItem('auth:access'));
+            if (!hasToken) {
+                console.warn('AUTH Orchestrator: refreshAuth called but no token available (header mode)');
+                // Don't clear tokens or redirect - let the auth flow handle it
+                return;
+            }
         }
+        // In cookie mode, tokens are HttpOnly so we can't check localStorage
+        // Always proceed to checkAuth() to verify current state via cookies
+
         // IMPORTANT: Reuse checkAuth so we honor throttling/backoff/cooldowns.
         // This prevents multiple components from causing rapid whoami loops
         // when the app is unauthenticated or during transient failures.
@@ -238,13 +246,16 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         console.info('AUTH Orchestrator: Initializing...');
         this.initialized = true;
 
-        // Only perform initial auth check if we have tokens to work with
-        const hasTokens = Boolean(localStorage.getItem('auth:access'));
-        if (hasTokens) {
+        // In cookie mode, tokens are HttpOnly so we can't check localStorage
+        // Always attempt whoami check to determine current auth state
+        const isCookieMode = process.env.NEXT_PUBLIC_HEADER_AUTH_MODE !== '1';
+
+        if (isCookieMode) {
+            // Cookie mode: Always check auth state since tokens are HttpOnly
             try {
                 await this._performWhoamiCheck();
             } catch (error) {
-                console.error('AUTH Orchestrator: Initialization error', error);
+                console.error('AUTH Orchestrator: Initialization error (cookie mode)', error);
                 // Don't throw - let components handle auth state
                 this.setState({
                     isLoading: false,
@@ -252,16 +263,31 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                 });
             }
         } else {
-            // No tokens, just mark as initialized with unauthenticated state
-            this.setState({
-                isLoading: false,
-                is_authenticated: false,
-                session_ready: false,
-                user_id: null,
-                user: null,
-                source: 'missing',
-                whoamiOk: false,
-            });
+            // Header mode: Only check if we have localStorage tokens
+            const hasTokens = Boolean(localStorage.getItem('auth:access'));
+            if (hasTokens) {
+                try {
+                    await this._performWhoamiCheck();
+                } catch (error) {
+                    console.error('AUTH Orchestrator: Initialization error (header mode)', error);
+                    // Don't throw - let components handle auth state
+                    this.setState({
+                        isLoading: false,
+                        error: error instanceof Error ? error.message : String(error),
+                    });
+                }
+            } else {
+                // No tokens, just mark as initialized with unauthenticated state
+                this.setState({
+                    isLoading: false,
+                    is_authenticated: false,
+                    session_ready: false,
+                    user_id: null,
+                    user: null,
+                    source: 'missing',
+                    whoamiOk: false,
+                });
+            }
         }
     }
 

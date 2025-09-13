@@ -40,7 +40,9 @@ def test_no_404_for_get_and_post_routes():
                     resp = client.get(url, timeout=5)
                 else:
                     # POST with a small JSON body; many legacy endpoints accept this
-                    resp = client.post(url, json={"text": "hi", "device_id": "x"}, timeout=5)
+                    resp = client.post(
+                        url, json={"text": "hi", "device_id": "x"}, timeout=5
+                    )
                 assert (
                     resp.status_code != 404
                 ), f"{method} {url} unexpectedly returned 404"

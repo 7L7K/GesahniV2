@@ -14,8 +14,8 @@ from typing import Any
 import jwt
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
-from ..auth_protection import public_route
 
+from ..auth_protection import public_route
 from ..deps.user import get_current_user_id, require_user, resolve_session_id
 from ..security import jwt_decode
 
@@ -31,6 +31,7 @@ from ..token_store import (
     allow_refresh,
 )
 from ..user_store import user_store
+from app.auth_debug import log_set_cookie, log_incoming_cookies
 
 
 # Debug dependency for auth endpoints
@@ -42,28 +43,42 @@ async def log_request_meta(request: Request):
     user_agent = request.headers.get("user-agent", "none")
     content_type = request.headers.get("content-type", "none")
 
-    logger.info("🔐 AUTH REQUEST DEBUG", extra={
-        "meta": {
-            "path": request.url.path,
-            "method": request.method,
-            "origin": origin,
-            "referer": referer,
-            "user_agent": user_agent[:100] + "..." if user_agent and len(user_agent) > 100 else user_agent,
-            "content_type": content_type,
-            "cookies_present": len(cookies) > 0,
-            "cookie_names": cookies,
-            "cookie_count": len(cookies),
-            "has_auth_header": "authorization" in [h.lower() for h in request.headers.keys()],
-            "query_params": dict(request.query_params),
-            "client_ip": getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
-        }
-    })
+    logger.info(
+        "🔐 AUTH REQUEST DEBUG",
+        extra={
+            "meta": {
+                "path": request.url.path,
+                "method": request.method,
+                "origin": origin,
+                "referer": referer,
+                "user_agent": (
+                    user_agent[:100] + "..."
+                    if user_agent and len(user_agent) > 100
+                    else user_agent
+                ),
+                "content_type": content_type,
+                "cookies_present": len(cookies) > 0,
+                "cookie_names": cookies,
+                "cookie_count": len(cookies),
+                "has_auth_header": "authorization"
+                in [h.lower() for h in request.headers.keys()],
+                "query_params": dict(request.query_params),
+                "client_ip": (
+                    getattr(request.client, "host", "unknown")
+                    if request.client
+                    else "unknown"
+                ),
+            }
+        },
+    )
 
     return request
+
 
 router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
 logger = logging.getLogger(__name__)
 # Auth metrics are now handled by Prometheus counters in app.metrics
+
 
 def _decode_any(token: str) -> dict | None:
     try:
@@ -71,10 +86,20 @@ def _decode_any(token: str) -> dict | None:
     except Exception:
         try:
             import jwt as _pyjwt
+
             return _pyjwt.decode(token, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
         except Exception:
             return None
-def _append_legacy_auth_cookie_headers(response: Response, *, access: str | None, refresh: str | None, session_id: str | None, request: Request) -> None:
+
+
+def _append_legacy_auth_cookie_headers(
+    response: Response,
+    *,
+    access: str | None,
+    refresh: str | None,
+    session_id: str | None,
+    request: Request,
+) -> None:
     """Append legacy cookie names (access_token, refresh_token, __session) with config flags.
 
     Keeps unit-level web.set_auth_cookies canonical-only, while endpoints provide
@@ -82,19 +107,57 @@ def _append_legacy_auth_cookie_headers(response: Response, *, access: str | None
     """
     try:
         from ..cookie_config import format_cookie_header, get_cookie_config
+
         cfg = get_cookie_config(request)
         ss = str(cfg.get("samesite", "lax")).capitalize()
         dom = cfg.get("domain")
         path = cfg.get("path", "/")
         sec = bool(cfg.get("secure", True))
         if access:
-            response.headers.append("set-cookie", format_cookie_header("access_token", access, max_age=int(cfg.get("access_ttl", 1800)), secure=sec, samesite=ss, path=path, httponly=True, domain=dom))
+            response.headers.append(
+                "set-cookie",
+                format_cookie_header(
+                    "access_token",
+                    access,
+                    max_age=int(cfg.get("access_ttl", 1800)),
+                    secure=sec,
+                    samesite=ss,
+                    path=path,
+                    httponly=True,
+                    domain=dom,
+                ),
+            )
         if refresh:
-            response.headers.append("set-cookie", format_cookie_header("refresh_token", refresh, max_age=int(cfg.get("refresh_ttl", 86400)), secure=sec, samesite=ss, path=path, httponly=True, domain=dom))
+            response.headers.append(
+                "set-cookie",
+                format_cookie_header(
+                    "refresh_token",
+                    refresh,
+                    max_age=int(cfg.get("refresh_ttl", 86400)),
+                    secure=sec,
+                    samesite=ss,
+                    path=path,
+                    httponly=True,
+                    domain=dom,
+                ),
+            )
         if session_id:
-            response.headers.append("set-cookie", format_cookie_header("__session", session_id, max_age=int(cfg.get("access_ttl", 1800)), secure=sec, samesite=ss, path=path, httponly=True, domain=dom))
+            response.headers.append(
+                "set-cookie",
+                format_cookie_header(
+                    "__session",
+                    session_id,
+                    max_age=int(cfg.get("access_ttl", 1800)),
+                    secure=sec,
+                    samesite=ss,
+                    path=path,
+                    httponly=True,
+                    domain=dom,
+                ),
+            )
     except Exception:
         pass
+
 
 def _is_rate_limit_enabled() -> bool:
     """Return True when in-app endpoint rate limits should apply.
@@ -106,8 +169,13 @@ def _is_rate_limit_enabled() -> bool:
         v = (os.getenv("RATE_LIMIT_MODE") or "").strip().lower()
         if v == "off":
             return False
-        in_test = (os.getenv("ENV", "").strip().lower() == "test") or bool(os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST"))
-        if in_test and (os.getenv("ENABLE_RATE_LIMIT_IN_TESTS", "0").strip().lower() not in {"1","true","yes","on"}):
+        in_test = (os.getenv("ENV", "").strip().lower() == "test") or bool(
+            os.getenv("PYTEST_RUNNING") or os.getenv("PYTEST_CURRENT_TEST")
+        )
+        if in_test and (
+            os.getenv("ENABLE_RATE_LIMIT_IN_TESTS", "0").strip().lower()
+            not in {"1", "true", "yes", "on"}
+        ):
             return False
     except Exception:
         pass
@@ -141,7 +209,78 @@ def _append_cookie_with_priority(
 # Clerk endpoints removed
 
 
+@router.get("/debug/cookies")
+def debug_cookies(request: Request) -> dict[str, dict[str, str]]:
+    """Echo cookie presence for debugging (values not exposed).
 
+    Returns a mapping of cookie names to "present"/empty string so callers can
+    determine whether the browser attached cookies on this request.
+    """
+    try:
+        cookies = {
+            k: ("present" if (v is not None and v != "") else "")
+            for k, v in request.cookies.items()
+        }
+    except Exception:
+        cookies = {}
+    return {"cookies": cookies}
+
+
+@router.get("/debug/auth-state")
+def debug_auth_state(request: Request) -> dict[str, Any]:
+    """Debug auth state - shows cookies received and token validation status.
+
+    Returns comprehensive auth debugging info including:
+    - All cookies received by name
+    - Whether access/refresh/session cookies are present and valid
+    - Current authentication status
+    """
+    try:
+        # Import cookie readers
+        from ..cookies import read_access_cookie, read_refresh_cookie, read_session_cookie
+
+        # Read tokens from cookies
+        access = read_access_cookie(request)
+        refresh = read_refresh_cookie(request)
+        session = read_session_cookie(request)
+
+        # Check if tokens are valid (basic decode check)
+        access_valid = False
+        refresh_valid = False
+        session_valid = bool(session)  # Session is just an opaque string
+
+        if access:
+            try:
+                _decode_any(access)
+                access_valid = True
+            except Exception:
+                pass
+
+        if refresh:
+            try:
+                _decode_any(refresh)
+                refresh_valid = True
+            except Exception:
+                pass
+
+        return {
+            "cookies_seen": list(request.cookies.keys()),
+            "has_access": bool(access),
+            "has_refresh": bool(refresh),
+            "has_session": bool(session),
+            "access_valid": access_valid,
+            "refresh_valid": refresh_valid,
+            "session_valid": session_valid,
+            "cookie_count": len(request.cookies),
+        }
+    except Exception as e:
+        return {
+            "error": str(e),
+            "cookies_seen": list(request.cookies.keys()) if hasattr(request, 'cookies') else [],
+            "has_access": False,
+            "has_refresh": False,
+            "has_session": False,
+        }
 
 
 def _in_test_mode() -> bool:
@@ -199,7 +338,10 @@ async def _require_user_or_dev(request: Request) -> str:
 
         from ..http_errors import unauthorized as _unauth
 
-        raise _unauth(message="authentication required", hint="login or include Authorization header")
+        raise _unauth(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
 
 
 async def verify_pat_async(
@@ -252,6 +394,7 @@ def verify_pat(
     except Exception:
         return None
 
+
 async def whoami_impl(request: Request) -> dict[str, Any]:
     """Canonical whoami implementation: single source of truth for session readiness.
 
@@ -280,7 +423,6 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             extra={
                 "meta": {
                     "req_id": req_id_var.get(),
-                    "req_id": req_id_var.get(),
                     "ip": request.client.host if request.client else "unknown",
                     "user_agent": request.headers.get("User-Agent", "unknown"),
                     "timestamp": time.time(),
@@ -298,7 +440,6 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             "whoami.cookie_check",
             extra={
                 "meta": {
-                    "req_id": req_id_var.get(),
                     "req_id": req_id_var.get(),
                     "has_access_token_cookie": bool(token_cookie),
                     "cookie_length": len(token_cookie) if token_cookie else 0,
@@ -462,7 +603,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.clerk_verification.start",
                 extra={
                     "meta": {
-                    "req_id": req_id_var.get(),
+                        "req_id": req_id_var.get(),
                         "timestamp": time.time(),
                     }
                 },
@@ -471,9 +612,12 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             # Try to verify Clerk token using the proper Clerk verification
             try:
                 from ..deps.clerk_auth import verify_clerk_token as _verify_clerk
+
                 if _verify_clerk:
                     clerk_claims = _verify_clerk(clerk_token)
-                    effective_uid = clerk_claims.get("user_id") or clerk_claims.get("sub")
+                    effective_uid = clerk_claims.get("user_id") or clerk_claims.get(
+                        "sub"
+                    )
                     if effective_uid:
                         session_ready = True
                         src = "clerk"
@@ -482,18 +626,18 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                             "whoami.clerk_verification.success",
                             extra={
                                 "meta": {
-                    "req_id": req_id_var.get(),
+                                    "req_id": req_id_var.get(),
                                     "user_id": effective_uid,
-                                "timestamp": time.time(),
-                            }
-                        },
-                    )
+                                    "timestamp": time.time(),
+                                }
+                            },
+                        )
                 else:
                     logger.warning(
                         "whoami.clerk_verification.no_verifier",
                         extra={
                             "meta": {
-                    "req_id": req_id_var.get(),
+                                "req_id": req_id_var.get(),
                                 "timestamp": time.time(),
                             }
                         },
@@ -503,7 +647,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                     "whoami.clerk_verification.not_available",
                     extra={
                         "meta": {
-                    "req_id": req_id_var.get(),
+                            "req_id": req_id_var.get(),
                             "timestamp": time.time(),
                         }
                     },
@@ -513,7 +657,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                     "whoami.clerk_verification.invalid",
                     extra={
                         "meta": {
-                    "req_id": req_id_var.get(),
+                            "req_id": req_id_var.get(),
                             "error": str(e),
                             "error_type": type(e).__name__,
                             "timestamp": time.time(),
@@ -525,7 +669,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "whoami.clerk_verification.failed",
                 extra={
                     "meta": {
-                    "req_id": req_id_var.get(),
+                        "req_id": req_id_var.get(),
                         "error": str(e),
                         "error_type": type(e).__name__,
                         "timestamp": time.time(),
@@ -533,171 +677,9 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 },
             )
 
-    # Priority 3: Try Authorization header only if cookie authentication failed
-    if not session_ready and token_header:
-        try:
-            logger.info(
-                "whoami.header_jwt_decode.start",
-                extra={
-                    "meta": {
-                    "req_id": req_id_var.get(),
-                        "timestamp": time.time(),
-                    }
-                },
-            )
-            claims = _decode_any(token_header)
-            session_ready = True
-            src = "header"
-            effective_uid = (
-                str(claims.get("user_id") or claims.get("sub") or "") or None
-            )
-            jwt_status = "ok"
-            logger.info(
-                "whoami.header_jwt_decode.success",
-                extra={
-                    "meta": {
-                    "req_id": req_id_var.get(),
-                        "user_id": effective_uid,
-                        "claims_keys": list(claims.keys()),
-                        "timestamp": time.time(),
-                    }
-                },
-            )
-        except Exception as e:
-            session_ready = False
-            effective_uid = None
-            jwt_status = "invalid"
-            logger.error(
-                "whoami.header_jwt_decode.failed",
-                extra={
-                    "meta": {
-                    "req_id": req_id_var.get(),
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "timestamp": time.time(),
-                    }
-                },
-            )
+    # (Duplicate header decode removed; header is already tried above)
 
-    # Priority 4: Try Clerk authentication if all other methods failed
-    if not session_ready and clerk_token and os.getenv("CLERK_ENABLED", "0") == "1":
-        try:
-            logger.info(
-                "whoami.clerk_verify.start",
-                extra={
-                    "meta": {
-                    "req_id": req_id_var.get(),
-                        "timestamp": time.time(),
-                    }
-                },
-            )
-            from ..deps.clerk_auth import verify_clerk_token
-
-            claims = verify_clerk_token(clerk_token)
-            session_ready = True
-            src = "clerk"
-            effective_uid = (
-                str(claims.get("sub") or claims.get("user_id") or "") or None
-            )
-            jwt_status = "ok"
-            # Set email in request state for Clerk authentication
-            try:
-                email = claims.get("email") or claims.get("email_address")
-                if email:
-                    request.state.email = email
-            except Exception as e:
-                logger.error(
-                    "whoami.cookie_jwt_decode.failed",
-                    extra={
-                        "meta": {
-                    "req_id": req_id_var.get(),
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "timestamp": time.time(),
-                        }
-                    },
-                )
-            logger.info(
-                "whoami.clerk_verify.success",
-                extra={
-                    "meta": {
-                    "req_id": req_id_var.get(),
-                        "user_id": effective_uid,
-                        "claims_keys": list(claims.keys()),
-                        "timestamp": time.time(),
-                    }
-                },
-            )
-        except Exception as e:
-            session_ready = False
-            effective_uid = None
-            jwt_status = "invalid"
-            logger.error(
-                "whoami.clerk_verify.failed",
-                extra={
-                    "meta": {
-                    "req_id": req_id_var.get(),
-                        "error": str(e),
-                        "error_type": type(e).__name__,
-                        "timestamp": time.time(),
-                    }
-                },
-            )
-
-        # If still not ready and Clerk is enabled, check for Clerk token in Authorization header
-        if not session_ready and token_header and os.getenv("CLERK_ENABLED", "0") == "1":
-            try:
-                logger.info(
-                    "whoami.clerk_header_verify.start",
-                    extra={
-                        "meta": {
-                    "req_id": req_id_var.get(),
-                            "timestamp": time.time(),
-                        }
-                    },
-                )
-                from ..deps.clerk_auth import verify_clerk_token
-
-                claims = verify_clerk_token(token_header)
-                session_ready = True
-                src = "clerk"
-                effective_uid = (
-                    str(claims.get("sub") or claims.get("user_id") or "") or None
-                )
-                jwt_status = "ok"
-                # Set email in request state for Clerk authentication
-                try:
-                    email = claims.get("email") or claims.get("email_address")
-                    if email:
-                        request.state.email = email
-                except Exception:
-                    pass
-                logger.info(
-                    "whoami.clerk_header_verify.success",
-                    extra={
-                        "meta": {
-                    "req_id": req_id_var.get(),
-                            "user_id": effective_uid,
-                            "claims_keys": list(claims.keys()),
-                            "timestamp": time.time(),
-                        }
-                    },
-                )
-            except Exception as e:
-                session_ready = False
-                effective_uid = None
-                jwt_status = "invalid"
-                logger.error(
-                    "whoami.clerk_header_verify.failed",
-                    extra={
-                        "meta": {
-                    "req_id": req_id_var.get(),
-                            "error": str(e),
-                            "error_type": type(e).__name__,
-                            "timestamp": time.time(),
-                        }
-                    },
-                )
+    # (Duplicate Clerk verification blocks removed; single Clerk path retained above)
 
     # Canonical policy: authenticated iff a valid token was presented
     is_authenticated = bool(session_ready and effective_uid)
@@ -706,7 +688,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         "whoami.result",
         extra={
             "meta": {
-                    "req_id": req_id_var.get(),
+                "req_id": req_id_var.get(),
                 "is_authenticated": is_authenticated,
                 "session_ready": session_ready,
                 "source": src,
@@ -764,6 +746,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         from fastapi.responses import JSONResponse as _JSON
 
         from ..logging_config import req_id_var as _rid
+
         body = {
             "code": "auth.not_authenticated",
             "detail": "not_authenticated",
@@ -779,6 +762,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     # Prefer Bearer when both header and cookies are present; detect conflict
     try:
         from ..deps.user import resolve_auth_source_conflict as _resolve_src
+
         src2, conflict = _resolve_src(request)
     except Exception:
         src2, conflict = src, False
@@ -786,6 +770,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         src = src2
 
     from ..logging_config import req_id_var as _rid
+
     body = {
         "schema_version": 1,
         "generated_at": datetime.now(UTC).isoformat(),
@@ -801,7 +786,12 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         "version": 1,
     }
     dbg = (os.getenv("DEBUG") or "").strip().lower() in {"1", "true", "yes", "on"}
-    legacy = (os.getenv("CSRF_LEGACY_GRACE") or "").strip().lower() in {"1", "true", "yes", "on"}
+    legacy = (os.getenv("CSRF_LEGACY_GRACE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if conflict and (dbg or legacy):
         body["auth_source_conflict"] = True
     # Log conflict warning always
@@ -830,6 +820,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         pass
 
     from fastapi.responses import JSONResponse as _JSON
+
     resp = _JSON(body, status_code=200)
     resp.headers.setdefault("Cache-Control", "no-store, max-age=0")
     resp.headers.setdefault("Pragma", "no-cache")
@@ -839,7 +830,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
 
 
 @router.get("/whoami", include_in_schema=False)
-async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONResponse:
+async def whoami(request: Request, response: Response, _: None = Depends(log_request_meta)) -> JSONResponse:
     """CANONICAL: Public whoami endpoint - the single source of truth for user identity.
 
     This is the canonical whoami endpoint that should be used by all clients.
@@ -863,12 +854,20 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
     start_time = time.time()
     req_id = req_id_var.get()
 
+    # Optional debug: log incoming cookie presence
+    try:
+        if os.getenv("AUTH_DEBUG") == "1":
+            log_incoming_cookies(request, route="/v1/whoami")
+    except Exception:
+        pass
+
     # First, delegate identity resolution to canonical whoami_impl
     try:
         out = await whoami_impl(request)
     except Exception as e:
         # Allow HTTPException to propagate for proper error responses
         from fastapi import HTTPException
+
         if isinstance(e, HTTPException):
             raise e
         # For other exceptions, return unauthenticated response
@@ -881,9 +880,27 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
             "version": 1,
         }
 
-    # If whoami_impl returned a Response, pass it through
+    # If whoami_impl returned a Response, optionally perform lazy refresh on 401 then pass through
     from fastapi.responses import Response as _RespType
+
     if isinstance(out, _RespType):  # type: ignore[arg-type]
+        try:
+            # When unauthenticated but a refresh cookie is present, mint a new access token
+            if getattr(out, "status_code", None) == 401:
+                from ..cookies import read_access_cookie, read_refresh_cookie
+                access_cookie = read_access_cookie(request)
+                has_refresh = bool(read_refresh_cookie(request))
+                if not access_cookie and has_refresh:
+                    try:
+                        from ..auth_refresh import perform_lazy_refresh
+                        from ..deps.user import get_current_user_id
+
+                        current_user_id = get_current_user_id(request=request)
+                        await perform_lazy_refresh(request, out, current_user_id)  # type: ignore[arg-type]
+                    except Exception:
+                        pass
+        except Exception:
+            pass
         return out  # type: ignore[return-value]
 
     # If already authenticated (dict), return immediately
@@ -894,8 +911,7 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
                 "auth.whoami",
                 extra={
                     "meta": {
-                    "req_id": req_id_var.get(),
-                        "req_id": req_id,
+                        "req_id": req_id_var.get(),
                         "is_authenticated": out.get("is_authenticated"),
                         "duration_ms": duration,
                     }
@@ -903,14 +919,14 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
             )
         except Exception:
             pass
-        return JSONResponse(
-            content=out,
-            headers={
-                "Vary": "Origin",
-                "Cache-Control": "no-store, max-age=0",
-                "Pragma": "no-cache",
-            },
-        )
+        # Set caching headers on the provided response and return dict
+        try:
+            response.headers["Vary"] = "Origin"
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+        except Exception:
+            pass
+        return out  # FastAPI will serialize and include headers/cookies from response
 
     # Otherwise, attempt silent rotation if refresh cookie present and no access cookie
     try:
@@ -925,7 +941,8 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
                 from ..deps.user import get_current_user_id
 
                 current_user_id = get_current_user_id(request=request)
-                await perform_lazy_refresh(request, Response(), current_user_id)
+                # IMPORTANT: set cookies on the actual response object so Set-Cookie is returned
+                await perform_lazy_refresh(request, response, current_user_id)
             except Exception:
                 pass  # Best effort for compatibility
     except Exception:
@@ -947,17 +964,14 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
     except Exception:
         pass
 
-    return JSONResponse(
-        content=out,
-        headers={
-            "Vary": "Origin",
-            "Cache-Control": "no-store, max-age=0",
-            "Pragma": "no-cache",
-        },
-    )
-
-
-
+    # Set caching headers on the provided response and return dict
+    try:
+        response.headers["Vary"] = "Origin"
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    except Exception:
+        pass
+    return out
 
 
 # Device sessions endpoints were moved to app.api.me for canonical shapes.
@@ -966,7 +980,7 @@ async def whoami(request: Request, _: None = Depends(log_request_meta)) -> JSONR
 @router.get("/pats", include_in_schema=False)
 async def list_pats(
     request: Request,
-) -> list[dict[str, Any]]:
+) -> RedirectResponse:
     """Legacy PATs endpoint - redirect to canonical route.
 
     This legacy endpoint should redirect to the canonical PATs management.
@@ -999,7 +1013,10 @@ async def create_pat(
     if user_id == "anon":
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
     name = str(body.get("name") or "")
     scopes = body.get("scopes") or []
     exp_at = body.get("exp_at")
@@ -1045,7 +1062,12 @@ def _jwt_secret() -> str:
     # checks during unit tests and keeps security checks strict by default.
     # Allow DEV_MODE to relax strength checks (explicit opt-in)
     try:
-        dev_mode = str(os.getenv("DEV_MODE", "0")).strip().lower() in {"1", "true", "yes", "on"}
+        dev_mode = str(os.getenv("DEV_MODE", "0")).strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         # Only allow DEV_MODE bypass when NOT running tests. Tests should still
         # exercise the strict secret validation unless they explicitly opt-in.
         if dev_mode and not _in_test_mode():
@@ -1110,7 +1132,7 @@ def _primary_kid_secret() -> tuple[str, str]:
     return kid, sec
 
 
-def _decode_any(token: str, *, leeway: int = 0) -> dict:
+def _decode_any_strict(token: str, *, leeway: int = 0) -> dict:
     pool = _key_pool_from_env()
     if not pool:
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
@@ -1138,7 +1160,9 @@ def _decode_any(token: str, *, leeway: int = 0) -> dict:
         raise last_err
     from ..http_errors import unauthorized
 
-    raise unauthorized(message="authentication required", hint="login or include Authorization header")
+    raise unauthorized(
+        message="authentication required", hint="login or include Authorization header"
+    )
 
 
 def _get_refresh_ttl_seconds() -> int:
@@ -1164,15 +1188,10 @@ def _get_refresh_ttl_seconds() -> int:
     return 7 * 24 * 60 * 60
 
 
-
-
-
 @router.get("/finish", include_in_schema=False)
 @router.post("/finish", include_in_schema=False)
 @public_route
-async def finish_clerk_login(
-    request: Request, response: Response
-):
+async def finish_clerk_login(request: Request, response: Response):
     """Legacy finish endpoint - redirect to canonical route.
 
     This legacy endpoint should redirect to the canonical finish route.
@@ -1206,12 +1225,13 @@ async def clerk_finish(request: Request) -> dict[str, Any]:
 
 @router.post(
     "/register",
-    include_in_schema=False,
     responses={
         200: {
             "content": {
                 "application/json": {
-                    "schema": {"example": {"access_token": "jwt", "refresh_token": "jwt"}}
+                    "schema": {
+                        "example": {"access_token": "jwt", "refresh_token": "jwt"}
+                    }
                 }
             }
         },
@@ -1273,9 +1293,12 @@ async def register_v1(request: Request, response: Response):
         import os as _os
 
         import jwt as _jwt
+
         now = int(time.time())
         jti = _jwt.api_jws.base64url_encode(_os.urandom(16)).decode()
-        refresh_token = make_refresh({"user_id": username, "jti": jti}, ttl_s=refresh_ttl)
+        refresh_token = make_refresh(
+            {"user_id": username, "jti": jti}, ttl_s=refresh_ttl
+        )
     except Exception:
         # Fallback minimal refresh
         jti = None
@@ -1287,10 +1310,16 @@ async def register_v1(request: Request, response: Response):
         from ..web.cookies import set_auth_cookies
         from .auth import _jwt_secret as _secret_fn  # dynamic secret
 
-        payload = jwt_decode(access_token, _secret_fn(), algorithms=["HSHS256" if False else "HS256"])  # ensure HS256
+        payload = jwt_decode(
+            access_token, _secret_fn(), algorithms=["HSHS256" if False else "HS256"]
+        )  # ensure HS256
         at_jti = payload.get("jti")
         exp = payload.get("exp", time.time() + access_ttl)
-        session_id = _create_session_id(at_jti, exp) if at_jti else f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        session_id = (
+            _create_session_id(at_jti, exp)
+            if at_jti
+            else f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        )
 
         set_auth_cookies(
             response,
@@ -1324,6 +1353,7 @@ async def register_v1(request: Request, response: Response):
 
     return {"access_token": access_token, "refresh_token": refresh_token}
 
+
 from ..auth_protection import public_route
 
 
@@ -1343,13 +1373,36 @@ from ..auth_protection import public_route
 async def login(
     request: Request,
     response: Response,
-    username: str = Query(..., description="Username for login"),
+    username: str | None = Query(None, description="Username (query fallback)"),
 ):
     """Dev login scaffold.
 
     CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
     """
 
+    # Accept username from JSON, then form, then query param
+    if not username:
+        body_username: str | None = None
+        form_username: str | None = None
+        # JSON first
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                v = body.get("username")
+                if isinstance(v, str) and v.strip():
+                    body_username = v.strip()
+        except Exception:
+            body_username = None
+        # Form as fallback
+        if not body_username:
+            try:
+                form = await request.form()
+                v = form.get("username") if form else None
+                if isinstance(v, str) and v.strip():
+                    form_username = v.strip()
+            except Exception:
+                form_username = None
+        username = body_username or form_username or username
     # Smart minimal login: accept any non-empty username for dev; in prod plug real check
     if not username:
         raise HTTPException(status_code=400, detail="missing_username")
@@ -1384,6 +1437,8 @@ async def login(
     jwt_token = make_access({"user_id": username}, ttl_s=access_ttl)
 
     # Also issue a refresh token and mark it allowed for this session
+    refresh_token = None
+    session_id = None
     try:
         import jwt
 
@@ -1441,7 +1496,13 @@ async def login(
             refresh_ttl=refresh_ttl,
             request=request,
         )
-        _append_legacy_auth_cookie_headers(response, access=jwt_token, refresh=refresh_token, session_id=session_id, request=request)
+        _append_legacy_auth_cookie_headers(
+            response,
+            access=jwt_token,
+            refresh=refresh_token,
+            session_id=session_id,
+            request=request,
+        )
         # Best-effort device cookie for soft device binding (1 year)
         try:
             if not request.cookies.get("did"):
@@ -1464,15 +1525,30 @@ async def login(
         logger.error(f"Exception in login cookie setting: {e}")
     await user_store.ensure_user(username)
     await user_store.increment_login(username)
-    return {"status": "ok", "user_id": username}
+    # Debug: print Set-Cookie headers sent
+    try:
+        if os.getenv("AUTH_DEBUG") == "1":
+            log_set_cookie(response, route="/v1/auth/login", user_id=username)
+    except Exception:
+        pass
+    # Always return tokens in dev login to support header-auth mode and debugging.
+    # In cookie mode the client may ignore these fields.
+    return {
+        "status": "ok",
+        "user_id": username,
+        "access_token": jwt_token,
+        "refresh_token": refresh_token,
+        "session_id": session_id,
+    }
 
 
 # Legacy login route removed - now handled by redirect in app.auth:router
+@router.post("/auth/token")
 async def dev_token(
     request: Request,
     username: str = Form(None),
     password: str = Form(None),
-    scope: str = Form("")
+    scope: str = Form(""),
 ):
     """Password-style token endpoint for dev/test.
 
@@ -1481,7 +1557,13 @@ async def dev_token(
     - Returns bearer token with optional scopes in payload
     """
     import os as _os
-    if (_os.getenv("DISABLE_DEV_TOKEN") or "").strip().lower() in {"1","true","yes","on"}:
+
+    if (_os.getenv("DISABLE_DEV_TOKEN") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
         raise HTTPException(status_code=403, detail="dev_token_disabled")
 
     sec = _os.getenv("JWT_SECRET")
@@ -1489,7 +1571,11 @@ async def dev_token(
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
     # Treat obvious placeholders/short strings as insecure for tests
     low = sec.strip().lower()
-    if len(sec) < 16 or low.startswith("change") or low in {"default", "placeholder", "secret", "key"}:
+    if (
+        len(sec) < 16
+        or low.startswith("change")
+        or low in {"default", "placeholder", "secret", "key"}
+    ):
         raise HTTPException(status_code=500, detail="insecure_jwt_secret")
 
     if not username:
@@ -1499,6 +1585,7 @@ async def dev_token(
     try:
         from ..cookie_config import get_token_ttls
         from ..tokens import make_access
+
         access_ttl, _ = get_token_ttls()
         payload: dict[str, Any] = {"user_id": username}
         if scope:
@@ -1539,6 +1626,7 @@ async def logout(request: Request, response: Response):
 
         # Get session ID from __session cookie
         from ..cookies import read_session_cookie
+
         session_id = read_session_cookie(request)
         if session_id:
             _delete_session_id(session_id)
@@ -1561,6 +1649,7 @@ async def logout(request: Request, response: Response):
         # Also clear via web facade to emit per-cookie headers expected by some tests
         try:
             from ..web.cookies import clear_auth_cookies as _web_clear
+
             _web_clear(response, request)
         except Exception:
             pass
@@ -1577,8 +1666,8 @@ async def logout(request: Request, response: Response):
             # The response will still be 204, indicating logout was processed
             pass
 
-    # Some clients/tests expect 200 OK; return 200 with empty body to be permissive
-    response.status_code = 200
+    # 204 No Content per contract
+    response.status_code = 204
     return response
 
 
@@ -1604,6 +1693,7 @@ async def logout_all(request: Request, response: Response):
     try:
         from ..auth import _delete_session_id
         from ..cookies import read_session_cookie
+
         sid = read_session_cookie(request)
         if sid:
             _delete_session_id(sid)
@@ -1632,7 +1722,9 @@ async def logout_all(request: Request, response: Response):
         }
     },
 )
-async def refresh(request: Request, response: Response, _: None = Depends(log_request_meta)):
+async def refresh(
+    request: Request, response: Response, _: None = Depends(log_request_meta)
+):
     """Rotate access/refresh cookies.
 
     Intent: When COOKIE_SAMESITE=none, require header X-Auth-Intent: refresh.
@@ -1668,7 +1760,9 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
                     "X-Auth-Intent"
                 )
                 if str(intent or "").strip().lower() != "refresh":
-                    logger.info("refresh_flow: csrf_failed=true, reason=missing_intent_header_cross_site")
+                    logger.info(
+                        "refresh_flow: csrf_failed=true, reason=missing_intent_header_cross_site"
+                    )
                     raise HTTPException(
                         status_code=400, detail="missing_intent_header_cross_site"
                     )
@@ -1676,7 +1770,9 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
                 # For cross-site, we'll accept the CSRF token from header only
                 # This is less secure than double-submit, but necessary for cross-site functionality
                 if not tok or len(tok) < 16:  # Basic validation
-                    logger.info("refresh_flow: csrf_failed=true, reason=invalid_csrf_format")
+                    logger.info(
+                        "refresh_flow: csrf_failed=true, reason=invalid_csrf_format"
+                    )
                     raise HTTPException(status_code=403, detail="invalid_csrf_format")
 
                 # TODO: Consider implementing server-side CSRF token validation for cross-site requests
@@ -1698,7 +1794,9 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
                     "X-Auth-Intent"
                 )
                 if str(intent or "").strip().lower() != "refresh":
-                    raise HTTPException(status_code=400, detail="missing_intent_header_cross_site")
+                    raise HTTPException(
+                        status_code=400, detail="missing_intent_header_cross_site"
+                    )
     except HTTPException:
         raise
     except Exception:
@@ -1735,7 +1833,6 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
     )
 
     try:
-
         # Optional JSON body may supply refresh_token for header-mode clients
         refresh_override: str | None = None
         try:
@@ -1750,8 +1847,13 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
         # Log incoming refresh token status
         rt_source = "cookie" if not refresh_override else "body"
         from ..cookies import read_refresh_cookie
+
         rt_value = refresh_override or read_refresh_cookie(request) or "missing"
-        logger.info("refresh_flow: incoming_rt=%s, source=%s", rt_value[:20] + "..." if rt_value != "missing" else "missing", rt_source)
+        logger.info(
+            "refresh_flow: incoming_rt=%s, source=%s",
+            rt_value[:20] + "..." if rt_value != "missing" else "missing",
+            rt_source,
+        )
 
         t0 = time.time()
 
@@ -1769,11 +1871,16 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
                 pass
 
         # Get current user ID for validation (fallback if token decode fails)
-        current_user_id = get_current_user_id(request=request) if not extracted_user_id else extracted_user_id
+        current_user_id = (
+            get_current_user_id(request=request)
+            if not extracted_user_id
+            else extracted_user_id
+        )
 
         # Return 401 if no valid authentication
         if current_user_id == "anon" or not current_user_id:
             from fastapi import HTTPException
+
             raise HTTPException(status_code=401, detail="invalid_refresh")
 
         # Perform rotation with replay protection - use shim for test compatibility
@@ -1781,15 +1888,27 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
 
         if tokens:
             refresh_rotation_success()
-            logger.info("refresh_flow: rotated=true, user_id=%s", tokens.get("user_id", "unknown"))
+            logger.info(
+                "refresh_flow: rotated=true, user_id=%s",
+                tokens.get("user_id", "unknown"),
+            )
             dt = int((time.time() - t0) * 1000)
             record_refresh_latency("rotation", dt)
 
             # Return tokens for header-mode clients - ALWAYS include both tokens
-            body: dict[str, Any] = {"status": "ok", "user_id": tokens.get("user_id", "anon")}
+            body: dict[str, Any] = {
+                "status": "ok",
+                "user_id": tokens.get("user_id", "anon"),
+            }
             if isinstance(tokens, dict):
                 body["access_token"] = tokens.get("access_token", "")
                 body["refresh_token"] = tokens.get("refresh_token", "")
+            # Debug: print Set-Cookie headers sent on rotation
+            try:
+                if os.getenv("AUTH_DEBUG") == "1":
+                    log_set_cookie(response, route="/v1/auth/refresh", user_id=tokens.get("user_id"))
+            except Exception:
+                pass
             return body
         else:
             # No rotation needed (token still valid) - but we still need to return current tokens
@@ -1801,6 +1920,7 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
             # Always return both access_token and refresh_token, even when no rotation occurs
             # Get the current valid tokens from cookies
             from ..cookies import read_access_cookie, read_refresh_cookie
+
             current_access_token = read_access_cookie(request) or ""
             current_refresh_token = read_refresh_cookie(request) or ""
 
@@ -1808,11 +1928,31 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
             try:
                 from ..cookie_config import get_token_ttls as _ttls
                 from ..web.cookies import set_auth_cookies as _set_c
+
                 access_ttl, refresh_ttl = _ttls()
                 sid = resolve_session_id(request=request, user_id=current_user_id)
-                _set_c(response, access=current_access_token, refresh=current_refresh_token, session_id=sid,
-                       access_ttl=access_ttl, refresh_ttl=refresh_ttl, request=request)
-                _append_legacy_auth_cookie_headers(response, access=current_access_token, refresh=current_refresh_token, session_id=sid, request=request)
+                _set_c(
+                    response,
+                    access=current_access_token,
+                    refresh=current_refresh_token,
+                    session_id=sid,
+                    access_ttl=access_ttl,
+                    refresh_ttl=refresh_ttl,
+                    request=request,
+                )
+                _append_legacy_auth_cookie_headers(
+                    response,
+                    access=current_access_token,
+                    refresh=current_refresh_token,
+                    session_id=sid,
+                    request=request,
+                )
+            except Exception:
+                pass
+            # Debug: print Set-Cookie headers sent when no rotation
+            try:
+                if os.getenv("AUTH_DEBUG") == "1":
+                    log_set_cookie(response, route="/v1/auth/refresh", user_id=current_user_id)
             except Exception:
                 pass
 
@@ -1820,7 +1960,7 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
                 "status": "ok",
                 "user_id": current_user_id,
                 "access_token": current_access_token,
-                "refresh_token": current_refresh_token
+                "refresh_token": current_refresh_token,
             }
 
     except HTTPException:
@@ -1837,7 +1977,12 @@ async def refresh(request: Request, response: Response, _: None = Depends(log_re
         record_refresh_latency("error", dt)
         logger.error("refresh_flow: error=%s", str(e))
         from ..http_errors import unauthorized
-        raise unauthorized(code="refresh_error", message="refresh failed", hint="try again or re-authenticate")
+
+        raise unauthorized(
+            code="refresh_error",
+            message="refresh failed",
+            hint="try again or re-authenticate",
+        )
 
 
 # OAuth2 Password flow endpoint for Swagger "Authorize" in dev
@@ -1921,7 +2066,9 @@ async def mock_set_access_cookie(request: Request, max_age: int = 1) -> Response
 
 
 # Test compatibility shims for legacy test imports
-async def rotate_refresh_cookies(request: Request, response: Response, user_id: str | None = None) -> dict[str, Any] | None:
+async def rotate_refresh_cookies(
+    request: Request, response: Response, user_id: str | None = None
+) -> dict[str, Any] | None:
     """Legacy shim function for tests. Delegates to the actual refresh endpoint logic.
 
     This function maintains backward compatibility for tests that import
@@ -1946,13 +2093,14 @@ async def rotate_refresh_cookies(request: Request, response: Response, user_id: 
         else:
             # Token still valid, no rotation needed - but always return both tokens
             from ..cookies import read_access_cookie, read_refresh_cookie
+
             current_access_token = read_access_cookie(request) or ""
             current_refresh_token = read_refresh_cookie(request) or ""
 
             return {
                 "access_token": current_access_token,
                 "refresh_token": current_refresh_token,
-                "user_id": current_user_id
+                "user_id": current_user_id,
             }
 
     except Exception as e:
@@ -1975,6 +2123,7 @@ async def _ensure_auth(user_id: str) -> None:
         # For now, just ensure the user exists in the user store
         # Use the provider pattern to avoid circular imports
         from ..middleware.middleware_core import _user_store_provider
+
         if _user_store_provider is not None:
             user_store = _user_store_provider()
             await user_store.ensure_user(user_id)
@@ -1988,6 +2137,13 @@ from ..auth_protection import public_route
 
 # Aliases for legacy compatibility
 login_v1 = login
-register_v1 = register_v1
 
-__all__ = ["router", "verify_pat", "rotate_refresh_cookies", "_ensure_auth", "login_v1", "register_v1"]
+
+__all__ = [
+    "router",
+    "verify_pat",
+    "rotate_refresh_cookies",
+    "_ensure_auth",
+    "login_v1",
+    "register_v1",
+]

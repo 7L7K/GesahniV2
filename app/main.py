@@ -31,14 +31,18 @@ from .logging_config import configure_logging, req_id_var
 try:  # optional import for tests/monkeypatching
     from .home_assistant import startup_check as ha_startup  # type: ignore
 except Exception:  # pragma: no cover - optional
+
     def ha_startup():  # type: ignore
         return None
+
 
 try:
     from .llama_integration import startup_check as llama_startup  # type: ignore
 except Exception:  # pragma: no cover - optional
+
     def llama_startup():  # type: ignore
         return None
+
 
 # Central note: Do NOT monkey‑patch PyJWT globally.
 # All JWT decoding is centralized in app.security.jwt_decode.
@@ -61,6 +65,7 @@ except Exception:
     # In environments without auth providers, default to disabled
     def apple_enabled() -> bool:  # type: ignore
         return False
+
 
 # Try to import the stub router but do NOT mount it before `app` exists
 try:
@@ -145,8 +150,6 @@ except Exception:  # pragma: no cover - optional
         return _noop2
 
 
-
-
 # ensure optional import does not crash in test environment
 try:
     from .proactive_engine import on_ha_event, set_presence
@@ -184,7 +187,9 @@ try:
             set_router(_module_model_router)
             logger.debug("Router registry set to model_router at import time")
         except Exception:
-            logger.debug("Failed to set router registry at import time; will rely on create_app()")
+            logger.debug(
+                "Failed to set router registry at import time; will rely on create_app()"
+            )
 except Exception:
     # Best-effort only; do not fail import if registry or model_router unavailable
     pass
@@ -253,6 +258,7 @@ def _record_error(error: Exception, context: str = "unknown"):
     # Also log to persistent audit trail for long-term diagnostics
     try:
         from .audit_new import AuditEvent, append
+
         audit_event = AuditEvent(
             user_id="system",
             route=f"system.{context}",
@@ -266,7 +272,7 @@ def _record_error(error: Exception, context: str = "unknown"):
                 "traceback": "".join(
                     traceback.format_exception(type(error), error, error.__traceback__)
                 ),
-            }
+            },
         )
         append(audit_event)
     except Exception as audit_error:
@@ -339,14 +345,22 @@ async def _enhanced_startup():
 
                 # Create a task with timeout to prevent hanging
                 import asyncio
+
                 try:
                     task = asyncio.create_task(init_func())
-                    await asyncio.wait_for(task, timeout=30.0)  # 30 second timeout per component
+                    await asyncio.wait_for(
+                        task, timeout=30.0
+                    )  # 30 second timeout per component
                     duration = time.time() - start_time
                     logger.info(f"✅ {name} initialized successfully ({duration:.1f}s)")
                 except TimeoutError:
-                    logger.warning(f"⚠️ {name} initialization timed out after 30s - continuing startup")
-                    _record_error(TimeoutError(f"{name} init timeout"), f"startup.{name.lower().replace(' ', '_')}")
+                    logger.warning(
+                        f"⚠️ {name} initialization timed out after 30s - continuing startup"
+                    )
+                    _record_error(
+                        TimeoutError(f"{name} init timeout"),
+                        f"startup.{name.lower().replace(' ', '_')}",
+                    )
                     continue
                 except Exception as e:
                     duration = time.time() - start_time
@@ -377,6 +391,7 @@ async def _enhanced_startup():
         # Start token store cleanup task
         try:
             from .token_store import start_cleanup_task
+
             await start_cleanup_task()
         except Exception as e:
             logger.debug("token store cleanup task not started", exc_info=True)
@@ -397,7 +412,9 @@ async def _init_database():
     try:
         # Database schemas are now initialized once during app startup
         # This function now only verifies connectivity
-        logger.info("Database connectivity verified - schemas already initialized at startup")
+        logger.info(
+            "Database connectivity verified - schemas already initialized at startup"
+        )
     except Exception as e:
         logger.error(f"Database connectivity test failed: {e}")
         raise
@@ -409,6 +426,7 @@ async def _init_token_store_schema():
         import asyncio
 
         from .auth_store_tokens import token_dao
+
         asyncio.create_task(token_dao.ensure_schema_migrated())
         logger.debug("Token store schema migration started in background")
     except Exception as e:
@@ -425,14 +443,18 @@ async def _init_openai_health_check():
         result = await check_vendor_health_gated("openai")
 
         if result["status"] in ["skipped", "missing_config"]:
-            logger.debug("OpenAI health check %s: %s", result["status"], result.get("reason", ""))
+            logger.debug(
+                "OpenAI health check %s: %s", result["status"], result.get("reason", "")
+            )
             return
         elif result["status"] == "healthy":
             logger.info("OpenAI startup health check successful")
             return
         else:
             # Health check failed
-            error_msg = result.get("error", f"Health check failed with status: {result['status']}")
+            error_msg = result.get(
+                "error", f"Health check failed with status: {result['status']}"
+            )
             logger.error("OpenAI startup health check failed: %s", error_msg)
             raise RuntimeError(f"OpenAI health check failed: {error_msg}")
 
@@ -445,6 +467,7 @@ async def _init_vector_store():
     """Initialize vector store with read-only health check."""
     try:
         from .memory.api import _get_store
+
         store = _get_store()
 
         # Read-only connectivity test - be tolerant of sync vs async implementations
@@ -489,13 +512,17 @@ async def _init_llama():
         # Check if LLaMA is explicitly disabled
         llama_enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
         if llama_enabled in {"0", "false", "no", "off"}:
-            logger.debug("LLaMA integration disabled via LLAMA_ENABLED environment variable")
+            logger.debug(
+                "LLaMA integration disabled via LLAMA_ENABLED environment variable"
+            )
             return
 
         # Check if Ollama URL is configured (fallback for when LLAMA_ENABLED is not set)
         ollama_url = os.getenv("OLLAMA_URL") or os.getenv("LLAMA_URL")
         if not ollama_url and llama_enabled not in {"1", "true", "yes", "on"}:
-            logger.debug("LLaMA integration not configured (no OLLAMA_URL), skipping initialization")
+            logger.debug(
+                "LLaMA integration not configured (no OLLAMA_URL), skipping initialization"
+            )
             return
 
         from .llama_integration import _check_and_set_flag
@@ -513,13 +540,17 @@ async def _init_home_assistant():
         # Check if Home Assistant is explicitly disabled
         ha_enabled = (os.getenv("HOME_ASSISTANT_ENABLED") or "").strip().lower()
         if ha_enabled in {"0", "false", "no", "off"}:
-            logger.debug("Home Assistant integration disabled via HOME_ASSISTANT_ENABLED environment variable")
+            logger.debug(
+                "Home Assistant integration disabled via HOME_ASSISTANT_ENABLED environment variable"
+            )
             return
 
         # Check if Home Assistant URL is configured
         ha_url = os.getenv("HOME_ASSISTANT_URL")
         if not ha_url:
-            logger.debug("Home Assistant not configured (no HOME_ASSISTANT_URL), skipping initialization")
+            logger.debug(
+                "Home Assistant not configured (no HOME_ASSISTANT_URL), skipping initialization"
+            )
             return
 
         from .home_assistant import get_states
@@ -558,6 +589,7 @@ async def _init_scheduler():
         if callable(start_method):
             # Try to determine if it's async by checking the return type or signature
             import inspect
+
             if inspect.iscoroutinefunction(start_method):
                 # It's an async function, await it
                 await start_method()
@@ -571,7 +603,9 @@ async def _init_scheduler():
         logger.debug("Scheduler initialization successful")
 
     except Exception as e:
-        logger.warning(f"Scheduler initialization failed: {e}. Continuing without background jobs.")
+        logger.warning(
+            f"Scheduler initialization failed: {e}. Continuing without background jobs."
+        )
         # Don't raise - make scheduler optional
         return
 
@@ -745,12 +779,14 @@ def create_app() -> FastAPI:
 
     # Import guards at top of create_app()
     import os
+
     DEBUG = os.getenv("GSN_DEBUG_STARTUP") == "1"
 
     # Add fault handler for startup diagnostics
     if DEBUG:
         import faulthandler
         import sys
+
         faulthandler.dump_traceback_later(8, repeat=True, file=sys.stderr)
 
     # Construct app with single composition root + lifespan
@@ -768,25 +804,32 @@ def create_app() -> FastAPI:
     if DEBUG:
         from app.diagnostics.startup_probe import probe
         from app.diagnostics.state import record_event, set_snapshot
+
         set_snapshot("before", probe(app))
         record_event("app-created", "FastAPI instantiated")
 
         # Wrap include_router to trace calls (observation-only)
         _orig_include = app.include_router
+
         def _trace_include(router, *args, **kwargs):
             from app.diagnostics.state import record_router_call
+
             prefix = kwargs.get("prefix")
             try:
                 where = f"{router.tags if hasattr(router,'tags') else ''}"
             except Exception:
                 where = "<router>"
             res = _orig_include(router, *args, **kwargs)
-            record_router_call(where=str(where), prefix=prefix, routes_total=len(app.routes))
+            record_router_call(
+                where=str(where), prefix=prefix, routes_total=len(app.routes)
+            )
             return res
+
         app.include_router = _trace_include  # type: ignore[attr-defined]
 
     # Register routers once via registry with dev/prod handling
     from app.routers.config import register_routers
+
     DEV = os.getenv("ENV", "dev") == "dev"
     try:
         register_routers(app)
@@ -800,6 +843,7 @@ def create_app() -> FastAPI:
     if os.getenv("ENV", "dev").lower() in {"dev", "local"}:
         try:
             from app.api.dev import router as dev_router
+
             app.include_router(dev_router, prefix="/dev", tags=["Dev"])
         except Exception as e:
             logger.warning("Failed to include dev router: %s", e)
@@ -809,7 +853,8 @@ def create_app() -> FastAPI:
         paths = {getattr(r, "path", None) for r in app.routes}
         assert "/healthz" in paths, "healthz missing after registration"
 
-    # AutoOptionsMiddleware removed - CorsPreflightMiddleware handles OPTIONS
+    # AutoOptionsMiddleware removed; Next proxy keeps dev same-origin, and a single
+    # Starlette CORSMiddleware (mounted only when CORS_ALLOW_ORIGINS is set) handles OPTIONS.
 
     # Phase 7: Initialize infrastructure singletons first (needed by router)
     try:
@@ -828,6 +873,7 @@ def create_app() -> FastAPI:
     # Phase 4: Wire router using bootstrap registry (now infrastructure is ready)
     try:
         from .bootstrap.router_registry import configure_default_router
+
         configure_default_router()
         logger.debug("✅ Router configured via bootstrap registry")
     except Exception as e:
@@ -840,7 +886,9 @@ def create_app() -> FastAPI:
             # Defer settings import to avoid side-effects at module import
             from app.settings import settings
 
-            backend = getattr(settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "dryrun")).lower()
+            backend = getattr(
+                settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "dryrun")
+            ).lower()
         except Exception:
             backend = os.getenv("PROMPT_BACKEND", "dryrun").lower()
 
@@ -855,6 +903,7 @@ def create_app() -> FastAPI:
             app.state.prompt_router = llama_router
             logger.info("prompt backend bound: llama")
         elif backend == "dryrun":
+
             async def dryrun_router(payload: dict) -> dict:
                 return {"dry_run": True, "echo": payload}
 
@@ -869,12 +918,26 @@ def create_app() -> FastAPI:
     async def _diag_start():
         if DEBUG:
             from app.diagnostics.state import record_event
+
             record_event("startup", "application startup")
+
+    # Auth cookie config dump (only when AUTH_DEBUG=1)
+    @app.on_event("startup")
+    async def _auth_cookie_cfg_dump():
+        try:
+            if os.getenv("AUTH_DEBUG") == "1":
+                from app.startup.auth_config_dump import dump_cookie_config
+
+                dump_cookie_config()
+        except Exception:
+            # Never fail startup due to debug logging
+            pass
 
     @app.on_event("shutdown")
     async def _diag_stop():
         if DEBUG:
             from app.diagnostics.state import record_event
+
             record_event("shutdown", "application shutdown")
 
     # Register backend factory for swappable, lazy backends (openai/llama/dryrun)
@@ -885,12 +948,15 @@ def create_app() -> FastAPI:
             # Resolve backend callables lazily to avoid heavy imports at import-time
             if name == "openai":
                 from app.routers.openai_router import openai_router
+
                 return openai_router
             if name == "llama":
                 from app.routers.llama_router import llama_router
+
                 return llama_router
             if name == "dryrun":
                 from app.routers.dryrun_router import dryrun_router
+
                 return dryrun_router
 
             # Fallback for unknown backends - should not happen in frozen contract
@@ -912,6 +978,7 @@ def create_app() -> FastAPI:
 
     # Error handlers (single registration point) - MUST happen before middleware setup
     from app.error_handlers import register_error_handlers
+
     register_error_handlers(app)
 
     # CORS middleware moved to middleware/stack.py to avoid duplicates
@@ -919,18 +986,27 @@ def create_app() -> FastAPI:
     # Phase 6.1: Set up canonical middleware stack (isolated from routers)
     # Note: middleware setup is intentionally executed after registering error handlers
     from app.middleware.loader import register_canonical_middlewares
+
     csrf_enabled = bool(int(os.getenv("CSRF_ENABLED", "1")))
-    # Support both newer `CORS_ORIGINS` and legacy `CORS_ALLOW_ORIGINS` env var names.
-    cors_env = os.getenv("CORS_ORIGINS") or os.getenv("CORS_ALLOW_ORIGINS")
-    cors_origins = cors_env.split(",") if cors_env else None
-    register_canonical_middlewares(app, csrf_enabled=csrf_enabled, cors_origins=cors_origins)
+    # Get CORS origins from centralized settings (handles dev proxy mode)
+    from app.settings_cors import get_cors_origins
+    cors_origins = get_cors_origins()
+    register_canonical_middlewares(
+        app, csrf_enabled=csrf_enabled, cors_origins=cors_origins
+    )
     logger.debug("✅ Canonical middleware stack configured")
 
     # Strict vector store preflight: fail startup early when STRICT_VECTOR_STORE is set
     try:
-        strict_vs = (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {"1","true","yes","on"}
+        strict_vs = (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         if strict_vs:
             from app.memory.unified_store import create_vector_store as _create_vs
+
             _create_vs()  # raise on invalid DSN when strict
     except Exception:
         # Let the exception propagate to fail-fast under strict mode
@@ -940,6 +1016,7 @@ def create_app() -> FastAPI:
     try:
         logger.debug("Attempting to register test error normalization router...")
         from .test_error_normalization import router as test_router
+
         app.include_router(test_router, prefix="/test-errors", tags=["test-errors"])
         logger.info("✅ Test error normalization router registered at /test-errors")
     except ImportError as e:
@@ -953,6 +1030,7 @@ def create_app() -> FastAPI:
     # Phase 6: Set up OpenAPI generation (isolated from routers)
     try:
         from .openapi.generator import setup_openapi_for_app
+
         setup_openapi_for_app(app)
         logger.debug("✅ OpenAPI generation configured")
     except Exception as e:
@@ -962,7 +1040,9 @@ def create_app() -> FastAPI:
     try:
         _tv_dir = os.getenv("TV_PHOTOS_DIR", "data/shared_photos")
         if _tv_dir:
-            app.mount("/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos")
+            app.mount(
+                "/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos"
+            )
     except Exception:
         pass
 
@@ -976,7 +1056,7 @@ def create_app() -> FastAPI:
 
     # Legacy Google OAuth callback is now handled by app/api/google_compat.py with feature flag
 
-# Infrastructure initialization moved to beginning of create_app()
+    # Infrastructure initialization moved to beginning of create_app()
 
     # After **all** middleware and routers are registered, but before return:
     from fastapi import APIRouter, Query
@@ -1002,11 +1082,15 @@ def create_app() -> FastAPI:
 
     @diag.get("/__diag/startup", include_in_schema=False)
     async def __diag_startup(phase: str = Query(default="after")):
-        return get_snapshot("before" if phase=="before" else "after")
+        return get_snapshot("before" if phase == "before" else "after")
 
     @diag.get("/__diag/events", include_in_schema=False)
     async def __diag_events():
-        return {"events": events(), "router_calls": router_calls(), "import_timings": import_timings()}
+        return {
+            "events": events(),
+            "router_calls": router_calls(),
+            "import_timings": import_timings(),
+        }
 
     @diag.get("/__diag/verify", include_in_schema=False)
     async def __diag_verify():
@@ -1019,20 +1103,38 @@ def create_app() -> FastAPI:
         def add(name, ok, details=""):
             checks.append({"name": name, "ok": bool(ok), "details": details})
 
-        add("CORS present once", mids.count("CORSMiddleware")==1, f"count={mids.count('CORSMiddleware')}")
+        try:
+            cors_required = bool((os.getenv("CORS_ORIGINS") or os.getenv("CORS_ALLOW_ORIGINS") or "").strip())
+        except Exception:
+            cors_required = False
+        if cors_required:
+            add(
+                "CORS present once",
+                mids.count("CORSMiddleware") == 1,
+                f"count={mids.count('CORSMiddleware')}",
+            )
+        else:
+            add(
+                "CORS omitted in proxy/same-origin",
+                mids.count("CORSMiddleware") == 0,
+                f"count={mids.count('CORSMiddleware')}",
+            )
         if "CSRFMiddleware" in mids and "CORSMiddleware" in mids:
-            add("CSRF after CORS", mids.index("CSRFMiddleware") > mids.index("CORSMiddleware"),
-                f"order={mids}")
+            add(
+                "CSRF after CORS",
+                mids.index("CSRFMiddleware") > mids.index("CORSMiddleware"),
+                f"order={mids}",
+            )
         else:
             add("CSRF ordering skipped", True, "CSRF or CORS missing")
 
         add("has /v1/whoami", "/v1/whoami" in paths)
         add("has health", ("/health" in paths) or ("/v1/health" in paths))
-        dup = sorted({p for p in paths if paths.count(p)>1})
+        dup = sorted({p for p in paths if paths.count(p) > 1})
         add("no duplicate paths", not dup, f"dups={dup}")
 
         passed = all(c["ok"] for c in checks)
-        return {"phase": snap.get("phase","after"), "passed": passed, "checks": checks}
+        return {"phase": snap.get("phase", "after"), "passed": passed, "checks": checks}
 
     @diag.get("/__diag/fingerprint", include_in_schema=False)
     async def __diag_fingerprint():
@@ -1044,35 +1146,39 @@ def create_app() -> FastAPI:
         # Collect stable identifiers
         route_info = []
         for r in sorted(routes, key=lambda x: x.get("path", "")):
-            route_info.append({
-                "path": r.get("path", ""),
-                "methods": sorted(r.get("methods", [])),
-                "name": r.get("name", "")
-            })
+            route_info.append(
+                {
+                    "path": r.get("path", ""),
+                    "methods": sorted(r.get("methods", [])),
+                    "name": r.get("name", ""),
+                }
+            )
 
         middleware_info = []
         for m in mids:
-            middleware_info.append({
-                "class_name": m.get("class_name", ""),
-                "name": m.get("name", "")
-            })
+            middleware_info.append(
+                {"class_name": m.get("class_name", ""), "name": m.get("name", "")}
+            )
 
         # Create stable fingerprint
         fingerprint_data = {
             "routes": route_info,
             "middlewares": middleware_info,
-            "phase": snap.get("phase", "after")
+            "phase": snap.get("phase", "after"),
         }
 
         # Convert to JSON string and hash for stable fingerprint
         import json
-        stable_json = json.dumps(fingerprint_data, sort_keys=True, separators=(',', ':'))
-        fingerprint = hashlib.sha256(stable_json.encode('utf-8')).hexdigest()[:16]
+
+        stable_json = json.dumps(
+            fingerprint_data, sort_keys=True, separators=(",", ":")
+        )
+        fingerprint = hashlib.sha256(stable_json.encode("utf-8")).hexdigest()[:16]
 
         return {
             "fingerprint": fingerprint,
             "data": fingerprint_data,
-            "generated_at": snap.get("timestamp", "unknown")
+            "generated_at": snap.get("timestamp", "unknown"),
         }
 
     app.include_router(diag)
@@ -1105,7 +1211,11 @@ def create_app() -> FastAPI:
                 pair_to_handlers[(m, path)].append(qualname)
 
         # Find duplicates where more than one handler is registered for same (method,path)
-        duplicates = {pair: handlers for pair, handlers in pair_to_handlers.items() if len(handlers) > 1}
+        duplicates = {
+            pair: handlers
+            for pair, handlers in pair_to_handlers.items()
+            if len(handlers) > 1
+        }
 
         if duplicates:
             lines = [f"Duplicate route registrations detected ({len(duplicates)}):"]
@@ -1123,13 +1233,13 @@ def create_app() -> FastAPI:
     logger.info("🎉 Application composition complete in create_app()")
     return app
 
+
 # Wire store providers into middleware (dependency injection)
 # Import stores *after* app exists to avoid import-time cycles
 from .middleware.middleware_core import set_store_providers
 from .user_store import user_store
 
 set_store_providers(user_store_provider=lambda: user_store)
-
 
 
 # OpenAPI setup moved to create_app() to avoid import-time cycles
@@ -1177,11 +1287,13 @@ class ServiceRequest(BaseModel):
 
     model_config = ConfigDict(
         json_schema_extra={
-            "examples": [{
-                "domain": "light",
-                "service": "turn_on",
-                "data": {"entity_id": "light.kitchen"},
-            }]
+            "examples": [
+                {
+                    "domain": "light",
+                    "service": "turn_on",
+                    "data": {"entity_id": "light.kitchen"},
+                }
+            ]
         }
     )
 
@@ -1216,9 +1328,6 @@ class ServiceRequest(BaseModel):
 # All router includes moved to create_app() to avoid import-time cycles
 
 # All router includes moved to create_app() to avoid import-time cycles
-
-
-
 
 
 # Middleware setup moved to create_app() to avoid import-time cycles

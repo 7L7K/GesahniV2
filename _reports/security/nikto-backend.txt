@@ -4,28 +4,28 @@
 + GET /: Uncommon header 'x-debug-backend' found, with contents: fastapi.
 + GET /: Uncommon header 'x-request-id' found, with contents: 05c8c72f-d7ad-4aa5-96f7-425668cf062c.
 + GET /qGyH6WoB.php~: Uncommon header 'x-error-code' found, with contents: not_found.
-+ GET .: The X-Content-Type-Options header is not set. This could allow the user agent to render the content of the site in a different fashion to the MIME type. See: https://www.netsparker.com/web-vulnerability-scanner/vulnerabilities/missing-content-type-header/: 
++ GET .: The X-Content-Type-Options header is not set. This could allow the user agent to render the content of the site in a different fashion to the MIME type. See: https://www.netsparker.com/web-vulnerability-scanner/vulnerabilities/missing-content-type-header/:
 + OPTIONS OPTIONS: Allowed HTTP Methods: GET .
 + GET /666%0a%0a<script>alert('Vulnerable');</script>666.jsp: Apache Tomcat 4.1 / Linux is vulnerable to Cross Site Scripting (XSS).
 + GET /servlet/org.apache.catalina.ContainerServlet/<script>alert('Vulnerable')</script>: Apache-Tomcat is vulnerable to Cross Site Scripting (XSS) by invoking java classes.
 + GET /servlet/org.apache.catalina.Context/<script>alert('Vulnerable')</script>: Apache-Tomcat is vulnerable to Cross Site Scripting (XSS) by invoking java classes.
 + GET /servlet/org.apache.catalina.Globals/<script>alert('Vulnerable')</script>: Apache-Tomcat is vulnerable to Cross Site Scripting (XSS) by invoking java classes.
 + GET /servlet/org.apache.catalina.servlets.WebdavStatus/<script>alert('Vulnerable')</script>: Apache-Tomcat is vulnerable to Cross Site Scripting (XSS) by invoking java classes.
-+ GET /nosuchurl/><script>alert('Vulnerable')</script>: JEUS is vulnerable to Cross Site Scripting (XSS) when requesting non-existing JSP pages. See: https://seclists.org/fulldisclosure/2003/Jun/494: 
-+ GET /~/<script>alert('Vulnerable')</script>.aspx?aspxerrorpath=null: Cross site scripting (XSS) is allowed with .aspx file requests. See: CA-2000-02: 
-+ GET /~/<script>alert('Vulnerable')</script>.aspx: Cross site scripting (XSS) is allowed with .aspx file requests. See: CA-2000-02: 
-+ GET /~/<script>alert('Vulnerable')</script>.asp: Cross site scripting (XSS) is allowed with .asp file requests. See: CA-2000-02: 
++ GET /nosuchurl/><script>alert('Vulnerable')</script>: JEUS is vulnerable to Cross Site Scripting (XSS) when requesting non-existing JSP pages. See: https://seclists.org/fulldisclosure/2003/Jun/494:
++ GET /~/<script>alert('Vulnerable')</script>.aspx?aspxerrorpath=null: Cross site scripting (XSS) is allowed with .aspx file requests. See: CA-2000-02:
++ GET /~/<script>alert('Vulnerable')</script>.aspx: Cross site scripting (XSS) is allowed with .aspx file requests. See: CA-2000-02:
++ GET /~/<script>alert('Vulnerable')</script>.asp: Cross site scripting (XSS) is allowed with .asp file requests. See: CA-2000-02:
 + GET /node/view/666\"><script>alert(document.domain)</script>: Drupal 4.2.0 RC is vulnerable to Cross Site Scripting (XSS).
 + GET /mailman/listinfo/<script>alert('Vulnerable')</script>: Mailman is vulnerable to Cross Site Scripting (XSS). Upgrade to version 2.0.8 to fix.
 + GET /index.php/\"><script><script>alert(document.cookie)</script><: eZ publish v3 and prior allow Cross Site Scripting (XSS).
-+ GET /bb000001.pl<script>alert('Vulnerable')</script>: Actinic E-Commerce services is vulnerable to Cross Site Scripting (XSS). See: CVE-2002-1732: 
++ GET /bb000001.pl<script>alert('Vulnerable')</script>: Actinic E-Commerce services is vulnerable to Cross Site Scripting (XSS). See: CVE-2002-1732:
 + GET /a.jsp/<script>alert('Vulnerable')</script>: JServ is vulnerable to Cross Site Scripting (XSS) when a non-existent JSP file is requested. Upgrade to the latest version of JServ.
 + GET /<script>alert('Vulnerable')</script>.thtml: Server is vulnerable to Cross Site Scripting (XSS).
 + GET /<script>alert('Vulnerable')</script>.shtml: Server is vulnerable to Cross Site Scripting (XSS).
 + GET /<script>alert('Vulnerable')</script>.jsp: Server is vulnerable to Cross Site Scripting (XSS).
 + GET /<script>alert('Vulnerable')</script>.aspx: Cross site scripting (XSS) is allowed with .aspx file requests (may be Microsoft .net).
-+ GET /<script>alert('Vulnerable')</script>: Server is vulnerable to Cross Site Scripting (XSS). See: CVE-2002-0681: 
-+ GET /docs/<script>alert('Vulnerable');</script>: Nokia Electronic Documentation is vulnerable to Cross Site Scripting (XSS). See: CVE-2003-0801: 
-+ GET /e5UdxEJOAJ9KqdUGTRiEJiXpzqOgq3ygPMORvFJB6GKr2BNNjgMsrXOKq7RJ0lRSp1HWebrQgIHMhyTVVyi8xTJaEdtPLUE3RUnwjE9WDKBkb3rNNE2ErdYHSeY2mnz1iGlMTgbr4kqZRXJAmCnQXcWqAsmj8sSEjEuc7oLKyrBLsanCZrTKBX2EGRxqdFJgG67kUJqb9JhUjQZrtqYHtek0yFO5Z7L<font%20size=50>DEFACED<!--//--: MyWebServer 1.0.2 is vulnerable to HTML injection. Upgrade to a later version. See: CVE-2002-1453: 
-+ GET /h38KgAKx2HnF9d2q6Ftnt8ExzPX3rbYK8gD8BHTpYrCtuU6mTQQs8a0UPHQWa1aAZqX4eM8uxrQHNKItglXaRA6hCUTQQfFkVEOwufe6XXbgasBR8WvOA1Fc3dWUgbTHIL0sggljXzX81eObuuMIIKKakL9MGvXr6obYpJmoXjldZNU4n9gnhp8OtFEn7ePhM9wd2jBflt4JvVp238gKALoo9zctIhm<font%20size=50><script>alert(11)</script><!--//--: MyWebServer 1.0.2 is vulnerable to Cross Site Scripting (XSS). See: CVE-2002-1453: 
-+ GET /pls/help/<script>alert('Vulnerable')</script>: Oracle 9iAS is vulnerable to Cross Site Scripting (XSS). See: CVE-2002-2029: 
++ GET /<script>alert('Vulnerable')</script>: Server is vulnerable to Cross Site Scripting (XSS). See: CVE-2002-0681:
++ GET /docs/<script>alert('Vulnerable');</script>: Nokia Electronic Documentation is vulnerable to Cross Site Scripting (XSS). See: CVE-2003-0801:
++ GET /e5UdxEJOAJ9KqdUGTRiEJiXpzqOgq3ygPMORvFJB6GKr2BNNjgMsrXOKq7RJ0lRSp1HWebrQgIHMhyTVVyi8xTJaEdtPLUE3RUnwjE9WDKBkb3rNNE2ErdYHSeY2mnz1iGlMTgbr4kqZRXJAmCnQXcWqAsmj8sSEjEuc7oLKyrBLsanCZrTKBX2EGRxqdFJgG67kUJqb9JhUjQZrtqYHtek0yFO5Z7L<font%20size=50>DEFACED<!--//--: MyWebServer 1.0.2 is vulnerable to HTML injection. Upgrade to a later version. See: CVE-2002-1453:
++ GET /h38KgAKx2HnF9d2q6Ftnt8ExzPX3rbYK8gD8BHTpYrCtuU6mTQQs8a0UPHQWa1aAZqX4eM8uxrQHNKItglXaRA6hCUTQQfFkVEOwufe6XXbgasBR8WvOA1Fc3dWUgbTHIL0sggljXzX81eObuuMIIKKakL9MGvXr6obYpJmoXjldZNU4n9gnhp8OtFEn7ePhM9wd2jBflt4JvVp238gKALoo9zctIhm<font%20size=50><script>alert(11)</script><!--//--: MyWebServer 1.0.2 is vulnerable to Cross Site Scripting (XSS). See: CVE-2002-1453:
++ GET /pls/help/<script>alert('Vulnerable')</script>: Oracle 9iAS is vulnerable to Cross Site Scripting (XSS). See: CVE-2002-2029:

@@ -8,7 +8,7 @@ from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
 
 router = APIRouter(
-    tags=["Admin"], dependencies=[Depends(docs_security_with(["admin:write"]))]
+    tags=["Auth"]
 )
 
 
@@ -43,7 +43,7 @@ class UserProfile(BaseModel):
     )
 
 
-@router.get("/profile")
+@router.get("/profile", dependencies=[Depends(docs_security_with(["user:profile:read"]))])
 async def get_profile(user_id: str = Depends(get_current_user_id)):
     prof = profile_store.get(user_id)
     return UserProfile(**prof)
@@ -57,6 +57,7 @@ class ProfileOk(BaseModel):
 
 @router.post(
     "/profile",
+    dependencies=[Depends(docs_security_with(["user:profile:write"]))],
     responses={200: {"model": ProfileOk}},
 )
 async def update_profile(

@@ -1,4 +1,3 @@
-import pytest
 from starlette.testclient import TestClient
 
 from app.main import app
@@ -79,10 +78,12 @@ def test_monitor_raising_does_not_break_success(monkeypatch):
     # Ensure id_token decoding yields issuer/sub/email so callback proceeds
     monkeypatch.setattr(
         "app.api.google_oauth.jwt_decode",
-        lambda token, options=None: {"iss": "https://accounts.google.com", "sub": "subid", "email": "user@example.com"},
+        lambda token, options=None: {
+            "iss": "https://accounts.google.com",
+            "sub": "subid",
+            "email": "user@example.com",
+        },
     )
 
     resp = client.get("/auth/callback?code=abc&state=stateval", follow_redirects=False)
     assert resp.status_code in (302, 303)
-
-

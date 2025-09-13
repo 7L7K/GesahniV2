@@ -9,9 +9,9 @@ from fastapi.testclient import TestClient
 
 # Set up logging
 logging.basicConfig(
-    level=logging.DEBUG,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
+
 
 def test_spotify_imports():
     """Test if Spotify modules can be imported successfully."""
@@ -34,12 +34,14 @@ def test_spotify_imports():
         except Exception as e:
             print(f"✗ {description}: {module_path} - ERROR: {e}")
 
+
 def test_router_creation():
     """Test if routers can be created successfully."""
     print("\n=== Testing Router Creation ===")
 
     try:
         from app.api.spotify import router as spotify_router
+
         print(f"✓ Spotify router created: {len(spotify_router.routes)} routes")
         for route in spotify_router.routes:
             print(f"  - {route.methods} {route.path}")
@@ -48,6 +50,7 @@ def test_router_creation():
 
     try:
         from app.api.spotify_player import router as player_router
+
         print(f"✓ Spotify player router created: {len(player_router.routes)} routes")
         for route in player_router.routes:
             print(f"  - {route.methods} {route.path}")
@@ -56,25 +59,28 @@ def test_router_creation():
 
     try:
         from app.api.spotify_sdk import router as sdk_router
+
         print(f"✓ Spotify SDK router created: {len(sdk_router.routes)} routes")
         for route in sdk_router.routes:
             print(f"  - {route.methods} {route.path}")
     except Exception as e:
         print(f"✗ Spotify SDK router creation failed: {e}")
 
+
 def test_main_app_router_registration():
     """Test if routers are registered in main app."""
     print("\n=== Testing Main App Router Registration ===")
 
     # Set test environment
-    os.environ['TEST_MODE'] = '1'
-    os.environ['JWT_OPTIONAL_IN_TESTS'] = '1'
+    os.environ["TEST_MODE"] = "1"
+    os.environ["JWT_OPTIONAL_IN_TESTS"] = "1"
 
     try:
         from app.main import app
+
         print("✓ Main app created successfully")
         # Check if routes are registered
-        spotify_routes = [route for route in app.routes if 'spotify' in str(route.path)]
+        spotify_routes = [route for route in app.routes if "spotify" in str(route.path)]
         print(f"✓ Found {len(spotify_routes)} Spotify-related routes:")
         for route in spotify_routes:
             print(f"  - {route.methods} {route.path}")
@@ -89,7 +95,7 @@ def test_main_app_router_registration():
             "/v1/spotify/callback",
             "/v1/spotify/devices",
             "/v1/spotify/play",
-            "/v1/spotify/token-for-sdk"
+            "/v1/spotify/token-for-sdk",
         ]
 
         print("\n--- Testing Endpoints ---")
@@ -102,6 +108,7 @@ def test_main_app_router_registration():
 
     except Exception as e:
         print(f"✗ Main app creation failed: {e}")
+
 
 def test_spotify_config():
     """Test Spotify configuration."""
@@ -119,6 +126,7 @@ def test_spotify_config():
         else:
             print(f"✗ {var}: NOT SET")
 
+
 def main():
     """Run all Spotify debugging tests."""
     print("Spotify Integration Debug Report")
@@ -131,6 +139,7 @@ def main():
 
     print("\n" + "=" * 50)
     print("Debug report complete. Check for any FAILED items above.")
+
 
 if __name__ == "__main__":
     main()

@@ -19,7 +19,8 @@ def is_testing() -> bool:
         or os.getenv("PYTEST_RUNNING")
         or os.getenv("TEST_MODE", "").strip() == "1"
         or os.getenv("ENV", "").strip().lower() == "test"
-        or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower() in {"1", "true", "yes", "on"}
+        or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower()
+        in {"1", "true", "yes", "on"}
     )
 
 
@@ -56,10 +57,11 @@ async def start_transcription(
     # In CI/testing mode, return 202 with job_id instead of running actual transcription
     if is_testing():
         from fastapi import Response
+
         return Response(
             content='{"job_id": "test-' + session_id + '", "status": "queued"}',
             media_type="application/json",
-            status_code=202
+            status_code=202,
         )
 
     # Normal production flow

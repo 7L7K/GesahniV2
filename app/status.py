@@ -51,7 +51,6 @@ def _admin_token() -> str | None:
     return tok or None
 
 
-
 @public_router.get("/rate_limit_status")
 async def rate_limit_status_public() -> dict:
     """Return current rate‑limit backend configuration and health (public).
@@ -70,7 +69,10 @@ async def rate_limit_status_public() -> dict:
             "backend": "unknown",
             "enabled": False,
             "connected": False,
-            "limits": {"long": int(os.getenv("RATE_LIMIT", "60") or 60), "burst": int(os.getenv("RATE_LIMIT_BURST", "10") or 10)},
+            "limits": {
+                "long": int(os.getenv("RATE_LIMIT", "60") or 60),
+                "burst": int(os.getenv("RATE_LIMIT_BURST", "10") or 10),
+            },
         }
 
 
@@ -312,7 +314,7 @@ async def observability_metrics() -> dict:
         "latency_p95_by_backend": get_ask_latency_p95_by_backend(),
         "error_rate_by_backend": get_ask_error_rate_by_backend(),
         "timestamp": datetime.now(UTC).isoformat(),
-        "description": "Golden queries for ASK observability budgets"
+        "description": "Golden queries for ASK observability budgets",
     }
 
 

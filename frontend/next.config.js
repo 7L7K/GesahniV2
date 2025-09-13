@@ -62,7 +62,8 @@ module.exports = {
   // When NEXT_PUBLIC_USE_DEV_PROXY=true, frontend will call relative paths and these
   // rewrites will proxy them to the backend at http://localhost:8000
   async rewrites() {
-    const useProxy = (process.env.NEXT_PUBLIC_USE_DEV_PROXY || 'false') === 'true';
+    const flag = String(process.env.NEXT_PUBLIC_USE_DEV_PROXY || process.env.USE_DEV_PROXY || 'false').toLowerCase();
+    const useProxy = ['true', '1', 'yes', 'on'].includes(flag);
     if (!useProxy) return [];
     const backend = process.env.NEXT_PUBLIC_API_ORIGIN || 'http://localhost:8000';
     // Normalize trailing slash

@@ -145,6 +145,22 @@ async def diag_auth(request: Request):
     }
 
 
+# Dev-only lightweight endpoints for auth debugging (names only, no secrets)
+@router.get("/cookies", include_in_schema=False)
+async def cookies(request: Request):
+    if not _is_dev():
+        raise HTTPException(status_code=403, detail="forbidden")
+    return {"cookie_names": sorted(request.cookies.keys())}
+
+
+@router.get("/auth-state", include_in_schema=False)
+async def auth_state(request: Request):
+    if not _is_dev():
+        raise HTTPException(status_code=403, detail="forbidden")
+    authz = "authorization" in (k.lower() for k in request.headers.keys())
+    return {"authz_header_present": authz, "cookie_names": sorted(request.cookies.keys())}
+
+
 @router.get("/debug/oauth", include_in_schema=False)
 async def debug_oauth_page(request):
     if not _is_dev():

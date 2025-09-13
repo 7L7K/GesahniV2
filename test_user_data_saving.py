@@ -16,7 +16,7 @@ from datetime import datetime
 import jwt
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 
 def test_user_data_extraction():
@@ -37,13 +37,14 @@ def test_user_data_extraction():
             "given_name": "John",
             "family_name": "Doe",
             "picture": "https://lh3.googleusercontent.com/a-/photo.jpg",
-            "locale": "en"
+            "locale": "en",
         }
 
         id_token = jwt.encode(id_token_payload, "test_secret", algorithm="HS256")
 
         # Process the ID token like the callback does
         from app.security import jwt_decode
+
         claims = jwt_decode(id_token, options={"verify_signature": False})
 
         # Extract user data
@@ -56,12 +57,14 @@ def test_user_data_extraction():
             "picture": claims.get("picture"),
             "locale": claims.get("locale"),
             "provider_sub": claims.get("sub"),
-            "provider_iss": claims.get("iss")
+            "provider_iss": claims.get("iss"),
         }
 
         # Verify all expected data is present
         required_fields = ["email", "provider_sub", "provider_iss"]
-        missing_fields = [field for field in required_fields if not user_data.get(field)]
+        missing_fields = [
+            field for field in required_fields if not user_data.get(field)
+        ]
 
         if missing_fields:
             print(f"❌ Missing required user data: {missing_fields}")
@@ -107,16 +110,20 @@ def test_user_data_saving():
             scopes="openid https://www.googleapis.com/auth/userinfo.email",
             provider_sub=user_data["provider_sub"],
             provider_iss=user_data["provider_iss"],
-            expires_at=int(datetime.now().timestamp()) + 3600
+            expires_at=int(datetime.now().timestamp()) + 3600,
         )
 
         # Add id_token for completeness
-        mock_id_token = jwt.encode({
-            "iss": user_data["provider_iss"],
-            "sub": user_data["provider_sub"],
-            "email": user_data["email"],
-            "email_verified": user_data["email_verified"]
-        }, "test_secret", algorithm="HS256")
+        mock_id_token = jwt.encode(
+            {
+                "iss": user_data["provider_iss"],
+                "sub": user_data["provider_sub"],
+                "email": user_data["email"],
+                "email_verified": user_data["email_verified"],
+            },
+            "test_secret",
+            algorithm="HS256",
+        )
         token.id_token = mock_id_token
 
         # Test database serialization

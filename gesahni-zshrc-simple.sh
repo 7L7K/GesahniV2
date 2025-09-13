@@ -4,7 +4,7 @@
 # Add this section to your ~/.zshrc file for easy Gesahni development
 
 # Avoid noisy zsh glob errors when patterns don't match
-setopt NO_NOMATCH 2>/dev/null || true
+setopt NO_NOMATCH
 
 # Gesahni project directory
 export GESAHNI_DIR="$HOME/2025/GesahniV2"
@@ -49,7 +49,36 @@ gesahni-start() {
     ./scripts/start.sh &
 
     # Wait for startup to complete, then run post-startup checks
-    sleep 5
+    echo "⏳ Waiting for services to start..."
+    _wait_for_health() {
+        local endpoint="$1"
+        local max_attempts=30
+        local attempt=1
+
+        while [ $attempt -le $max_attempts ]; do
+            if curl -fsS --max-time 2 "$endpoint" >/dev/null 2>&1; then
+                return 0
+            fi
+            echo -n "."
+            sleep 1
+            ((attempt++))
+        done
+        return 1
+    }
+
+    # Wait for backend to be ready
+    if _wait_for_health "http://localhost:8000/healthz/ready"; then
+        echo " ✅ Backend ready"
+    else
+        echo " ❌ Backend failed to start within 30 seconds"
+    fi
+
+    # Wait for frontend to be ready
+    if _wait_for_health "http://localhost:3000"; then
+        echo " ✅ Frontend ready"
+    else
+        echo " ❌ Frontend failed to start within 30 seconds"
+    fi
 
     # Post-startup verification
     echo ""
@@ -57,17 +86,17 @@ gesahni-start() {
     echo "=============================="
 
     # Check backend health
-    if curl -s http://localhost:8000/health >/dev/null 2>&1; then
+    if curl -fsS --max-time 5 --retry 2 --retry-delay 1 http://localhost:8000/health >/dev/null 2>&1; then
         echo "✅ Backend: http://localhost:8000 (running)"
 
         # Check our new endpoints
-        if curl -s http://localhost:8000/v1/whoami >/dev/null 2>&1; then
+        if curl -fsS --max-time 5 --retry 2 --retry-delay 1 http://localhost:8000/v1/whoami >/dev/null 2>&1; then
             echo "   ✅ /v1/whoami: working"
         else
             echo "   ❌ /v1/whoami: not responding"
         fi
 
-        if curl -s http://localhost:8000/__diag/fingerprint >/dev/null 2>&1; then
+        if curl -fsS --max-time 5 --retry 2 --retry-delay 1 http://localhost:8000/__diag/fingerprint >/dev/null 2>&1; then
             echo "   ✅ Diagnostics: available"
         else
             echo "   ❌ Diagnostics: not available"
@@ -77,7 +106,7 @@ gesahni-start() {
     fi
 
     # Check frontend
-    if curl -s http://localhost:3000 >/dev/null 2>&1; then
+    if curl -fsS --max-time 5 --retry 2 --retry-delay 1 http://localhost:3000 >/dev/null 2>&1; then
         echo "✅ Frontend: http://localhost:3000 (running)"
     else
         echo "❌ Frontend: not responding"
@@ -106,27 +135,21 @@ gesahni-stop() {
 
     echo "🛑 Stopping Gesahni Development Environment"
 
-    patterns=("uvicorn app.main:app" "next dev" "pnpm dev" "npm run dev")
+    # More specific patterns scoped to Gesahni directory and exact commands
+    patterns=("$GESAHNI_DIR.*uvicorn app.main:app" "$GESAHNI_DIR.*next dev" "$GESAHNI_DIR.*next-server")
     ports=(8000 3000)
 
     found=false
 
-    # Stop by process pattern
+    # Stop by specific Gesahni-scoped process patterns
     for pat in "${patterns[@]}"; do
       pids=$(pgrep -f -- "$pat" || true)
       if [ -n "$pids" ]; then
         found=true
-        echo "Found processes for '$pat': $pids"
+        echo "Found Gesahni processes for '$pat': $pids"
         for pid in $pids; do
           if kill -0 "$pid" 2>/dev/null; then
             kill -TERM "$pid" 2>/dev/null || true
-          fi
-        done
-        sleep 1
-        for pid in $pids; do
-          if kill -0 "$pid" 2>/dev/null; then
-            echo "Forcing kill PID $pid"
-            kill -KILL "$pid" 2>/dev/null || true
           fi
         done
       fi
@@ -188,7 +211,21 @@ gesahni-back() {
 gesahni-front() {
     cd "$GESAHNI_DIR/frontend"
     unset PORT
-    npm run dev
+
+    # Detect and use preferred package manager
+    if command -v bun >/dev/null 2>&1 && [ -f "bun.lockb" ]; then
+        echo "🐰 Using bun (lockfile detected)"
+        bun run dev
+    elif command -v pnpm >/dev/null 2>&1 && [ -f "pnpm-lock.yaml" ]; then
+        echo "📦 Using pnpm (lockfile detected)"
+        pnpm run dev
+    elif command -v yarn >/dev/null 2>&1 && [ -f "yarn.lock" ]; then
+        echo "🧶 Using yarn (lockfile detected)"
+        yarn run dev
+    else
+        echo "📦 Using npm (fallback)"
+        npm run dev
+    fi
 }
 
 # Function to start only Qdrant vector store
@@ -204,7 +241,7 @@ gesahni-budget() {
     echo "=================================="
 
     if command -v python3 >/dev/null 2>&1; then
-        PYTHONPROFILEIMPORTTIME=1 python -c "import app.main" 2>&1 | python scripts/check_startup_budget.py
+        PYTHONPROFILEIMPORTTIME=1 python3 -c "import app.main" 2>&1 | python3 scripts/check_startup_budget.py
     else
         echo "❌ Python3 not found - cannot run startup budget check"
     fi

@@ -151,6 +151,17 @@ npm install
 npm run dev  # http://localhost:3000
 ```
 
+### Networking Quickstart
+
+- Dev (default): same-origin via Next rewrites.
+  - Set `NEXT_PUBLIC_USE_DEV_PROXY=true` and run frontend + backend.
+  - Visit `/debug/env-canary` to confirm.
+
+- Prod: prefer reverse-proxy under the same origin.
+  - If cross-origin is unavoidable, set `CORS_ALLOW_ORIGINS`, and cookies `SameSite=None; Secure`.
+
+- Never hardcode `http://localhost:8000` in client code. ESLint will block it.
+
 ### ⚙️ Startup & Initialization (developer reference)
 
 This project centralizes application boot-time logic in `app/startup/` so the

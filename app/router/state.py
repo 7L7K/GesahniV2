@@ -21,7 +21,11 @@ class AsyncCachedHealth:
 
     def __init__(self, *, ttl_seconds: float = 3.0) -> None:
         self._ttl = float(ttl_seconds)
-        self._snapshot: dict[str, Any] = {"openai": {"ok": False, "latency_ms": 0}, "llama": {"ok": False, "latency_ms": 0}, "ts": 0.0}
+        self._snapshot: dict[str, Any] = {
+            "openai": {"ok": False, "latency_ms": 0},
+            "llama": {"ok": False, "latency_ms": 0},
+            "ts": 0.0,
+        }
         self._ts: float = 0.0
         self._task: asyncio.Task | None = None
 

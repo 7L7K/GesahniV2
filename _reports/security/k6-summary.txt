@@ -1,6 +1,6 @@
 
 
-  █ THRESHOLDS 
+  █ THRESHOLDS
 
     http_req_duration
     ✓ 'p(95)<500' p(95)=130.1ms
@@ -9,7 +9,7 @@
     ✓ 'rate<0.01' rate=0.00%
 
 
-  █ TOTAL RESULTS 
+  █ TOTAL RESULTS
 
     checks_total.......: 258     11.773004/s
     checks_succeeded...: 100.00% 258 out of 258
@@ -26,7 +26,7 @@
     http_reqs......................: 258    11.773004/s
 
     EXECUTION
-    iteration_duration.............: avg=1.15s   min=1.04s  med=1.11s   max=1.41s p(90)=1.27s   p(95)=1.39s  
+    iteration_duration.............: avg=1.15s   min=1.04s  med=1.11s   max=1.41s p(90)=1.27s   p(95)=1.39s
     iterations.....................: 81     3.696176/s
     vus............................: 5      min=5        max=5
     vus_max........................: 5      min=5        max=5

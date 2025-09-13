@@ -33,8 +33,7 @@ from app.middleware import (
     add_mw,
 )
 from app.middleware.audit_mw import AuditMiddleware
-from app.middleware.cors import CorsPreflightMiddleware
-from app.middleware.cors_cache_fix import SafariCORSCacheFixMiddleware
+# Deprecated custom CORS layers removed; use a single Starlette CORSMiddleware only when needed
 from app.middleware.custom import EnhancedErrorHandlingMiddleware
 from app.middleware.deprecation_mw import DeprecationHeaderMiddleware
 from app.middleware.error_handler import ErrorHandlerMiddleware
@@ -62,10 +61,14 @@ log = logging.getLogger(__name__)
 # To verify: Run `python scripts/print_middleware.py`
 # =============================================================================
 
+
 def _is_truthy(v: str | None) -> bool:
     return (v or "").strip().lower() in {"1", "true", "yes", "on"}
 
-def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_origins: list[str] | None = None) -> None:
+
+def setup_middleware_stack(
+    app: FastAPI, *, csrf_enabled: bool = True, cors_origins: list[str] | None = None
+) -> None:
     """
     SINGLE SOURCE OF TRUTH for FastAPI middleware stack configuration.
 
@@ -86,24 +89,22 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
     # NOTE: FastAPI stores app.user_middleware in reverse order (inner→outer)
     # So EXPECTED must match the actual storage order, not the addition order
     EXPECTED = [
-        "ReloadEnvMiddleware",            # innermost (added last)
-        "ErrorHandlerMiddleware",         # conditional
-        "EnhancedErrorHandlingMiddleware", # conditional
-        "CSRFMiddleware",                 # conditional
-        "DeprecationHeaderMiddleware",   # runs before MetricsMiddleware in execution
-        "MetricsMiddleware",              # runs after DeprecationHeaderMiddleware in execution
+        "ReloadEnvMiddleware",  # innermost (added last)
+        "ErrorHandlerMiddleware",  # conditional
+        "EnhancedErrorHandlingMiddleware",  # conditional
+        "CSRFMiddleware",  # conditional
+        "DeprecationHeaderMiddleware",  # runs before MetricsMiddleware in execution
+        "MetricsMiddleware",  # runs after DeprecationHeaderMiddleware in execution
         "AuditMiddleware",
         "DedupMiddleware",
         "SilentRefreshMiddleware",
-        "SessionAttachMiddleware",        # conditional
-        "RateLimitMiddleware",            # conditional
+        "SessionAttachMiddleware",  # conditional
+        "RateLimitMiddleware",  # conditional
         "HealthCheckFilterMiddleware",
         "RedactHashMiddleware",
         "TraceRequestMiddleware",
         "RequestIDMiddleware",
-        "CORSMiddleware",                 # added third
-        "SafariCORSCacheFixMiddleware",   # added second
-        "CorsPreflightMiddleware",        # outermost (added first)
+        "CORSMiddleware",  # if enabled
     ]
 
     # Environment checks for conditionals
@@ -114,24 +115,26 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
     rate_limit_enabled = _is_truthy(rate_limit_enabled_env) and not in_ci
     legacy_error_mw = _is_truthy(os.getenv("LEGACY_ERROR_MW"))
 
-    log.info("Setting up middleware stack with csrf_enabled=%s, cors_origins=%s", csrf_enabled, cors_origins)
+    log.info(
+        "Setting up middleware stack with csrf_enabled=%s, cors_origins=%s",
+        csrf_enabled,
+        cors_origins,
+    )
 
     # Add middleware in exact order (outer → inner)
 
-    # CORS layers - CorsPreflightMiddleware runs before CORSMiddleware
-    cors_origins_list = cors_origins or ["http://localhost:3000", "http://127.0.0.1:3000"]
-    app.add_middleware(CorsPreflightMiddleware, allow_origins=cors_origins_list)
-    add_mw(app, SafariCORSCacheFixMiddleware, name="SafariCORSCacheFixMiddleware")
-
-    # CORSMiddleware from Starlette (kept for backward compatibility)
-    # Add this after CorsPreflightMiddleware so CorsPreflightMiddleware runs first
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=cors_origins_list,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"]
-    )
+    # CORS: only mount when explicit origins provided (cross-origin prod).
+    cors_enabled = bool(cors_origins and [o for o in cors_origins if o])
+    if cors_enabled:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=list({o.strip().rstrip('/') for o in cors_origins or [] if o and o.strip()}),
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+            allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
+            expose_headers=["X-Request-ID", "X-Error-Code", "X-Error-ID", "X-Trace-ID"],
+            max_age=3600,
+        )
 
     # Request ID and tracing
     add_mw(app, RequestIDMiddleware, name="RequestIDMiddleware")
@@ -166,9 +169,13 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
 
     # Legacy error middlewares (conditional)
     if legacy_error_mw:
-        add_mw(app, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware")
+        add_mw(
+            app, EnhancedErrorHandlingMiddleware, name="EnhancedErrorHandlingMiddleware"
+        )
         add_mw(app, ErrorHandlerMiddleware, name="ErrorHandlerMiddleware")
-        log.warning("Legacy error middlewares enabled (LEGACY_ERROR_MW=1) — not recommended.")
+        log.warning(
+            "Legacy error middlewares enabled (LEGACY_ERROR_MW=1) — not recommended."
+        )
 
     # ReloadEnvMiddleware (dev/CI only, innermost)
     if dev_mode and not in_ci:
@@ -182,18 +189,28 @@ def setup_middleware_stack(app: FastAPI, *, csrf_enabled: bool = True, cors_orig
             continue
         elif name == "RateLimitMiddleware" and not rate_limit_enabled:
             continue
-        elif name in ["EnhancedErrorHandlingMiddleware", "ErrorHandlerMiddleware"] and not legacy_error_mw:
+        elif (
+            name in ["EnhancedErrorHandlingMiddleware", "ErrorHandlerMiddleware"]
+            and not legacy_error_mw
+        ):
             continue
         elif name == "ReloadEnvMiddleware" and not (dev_mode and not in_ci):
             continue
-        elif name == "SessionAttachMiddleware" and not _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "0")):
+        elif name == "SessionAttachMiddleware" and not _is_truthy(
+            os.getenv("SESSION_ATTACH_ENABLED", "0")
+        ):
+            continue
+        if name == "CORSMiddleware" and not cors_enabled:
             continue
         expected.append(name)
 
     if names != expected:
-        raise RuntimeError(f"Middleware order mismatch.\nExpected (outer→inner): {expected}\nActual   (outer→inner): {names}")
+        raise RuntimeError(
+            f"Middleware order mismatch.\nExpected (outer→inner): {expected}\nActual   (outer→inner): {names}"
+        )
 
     log.info("Middleware stack setup complete with %d middlewares", len(names))
+
 
 # =============================================================================
 # END OF SINGLE SOURCE OF TRUTH - DO NOT MODIFY MIDDLEWARE ORDER ELSEWHERE

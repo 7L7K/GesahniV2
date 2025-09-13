@@ -1,5 +1,8 @@
 from prometheus_client import Counter, Histogram
 
+# Legacy endpoint usage metrics
+LEGACY_HITS = Counter("legacy_hits_total", "Legacy endpoint hits", ["endpoint"])
+
 try:
     from prometheus_client import Gauge
 except Exception:  # pragma: no cover - optional dependency

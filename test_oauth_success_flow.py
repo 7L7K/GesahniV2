@@ -22,7 +22,7 @@ import jwt
 import requests
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 
 class OAuthSuccessFlowTest:
@@ -48,7 +48,7 @@ class OAuthSuccessFlowTest:
             "name": self.test_user_name,
             "given_name": "Test",
             "family_name": "User",
-            "picture": "https://lh3.googleusercontent.com/a/testphoto"
+            "picture": "https://lh3.googleusercontent.com/a/testphoto",
         }
 
         id_token = jwt.encode(id_token_payload, "test_secret", algorithm="HS256")
@@ -60,7 +60,7 @@ class OAuthSuccessFlowTest:
             "scope": "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly",
             "token_type": "Bearer",
             "expires_in": 3600,
-            "id_token": id_token
+            "id_token": id_token,
         }
 
     def test_1_oauth_initiation(self):
@@ -68,16 +68,27 @@ class OAuthSuccessFlowTest:
         print("1️⃣ Testing OAuth Flow Initiation...")
 
         try:
-            response = requests.get(f"{self.base_url}/v1/auth/google/login_url", timeout=10)
+            response = requests.get(
+                f"{self.base_url}/v1/auth/google/login_url", timeout=10
+            )
             if response.status_code != 200:
                 print(f"❌ Failed to get OAuth URL: {response.status_code}")
                 return False
 
             data = response.json()
-            auth_url = data.get('auth_url', '')
+            auth_url = data.get("auth_url", "")
 
             # Verify the URL contains required parameters
-            if not all(param in auth_url for param in ['client_id=', 'redirect_uri=', 'scope=', 'state=', 'openid']):
+            if not all(
+                param in auth_url
+                for param in [
+                    "client_id=",
+                    "redirect_uri=",
+                    "scope=",
+                    "state=",
+                    "openid",
+                ]
+            ):
                 print("❌ OAuth URL missing required parameters")
                 return False
 
@@ -95,26 +106,28 @@ class OAuthSuccessFlowTest:
 
         try:
             # First, get a fresh OAuth URL to get state
-            response = requests.get(f"{self.base_url}/v1/auth/google/login_url", timeout=10)
+            response = requests.get(
+                f"{self.base_url}/v1/auth/google/login_url", timeout=10
+            )
             if response.status_code != 200:
                 print("❌ Failed to get OAuth URL for callback test")
                 return False
 
             data = response.json()
-            auth_url = data.get('auth_url', '')
+            auth_url = data.get("auth_url", "")
 
             # Extract state from URL
-            if 'state=' not in auth_url:
+            if "state=" not in auth_url:
                 print("❌ No state parameter in OAuth URL")
                 return False
 
-            state = auth_url.split('state=')[1].split('&')[0]
+            state = auth_url.split("state=")[1].split("&")[0]
 
             # Create mock Google tokens
             mock_tokens = self.create_mock_google_tokens()
 
             # Mock the Google token exchange
-            with patch('httpx.AsyncClient') as mock_client:
+            with patch("httpx.AsyncClient") as mock_client:
                 mock_instance = Mock()
                 mock_client.return_value.__aenter__.return_value = mock_instance
 
@@ -127,19 +140,21 @@ class OAuthSuccessFlowTest:
                 from app.integrations.google.oauth import exchange_code
 
                 # Test the exchange_code function
-                result = asyncio.run(exchange_code(
-                    "mock_authorization_code_123",
-                    state,
-                    verify_state=False,  # Skip state verification for test
-                    code_verifier="test_code_verifier"
-                ))
+                result = asyncio.run(
+                    exchange_code(
+                        "mock_authorization_code_123",
+                        state,
+                        verify_state=False,  # Skip state verification for test
+                        code_verifier="test_code_verifier",
+                    )
+                )
 
                 # Verify the result
-                if not hasattr(result, 'id_token'):
+                if not hasattr(result, "id_token"):
                     print("❌ Token exchange didn't preserve id_token")
                     return False
 
-                if result.id_token != mock_tokens['id_token']:
+                if result.id_token != mock_tokens["id_token"]:
                     print("❌ id_token not preserved correctly")
                     return False
 
@@ -165,10 +180,13 @@ class OAuthSuccessFlowTest:
 
             # Decode and verify the ID token
             from app.security import jwt_decode
-            claims = jwt_decode(mock_tokens['id_token'], options={"verify_signature": False})
+
+            claims = jwt_decode(
+                mock_tokens["id_token"], options={"verify_signature": False}
+            )
 
             # Verify required claims
-            required_claims = ['iss', 'sub', 'aud', 'exp', 'iat', 'email']
+            required_claims = ["iss", "sub", "aud", "exp", "iat", "email"]
             missing_claims = [claim for claim in required_claims if claim not in claims]
 
             if missing_claims:
@@ -176,16 +194,16 @@ class OAuthSuccessFlowTest:
                 return False
 
             # Verify issuer
-            if claims['iss'] != 'https://accounts.google.com':
+            if claims["iss"] != "https://accounts.google.com":
                 print(f"❌ Wrong issuer: {claims['iss']}")
                 return False
 
             # Verify user data
-            if claims['email'] != self.test_user_email:
+            if claims["email"] != self.test_user_email:
                 print(f"❌ Wrong email: {claims['email']}")
                 return False
 
-            if claims['sub'] != self.test_user_sub:
+            if claims["sub"] != self.test_user_sub:
                 print(f"❌ Wrong subject: {claims['sub']}")
                 return False
 
@@ -215,16 +233,16 @@ class OAuthSuccessFlowTest:
             token = ThirdPartyToken(
                 user_id=self.test_user_email,
                 provider="google",
-                access_token=mock_tokens['access_token'],
-                refresh_token=mock_tokens['refresh_token'],
-                scope=mock_tokens['scope'],
+                access_token=mock_tokens["access_token"],
+                refresh_token=mock_tokens["refresh_token"],
+                scope=mock_tokens["scope"],
                 provider_sub=self.test_user_sub,
                 provider_iss="https://accounts.google.com",
-                expires_at=int((datetime.now() + timedelta(hours=1)).timestamp())
+                expires_at=int((datetime.now() + timedelta(hours=1)).timestamp()),
             )
 
             # Add id_token for processing
-            token.id_token = mock_tokens['id_token']
+            token.id_token = mock_tokens["id_token"]
 
             # Test database serialization
             db_tuple = token.to_db_tuple()
@@ -260,7 +278,7 @@ class OAuthSuccessFlowTest:
             print("   Step 2: Google redirects with authorization code ✅")
 
             # 3. Backend exchanges code for tokens
-            with patch('httpx.AsyncClient') as mock_client:
+            with patch("httpx.AsyncClient") as mock_client:
                 mock_instance = Mock()
                 mock_client.return_value.__aenter__.return_value = mock_instance
 
@@ -271,17 +289,20 @@ class OAuthSuccessFlowTest:
 
                 from app.integrations.google.oauth import exchange_code
 
-                result = asyncio.run(exchange_code(
-                    "mock_code",
-                    "mock_state",
-                    verify_state=False,
-                    code_verifier="mock_verifier"
-                ))
+                result = asyncio.run(
+                    exchange_code(
+                        "mock_code",
+                        "mock_state",
+                        verify_state=False,
+                        code_verifier="mock_verifier",
+                    )
+                )
 
                 print("   Step 3: Token exchange successful ✅")
 
             # 4. Process ID token
             from app.security import jwt_decode
+
             claims = jwt_decode(result.id_token, options={"verify_signature": False})
 
             print("   Step 4: ID token processed ✅")
@@ -311,7 +332,7 @@ class OAuthSuccessFlowTest:
             self.test_2_simulate_successful_oauth_callback,
             self.test_3_id_token_processing,
             self.test_4_user_data_persistence,
-            self.test_5_complete_flow_simulation
+            self.test_5_complete_flow_simulation,
         ]
 
         results = []
@@ -356,8 +377,12 @@ def main():
     if success:
         print("\n" + "=" * 60)
         print("🎯 VERDICT: Google OAuth is READY FOR PRODUCTION")
-        print("Users can successfully log in with Google and all data will be saved correctly!")
-        print("\n🚀 Next: Test with real Google OAuth flow in your frontend application")
+        print(
+            "Users can successfully log in with Google and all data will be saved correctly!"
+        )
+        print(
+            "\n🚀 Next: Test with real Google OAuth flow in your frontend application"
+        )
 
 
 if __name__ == "__main__":
