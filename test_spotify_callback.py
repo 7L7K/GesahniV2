@@ -13,7 +13,7 @@ import jwt
 import requests
 
 # Add the app directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "."))
 
 from app.api.oauth_store import put_tx
 
@@ -23,10 +23,10 @@ def test_spotify_callback():
 
     # Generate transaction data
     tx_id = uuid.uuid4().hex
-    user_id = 'testuser'
+    user_id = "testuser"
 
     # Create JWT state
-    secret = os.getenv('JWT_SECRET', 'dev_jwt_secret_key_for_testing_only')
+    secret = os.getenv("JWT_SECRET", "dev_jwt_secret_key_for_testing_only")
     state_payload = {
         "tx": tx_id,
         "uid": user_id,
@@ -40,7 +40,7 @@ def test_spotify_callback():
     tx_data = {
         "user_id": user_id,
         "code_verifier": f"test_verifier_{secrets.token_hex(16)}",
-        "ts": int(time.time())
+        "ts": int(time.time()),
     }
 
     print(f"Storing transaction data for tx_id: {tx_id}")
@@ -48,10 +48,7 @@ def test_spotify_callback():
 
     # Now make the callback request
     callback_url = "http://127.0.0.1:8000/v1/spotify/callback"
-    params = {
-        "code": "fake",
-        "state": state
-    }
+    params = {"code": "fake", "state": state}
 
     print(f"Making callback request with state: {state[:50]}...")
     try:
@@ -60,6 +57,7 @@ def test_spotify_callback():
         print(f"Response content: {response.text[:200]}...")
     except Exception as e:
         print(f"Request failed: {e}")
+
 
 if __name__ == "__main__":
     test_spotify_callback()

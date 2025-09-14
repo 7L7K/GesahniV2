@@ -28,15 +28,14 @@ from pathlib import Path
 from typing import Any, Optional
 
 # Add the app directory to the Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.auth_store_tokens import TokenDAO, upsert_token
 from app.models.third_party_tokens import ThirdPartyToken
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -57,15 +56,15 @@ class SpotifyTokenMigrator:
             "tokens_migrated": 0,
             "tokens_skipped": 0,
             "errors": 0,
-            "backups_created": 0
+            "backups_created": 0,
         }
 
     def setup_logging_to_file(self) -> None:
         """Set up logging to both console and file."""
         file_handler = logging.FileHandler(MIGRATION_LOG_FILE)
-        file_handler.setFormatter(logging.Formatter(
-            '%(asctime)s - %(levelname)s - %(message)s'
-        ))
+        file_handler.setFormatter(
+            logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
+        )
         logger.addHandler(file_handler)
 
     def find_spotify_token_files(self) -> list[Path]:
@@ -81,8 +80,8 @@ class SpotifyTokenMigrator:
     def parse_token_file(self, file_path: Path) -> Optional[dict[str, Any]]:
         """Parse a single token JSON file."""
         try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
 
             # Validate required fields
             if not isinstance(data, dict):
@@ -91,7 +90,9 @@ class SpotifyTokenMigrator:
 
             required_fields = ["access_token", "refresh_token", "expires_at"]
             if not all(field in data for field in required_fields):
-                logger.error(f"Missing required fields in {file_path}: {required_fields}")
+                logger.error(
+                    f"Missing required fields in {file_path}: {required_fields}"
+                )
                 return None
 
             return data
@@ -103,7 +104,9 @@ class SpotifyTokenMigrator:
             logger.error(f"Unexpected error reading {file_path}: {e}")
             return None
 
-    def create_token_from_json(self, user_id: str, json_data: dict[str, Any]) -> Optional[ThirdPartyToken]:
+    def create_token_from_json(
+        self, user_id: str, json_data: dict[str, Any]
+    ) -> Optional[ThirdPartyToken]:
         """Create a ThirdPartyToken from JSON data."""
         try:
             # Extract user_id from filename (remove .json extension)
@@ -138,7 +141,7 @@ class SpotifyTokenMigrator:
                 scope=scope,
                 expires_at=int(expires_at),
                 created_at=int(time.time()),  # Use current time as creation time
-                updated_at=int(time.time())
+                updated_at=int(time.time()),
             )
 
             return token
@@ -154,7 +157,7 @@ class SpotifyTokenMigrator:
 
         backup_path = file_path.with_suffix(file_path.suffix + BACKUP_SUFFIX)
         try:
-            with open(file_path, 'rb') as src, open(backup_path, 'wb') as dst:
+            with open(file_path, "rb") as src, open(backup_path, "wb") as dst:
                 dst.write(src.read())
             self.migration_stats["backups_created"] += 1
             logger.info(f"Created backup: {backup_path}")
@@ -260,17 +263,21 @@ class SpotifyTokenMigrator:
             # Remove all Spotify tokens from database
             with sqlite3.connect(self.token_dao.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute("""
+                cursor.execute(
+                    """
                     DELETE FROM third_party_tokens
                     WHERE provider = 'spotify'
-                """)
+                """
+                )
                 deleted_count = cursor.rowcount
                 conn.commit()
 
             logger.info(f"Removed {deleted_count} Spotify tokens from database")
 
             # Restore backup files (optional - user can do this manually)
-            logger.info("Note: Original JSON files are backed up with suffix '{BACKUP_SUFFIX}'")
+            logger.info(
+                "Note: Original JSON files are backed up with suffix '{BACKUP_SUFFIX}'"
+            )
             logger.info("You can manually restore them if needed")
 
             return True
@@ -282,26 +289,22 @@ class SpotifyTokenMigrator:
 
 async def main():
     """Main entry point."""
-    parser = argparse.ArgumentParser(description="Migrate Spotify tokens from JSON to database")
+    parser = argparse.ArgumentParser(
+        description="Migrate Spotify tokens from JSON to database"
+    )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Preview migration without making changes"
+        help="Preview migration without making changes",
     )
     parser.add_argument(
-        "--migrate",
-        action="store_true",
-        help="Perform the actual migration"
+        "--migrate", action="store_true", help="Perform the actual migration"
     )
     parser.add_argument(
-        "--rollback",
-        action="store_true",
-        help="Rollback the migration"
+        "--rollback", action="store_true", help="Rollback the migration"
     )
     parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Enable verbose logging"
+        "--verbose", "-v", action="store_true", help="Enable verbose logging"
     )
 
     args = parser.parse_args()
@@ -312,7 +315,9 @@ async def main():
     # Validate arguments
     actions = [args.dry_run, args.migrate, args.rollback]
     if sum(actions) != 1:
-        parser.error("Exactly one of --dry-run, --migrate, or --rollback must be specified")
+        parser.error(
+            "Exactly one of --dry-run, --migrate, or --rollback must be specified"
+        )
 
     # Create migrator
     dry_run = args.dry_run

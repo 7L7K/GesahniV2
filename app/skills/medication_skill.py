@@ -73,14 +73,24 @@ class MedicationSkill(Skill):
                 run_at = datetime.now() + timedelta(hours=1)
 
             idemp = f"med:{drug}:{int(run_at.timestamp())}"
-            await record_action("med.reminder", idempotency_key=idemp, metadata={"drug": drug, "when": run_at.isoformat()})
-            return f"Reminder set to take {drug} at {run_at.strftime('%Y-%m-%d %I:%M %p')}"
+            await record_action(
+                "med.reminder",
+                idempotency_key=idemp,
+                metadata={"drug": drug, "when": run_at.isoformat()},
+            )
+            return (
+                f"Reminder set to take {drug} at {run_at.strftime('%Y-%m-%d %I:%M %p')}"
+            )
 
         # logging taken/skipped/check
         drug = gd.get("drug2") or gd.get("drug3") or gd.get("drug4")
         if drug:
             drug = drug.strip()
-            verb = "took" if gd.get("drug2") else ("skipped" if gd.get("drug3") else "checked")
+            verb = (
+                "took"
+                if gd.get("drug2")
+                else ("skipped" if gd.get("drug3") else "checked")
+            )
             txt = f"Medication {verb}: {drug} @ {datetime.now().isoformat()}"
             try:
                 await notes_dao.add(txt)
@@ -97,5 +107,3 @@ class MedicationSkill(Skill):
 
 
 __all__ = ["MedicationSkill"]
-
-

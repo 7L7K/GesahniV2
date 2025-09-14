@@ -5,6 +5,7 @@ It can be imported in isolation without pulling in heavy dependencies.
 
 Only used by create_app() - no other modules should import this.
 """
+
 from __future__ import annotations
 
 # Import Router protocol from bootstrap location
@@ -37,6 +38,7 @@ def create_model_router_adapter() -> Router:
     """
     # Import inside function to avoid circular imports
     from app.infra.model_router import get_model_router
+
     model_router_instance = get_model_router()
 
     class ModelRouterAdapter:

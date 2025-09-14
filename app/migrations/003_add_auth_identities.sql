@@ -56,4 +56,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_tokens_identity_provider_valid ON third_par
 
 COMMIT;
 PRAGMA foreign_keys=on;
-

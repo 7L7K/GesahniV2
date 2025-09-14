@@ -25,16 +25,18 @@ def get_expected_endpoints():
 
     return expected
 
+
 def get_actual_routes():
     """Get actual routes from FastAPI app."""
     app = create_app()
     routes = set()
 
     for r in app.routes:
-        if hasattr(r, 'path'):
+        if hasattr(r, "path"):
             routes.add(r.path)
 
     return routes
+
 
 def main():
     print("🔍 Comparing expected vs actual routes...")
@@ -60,6 +62,7 @@ def main():
         print(f"\n✅ EXTRA ROUTES ({len(extra)}):")
         for e in extra:
             print(f"  {e}")
+
 
 if __name__ == "__main__":
     main()

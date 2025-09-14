@@ -42,6 +42,7 @@ async def get_settings(request: Request) -> JSONResponse:
     except Exception as e:
         # Log the error but return a basic response
         import logging
+
         logger = logging.getLogger(__name__)
         logger.exception("Error fetching settings: %s", e)
 
@@ -61,5 +62,5 @@ async def get_settings(request: Request) -> JSONResponse:
                 },
                 "version": "unknown",
             },
-            status_code=200
+            status_code=200,
         )

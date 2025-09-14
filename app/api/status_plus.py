@@ -16,21 +16,29 @@ router = APIRouter(tags=["Admin"])
 @router.get("/status/features")
 async def features(user_id: str = Depends(get_current_user_id)):
     from app.feature_flags import HA_ON, OLLAMA_ON, QDRANT_ON
-    
+
     # Feature flags (environment-based configuration)
     flag_states = {
         "ollama": bool(OLLAMA_ON),
         "home_assistant": bool(HA_ON),
         "qdrant": bool(QDRANT_ON),
     }
-    
+
     # Runtime states (what actually mounted/configured)
     # Default heuristics based on environment
-    devices_enabled = (os.getenv("DEVICE_AUTH_ENABLED") or "").lower() in {"1", "true", "yes"}
+    devices_enabled = (os.getenv("DEVICE_AUTH_ENABLED") or "").lower() in {
+        "1",
+        "true",
+        "yes",
+    }
     transcribe_enabled = True
     ollama_enabled = bool(os.getenv("OLLAMA_URL")) and flag_states["ollama"]
-    home_assistant_enabled = bool(os.getenv("HOME_ASSISTANT_TOKEN")) and flag_states["home_assistant"]
-    qdrant_enabled = (os.getenv("VECTOR_STORE") or "").lower().startswith("qdrant") and flag_states["qdrant"]
+    home_assistant_enabled = (
+        bool(os.getenv("HOME_ASSISTANT_TOKEN")) and flag_states["home_assistant"]
+    )
+    qdrant_enabled = (os.getenv("VECTOR_STORE") or "").lower().startswith(
+        "qdrant"
+    ) and flag_states["qdrant"]
 
     # Prefer authoritative app.state if populated during router registration
     try:
@@ -42,7 +50,9 @@ async def features(user_id: str = Depends(get_current_user_id)):
             transcribe_enabled = bool(mounted.get("transcribe"))
             # For flag-controlled features, require both flag AND mount success
             ollama_enabled = bool(mounted.get("ollama")) and flag_states["ollama"]
-            home_assistant_enabled = bool(mounted.get("home_assistant")) and flag_states["home_assistant"]
+            home_assistant_enabled = (
+                bool(mounted.get("home_assistant")) and flag_states["home_assistant"]
+            )
             qdrant_enabled = bool(mounted.get("qdrant")) and flag_states["qdrant"]
     except Exception:
         pass
@@ -61,7 +71,7 @@ async def features(user_id: str = Depends(get_current_user_id)):
             "ollama": bool(ollama_enabled),
             "home_assistant": bool(home_assistant_enabled),
             "qdrant": bool(qdrant_enabled),
-        }
+        },
     }
 
 

@@ -200,7 +200,11 @@ class SmalltalkSkill(Skill):
                 # best-effort ledger record
                 import asyncio
 
-                asyncio.create_task(record_action("smalltalk.respond", idempotency_key=idemp, reversible=False))
+                asyncio.create_task(
+                    record_action(
+                        "smalltalk.respond", idempotency_key=idemp, reversible=False
+                    )
+                )
             except Exception:
                 pass
             log.debug("Recorded smalltalk response", extra={"resp": resp})

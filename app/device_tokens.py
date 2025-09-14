@@ -80,7 +80,11 @@ async def upsert_device_token(
             },
         )
         await r.expire(_key_device_token(token_id), max(1, int(ttl_seconds)))  # type: ignore[attr-defined]
-        await r.set(_key_device_for_owner(owner_id, device_id), token_id, ex=max(1, int(ttl_seconds)))  # type: ignore[attr-defined]
+        await r.set(
+            _key_device_for_owner(owner_id, device_id),
+            token_id,
+            ex=max(1, int(ttl_seconds)),
+        )  # type: ignore[attr-defined]
     except Exception:
         pass
 

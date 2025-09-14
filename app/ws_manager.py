@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class WSConnectionState:
     """Tracks the state of a WebSocket connection."""
+
     websocket: WebSocket
     user_id: str
     connected_at: float
@@ -74,7 +75,9 @@ class WSConnectionState:
             logger.debug("ws.ping.failed: user_id=%s error=%s", self.user_id, str(e))
             self.is_alive = False
             record_ws_heartbeat_failed()
-            record_ws_error("heartbeat_failed", self.metadata.get("endpoint", "unknown"))
+            record_ws_error(
+                "heartbeat_failed", self.metadata.get("endpoint", "unknown")
+            )
             return False
 
     async def close(self, code: int = 1000, reason: str = "normal_closure"):
@@ -127,7 +130,9 @@ class WSConnectionManager:
 
             self._connections.clear()
 
-    async def add_connection(self, ws: WebSocket, user_id: str, **metadata) -> WSConnectionState:
+    async def add_connection(
+        self, ws: WebSocket, user_id: str, **metadata
+    ) -> WSConnectionState:
         """Add a new WebSocket connection."""
         async with self._lock:
             # Remove any existing connection for this user
@@ -140,7 +145,7 @@ class WSConnectionManager:
                 user_id=user_id,
                 connected_at=time.monotonic(),
                 last_activity=time.monotonic(),
-                metadata=metadata
+                metadata=metadata,
             )
 
             self._connections[user_id] = conn_state
@@ -149,7 +154,12 @@ class WSConnectionManager:
             endpoint = metadata.get("endpoint", "unknown")
             record_ws_connection(endpoint, user_id)
 
-            logger.info("ws.manager.add: user_id=%s endpoint=%s connections=%d", user_id, endpoint, len(self._connections))
+            logger.info(
+                "ws.manager.add: user_id=%s endpoint=%s connections=%d",
+                user_id,
+                endpoint,
+                len(self._connections),
+            )
             return conn_state
 
     async def remove_connection(self, user_id: str):
@@ -166,8 +176,13 @@ class WSConnectionManager:
                 # Record metrics
                 record_ws_disconnection(endpoint, user_id, duration)
 
-                logger.info("ws.manager.remove: user_id=%s endpoint=%s duration=%.2f connections=%d",
-                           user_id, endpoint, duration, len(self._connections))
+                logger.info(
+                    "ws.manager.remove: user_id=%s endpoint=%s duration=%.2f connections=%d",
+                    user_id,
+                    endpoint,
+                    duration,
+                    len(self._connections),
+                )
 
     def get_connection(self, user_id: str) -> WSConnectionState | None:
         """Get connection state for a user."""
@@ -177,14 +192,26 @@ class WSConnectionManager:
         """Get all active connections."""
         return list(self._connections.values())
 
-    def get_connections_by_metadata(self, key: str, value: Any) -> list[WSConnectionState]:
+    def get_connections_by_metadata(
+        self, key: str, value: Any
+    ) -> list[WSConnectionState]:
         """Get connections filtered by metadata."""
-        return [conn for conn in self._connections.values() if conn.metadata.get(key) == value]
+        return [
+            conn
+            for conn in self._connections.values()
+            if conn.metadata.get(key) == value
+        ]
 
-    async def broadcast_to_all(self, message: dict, exclude_user_ids: set[str] | None = None):
+    async def broadcast_to_all(
+        self, message: dict, exclude_user_ids: set[str] | None = None
+    ):
         """Broadcast message to all connections."""
         exclude = exclude_user_ids or set()
-        connections = [conn for uid, conn in self._connections.items() if uid not in exclude and conn.is_alive]
+        connections = [
+            conn
+            for uid, conn in self._connections.items()
+            if uid not in exclude and conn.is_alive
+        ]
 
         if not connections:
             return
@@ -201,13 +228,19 @@ class WSConnectionManager:
                 conn.update_activity()
                 record_ws_message_sent()
             except Exception as e:
-                logger.debug("ws.broadcast.failed: user_id=%s error=%s", conn.user_id, str(e))
+                logger.debug(
+                    "ws.broadcast.failed: user_id=%s error=%s", conn.user_id, str(e)
+                )
                 conn.is_alive = False
                 failed_count += 1
                 record_ws_message_failed()
-                record_ws_error("broadcast_send_failed", conn.metadata.get("endpoint", "unknown"))
+                record_ws_error(
+                    "broadcast_send_failed", conn.metadata.get("endpoint", "unknown")
+                )
 
-        await asyncio.gather(*[send_to_connection(conn) for conn in connections], return_exceptions=True)
+        await asyncio.gather(
+            *[send_to_connection(conn) for conn in connections], return_exceptions=True
+        )
 
         if failed_count > 0:
             record_ws_broadcast_failed()
@@ -228,7 +261,9 @@ class WSConnectionManager:
             logger.debug("ws.send.failed: user_id=%s error=%s", user_id, str(e))
             conn.is_alive = False
             record_ws_message_failed()
-            record_ws_error("send_to_user_failed", conn.metadata.get("endpoint", "unknown"))
+            record_ws_error(
+                "send_to_user_failed", conn.metadata.get("endpoint", "unknown")
+            )
             return False
 
     async def _cleanup_loop(self):
@@ -262,8 +297,11 @@ class WSConnectionManager:
                     idle_connections.append((user_id, conn))
 
             for user_id, conn in idle_connections:
-                logger.info("ws.cleanup.idle: user_id=%s idle_time=%.1fs",
-                           user_id, time.monotonic() - conn.last_activity)
+                logger.info(
+                    "ws.cleanup.idle: user_id=%s idle_time=%.1fs",
+                    user_id,
+                    time.monotonic() - conn.last_activity,
+                )
                 await conn.close(code=1000, reason="idle_timeout")
                 del self._connections[user_id]
 

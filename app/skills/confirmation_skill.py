@@ -26,14 +26,16 @@ class ConfirmationSkill(Skill):
             from .tools.catalog import validate_and_execute
 
             ok, msg, confirm = await validate_and_execute(tool, slots)
-            await record_action("confirmation.accepted", idempotency_key=key, metadata={"tool": tool, "ok": ok})
+            await record_action(
+                "confirmation.accepted",
+                idempotency_key=key,
+                metadata={"tool": tool, "ok": ok},
+            )
             return msg
         else:
             # decline
             dequeue(key)
-            await record_action("confirmation.declined", idempotency_key=key, metadata={})
+            await record_action(
+                "confirmation.declined", idempotency_key=key, metadata={}
+            )
             return "Okay, cancelled."
-
-
-
-

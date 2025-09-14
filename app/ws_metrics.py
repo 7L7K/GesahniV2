@@ -38,8 +38,12 @@ def record_ws_connection(endpoint: str, user_id: str):
         _ws_metrics["connections_by_endpoint"][endpoint] = 0
     _ws_metrics["connections_by_endpoint"][endpoint] += 1
 
-    logger.info("ws.metrics.connection: endpoint=%s user_id=%s active=%d",
-               endpoint, user_id, _ws_metrics["connections_active"])
+    logger.info(
+        "ws.metrics.connection: endpoint=%s user_id=%s active=%d",
+        endpoint,
+        user_id,
+        _ws_metrics["connections_active"],
+    )
 
 
 def record_ws_disconnection(endpoint: str, user_id: str, duration: float):
@@ -47,16 +51,25 @@ def record_ws_disconnection(endpoint: str, user_id: str, duration: float):
     _ws_metrics["connections_active"] = max(0, _ws_metrics["connections_active"] - 1)
 
     if endpoint in _ws_metrics["connections_by_endpoint"]:
-        _ws_metrics["connections_by_endpoint"][endpoint] = max(0, _ws_metrics["connections_by_endpoint"][endpoint] - 1)
+        _ws_metrics["connections_by_endpoint"][endpoint] = max(
+            0, _ws_metrics["connections_by_endpoint"][endpoint] - 1
+        )
 
     # Update average connection duration
     current_avg = _ws_metrics["connection_duration_avg"]
     total_connections = _ws_metrics["connections_total"]
     if total_connections > 0:
-        _ws_metrics["connection_duration_avg"] = (current_avg * (total_connections - 1) + duration) / total_connections
+        _ws_metrics["connection_duration_avg"] = (
+            current_avg * (total_connections - 1) + duration
+        ) / total_connections
 
-    logger.info("ws.metrics.disconnection: endpoint=%s user_id=%s duration=%.2f active=%d",
-               endpoint, user_id, duration, _ws_metrics["connections_active"])
+    logger.info(
+        "ws.metrics.disconnection: endpoint=%s user_id=%s duration=%.2f active=%d",
+        endpoint,
+        user_id,
+        duration,
+        _ws_metrics["connections_active"],
+    )
 
 
 def record_ws_message_sent():
@@ -102,7 +115,11 @@ def record_ws_auth_failure(reason: str):
         _ws_metrics["errors_by_type"][reason] = 0
     _ws_metrics["errors_by_type"][reason] += 1
 
-    logger.warning("ws.metrics.auth_failure: reason=%s total_failures=%d", reason, _ws_metrics["auth_fail_total"])
+    logger.warning(
+        "ws.metrics.auth_failure: reason=%s total_failures=%d",
+        reason,
+        _ws_metrics["auth_fail_total"],
+    )
 
 
 def record_ws_error(error_type: str, endpoint: str = "unknown"):
@@ -111,8 +128,12 @@ def record_ws_error(error_type: str, endpoint: str = "unknown"):
         _ws_metrics["errors_by_type"][error_type] = 0
     _ws_metrics["errors_by_type"][error_type] += 1
 
-    logger.error("ws.metrics.error: type=%s endpoint=%s total_errors=%d",
-                error_type, endpoint, _ws_metrics["errors_by_type"][error_type])
+    logger.error(
+        "ws.metrics.error: type=%s endpoint=%s total_errors=%d",
+        error_type,
+        endpoint,
+        _ws_metrics["errors_by_type"][error_type],
+    )
 
 
 def record_ws_heartbeat_sent():
@@ -139,19 +160,27 @@ def get_ws_metrics() -> dict[str, Any]:
 
     total_messages = metrics["messages_sent_total"] + metrics["messages_failed_total"]
     if total_messages > 0:
-        metrics["message_success_rate"] = metrics["messages_sent_total"] / total_messages
+        metrics["message_success_rate"] = (
+            metrics["messages_sent_total"] / total_messages
+        )
     else:
         metrics["message_success_rate"] = 0.0
 
     total_broadcasts = metrics["broadcasts_total"] + metrics["broadcasts_failed_total"]
     if total_broadcasts > 0:
-        metrics["broadcast_success_rate"] = metrics["broadcasts_total"] / total_broadcasts
+        metrics["broadcast_success_rate"] = (
+            metrics["broadcasts_total"] / total_broadcasts
+        )
     else:
         metrics["broadcast_success_rate"] = 0.0
 
-    total_heartbeats = metrics["heartbeat_sent_total"] + metrics["heartbeat_failed_total"]
+    total_heartbeats = (
+        metrics["heartbeat_sent_total"] + metrics["heartbeat_failed_total"]
+    )
     if total_heartbeats > 0:
-        metrics["heartbeat_success_rate"] = metrics["heartbeat_sent_total"] / total_heartbeats
+        metrics["heartbeat_success_rate"] = (
+            metrics["heartbeat_sent_total"] / total_heartbeats
+        )
     else:
         metrics["heartbeat_success_rate"] = 0.0
 
@@ -186,7 +215,9 @@ def format_prometheus_metrics() -> str:
     metrics = get_ws_metrics()
     lines = []
 
-    lines.append("# HELP ws_connections_active Current number of active WebSocket connections")
+    lines.append(
+        "# HELP ws_connections_active Current number of active WebSocket connections"
+    )
     lines.append("# TYPE ws_connections_active gauge")
     lines.append(f"ws_connections_active {metrics['connections_active']}")
 

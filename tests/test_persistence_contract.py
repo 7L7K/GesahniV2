@@ -28,10 +28,12 @@ class TestPersistenceContract:
 
         # Test ensure_schema_migrated
         import asyncio
+
         asyncio.run(dao.ensure_schema_migrated())
 
         # Test persist (via upsert_token) - mock the validation for this test
         import time
+
         token = ThirdPartyToken(
             user_id="test_user",
             provider="spotify",
@@ -40,14 +42,18 @@ class TestPersistenceContract:
             provider_iss="https://accounts.spotify.com",
             identity_id="test_identity_123",
             scopes="playlist-read-private",
-            expires_at=int(time.time()) + 3600,  # Valid future timestamp (1 hour from now)
-            is_valid=True
+            expires_at=int(time.time())
+            + 3600,  # Valid future timestamp (1 hour from now)
+            is_valid=True,
         )
 
         # Mock the validation methods to return True for this test
         from unittest.mock import patch
-        with patch.object(dao, '_validate_spotify_token_contract', return_value=True), \
-             patch.object(dao, '_validate_token_for_storage', return_value=True):
+
+        with (
+            patch.object(dao, "_validate_spotify_token_contract", return_value=True),
+            patch.object(dao, "_validate_token_for_storage", return_value=True),
+        ):
             result = asyncio.run(dao.persist(token))
             assert result is True
 
@@ -59,7 +65,9 @@ class TestPersistenceContract:
             assert retrieved.provider == token.provider
 
             # Test revoke_family
-            revoke_result = asyncio.run(dao.revoke_family(token.user_id, token.provider))
+            revoke_result = asyncio.run(
+                dao.revoke_family(token.user_id, token.provider)
+            )
             assert revoke_result is True
 
     def test_user_dao_interface_contract(self, temp_db_dir):
@@ -69,14 +77,11 @@ class TestPersistenceContract:
 
         # Test ensure_schema_migrated
         import asyncio
+
         asyncio.run(dao.ensure_schema_migrated())
 
         # Test persist
-        stats = UserStats(
-            user_id="test_user",
-            login_count=5,
-            request_count=10
-        )
+        stats = UserStats(user_id="test_user", login_count=5, request_count=10)
 
         result = asyncio.run(dao.persist(stats))
         assert result is True
@@ -96,6 +101,7 @@ class TestPersistenceContract:
         """Test that the migration system can run on a fresh database directory."""
         # This should work without any manual DB setup
         import asyncio
+
         asyncio.run(run_all_migrations(temp_db_dir))
 
         # Verify databases were created
@@ -107,9 +113,11 @@ class TestPersistenceContract:
         # TokenDAO
         token_dao = TokenDAO(str(temp_db_dir / "tokens.db"))
         import asyncio
+
         asyncio.run(token_dao.ensure_schema_migrated())
 
         import time
+
         token = ThirdPartyToken(
             user_id="test_user",
             provider="spotify",
@@ -117,20 +125,26 @@ class TestPersistenceContract:
             provider_iss="https://accounts.spotify.com",
             identity_id="test_identity_123",
             scopes="playlist-read-private",
-            expires_at=int(time.time()) + 3600,  # Valid future timestamp (1 hour from now)
-            is_valid=True
+            expires_at=int(time.time())
+            + 3600,  # Valid future timestamp (1 hour from now)
+            is_valid=True,
         )
 
         # Mock the validation methods to return True for this test
         from unittest.mock import patch
-        with patch.object(token_dao, '_validate_spotify_token_contract', return_value=True), \
-             patch.object(token_dao, '_validate_token_for_storage', return_value=True):
+
+        with (
+            patch.object(
+                token_dao, "_validate_spotify_token_contract", return_value=True
+            ),
+            patch.object(token_dao, "_validate_token_for_storage", return_value=True),
+        ):
             asyncio.run(token_dao.persist(token))
             retrieved = asyncio.run(token_dao.get_by_id(token.id))
 
             assert retrieved is not None
         assert isinstance(retrieved, ThirdPartyToken)
-        assert hasattr(retrieved, 'user_id')  # Pydantic model attribute
+        assert hasattr(retrieved, "user_id")  # Pydantic model attribute
         assert not isinstance(retrieved, dict)  # Not a raw dict
 
         # UserDAO
@@ -143,5 +157,5 @@ class TestPersistenceContract:
 
         assert retrieved_stats is not None
         assert isinstance(retrieved_stats, UserStats)
-        assert hasattr(retrieved_stats, 'login_count')  # Pydantic model attribute
+        assert hasattr(retrieved_stats, "login_count")  # Pydantic model attribute
         assert not isinstance(retrieved_stats, dict)  # Not a raw dict

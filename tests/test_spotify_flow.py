@@ -2,6 +2,7 @@
 """
 Test script to simulate the complete Spotify OAuth flow
 """
+
 import json
 
 import requests

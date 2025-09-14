@@ -216,11 +216,11 @@ The Sessions/Identity domain handles user authentication, session management, an
 
 **Secure Cookies (Production):**
 ```
-Set-Cookie: access_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...; 
+Set-Cookie: access_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...;
     Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=1209600
-Set-Cookie: refresh_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...; 
+Set-Cookie: refresh_token=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...;
     Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=7776000
-Set-Cookie: __session=sess_1640995200_abc123def; 
+Set-Cookie: __session=sess_1640995200_abc123def;
     Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000
 ```
 

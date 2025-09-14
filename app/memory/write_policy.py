@@ -40,10 +40,20 @@ class MemoryWritePolicy:
         # Enable/disable policies
         self.enable_memory_policy = os.getenv(
             "ENABLE_MEMORY_WRITE_POLICY", "1"
-        ).lower() in {"1", "true", "yes", "on"}
+        ).lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
         self.enable_profile_policy = os.getenv(
             "ENABLE_PROFILE_WRITE_POLICY", "1"
-        ).lower() in {"1", "true", "yes", "on"}
+        ).lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
 
         logger.info(
             "Memory write policy initialized",

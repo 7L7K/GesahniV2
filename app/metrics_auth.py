@@ -62,21 +62,21 @@ except ImportError:
 AUTH_LAZY_REFRESH_V2 = Counter(
     "auth_lazy_refresh_v2_total",
     "Total number of lazy refresh operations (v2)",
-    ["source", "result"]
+    ["source", "result"],
 )
 
 # Refresh rotation metrics
 AUTH_REFRESH_ROTATION = Counter(
     "auth_refresh_rotation_total",
     "Total number of refresh token rotations",
-    ["result", "reason"]
+    ["result", "reason"],
 )
 
 # Replay protection metrics
 AUTH_REPLAY_PROTECTION = Counter(
     "auth_replay_protection_total",
     "Total number of replay protection events",
-    ["action", "reason"]
+    ["action", "reason"],
 )
 
 # Refresh operation latency
@@ -84,35 +84,35 @@ AUTH_REFRESH_LATENCY = Histogram(
     "auth_refresh_latency_seconds",
     "Latency of refresh operations",
     ["operation"],
-    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0]
+    buckets=[0.1, 0.5, 1.0, 2.0, 5.0, 10.0],
 )
 
 # Token validation metrics
 AUTH_TOKEN_VALIDATION = Counter(
     "auth_token_validation_total",
     "Total number of token validations",
-    ["token_type", "result"]
+    ["token_type", "result"],
 )
 
 # Session metrics
 AUTH_SESSION_OPERATIONS = Counter(
     "auth_session_operations_total",
     "Total number of session operations",
-    ["operation", "result"]
+    ["operation", "result"],
 )
 
 # Rate limiting metrics for auth operations
 AUTH_RATE_LIMIT = Counter(
     "auth_rate_limit_total",
     "Total number of rate limit events",
-    ["operation", "result"]
+    ["operation", "result"],
 )
 
 # Concurrent request metrics
 AUTH_CONCURRENT_REQUESTS = Counter(
     "auth_concurrent_requests_total",
     "Total number of concurrent request handling",
-    ["action", "reason"]
+    ["action", "reason"],
 )
 
 # JWT leeway metrics
@@ -120,35 +120,33 @@ AUTH_JWT_LEEWAY_USAGE = Histogram(
     "auth_jwt_leeway_usage_seconds",
     "JWT leeway usage in seconds",
     ["operation"],
-    buckets=[0, 10, 30, 60, 120, 300]
+    buckets=[0, 10, 30, 60, 120, 300],
 )
 
 # Family revocation metrics
 AUTH_FAMILY_REVOCATION = Counter(
     "auth_family_revocation_total",
     "Total number of refresh token family revocations",
-    ["reason"]
+    ["reason"],
 )
 
 # Device-bound session metrics
 AUTH_DEVICE_BOUND_SESSIONS = Counter(
     "auth_device_bound_sessions_total",
     "Total number of device-bound session operations",
-    ["operation", "device_type"]
+    ["operation", "device_type"],
 )
 
 # Active session gauge
 AUTH_ACTIVE_SESSIONS = Gauge(
-    "auth_active_sessions",
-    "Number of currently active sessions",
-    ["session_type"]
+    "auth_active_sessions", "Number of currently active sessions", ["session_type"]
 )
 
 # Failed authentication attempts by IP
 AUTH_FAILED_ATTEMPTS_IP = Counter(
     "auth_failed_attempts_ip_total",
     "Total number of failed authentication attempts by IP",
-    ["ip_hash", "reason"]
+    ["ip_hash", "reason"],
 )
 
 # Token expiration metrics
@@ -156,7 +154,7 @@ AUTH_TOKEN_EXPIRATION = Histogram(
     "auth_token_expiration_seconds",
     "Time until token expiration",
     ["token_type"],
-    buckets=[60, 300, 900, 3600, 7200, 21600, 43200, 86400]
+    buckets=[60, 300, 900, 3600, 7200, 21600, 43200, 86400],
 )
 
 
@@ -269,7 +267,9 @@ def record_failed_attempt_ip(ip_hash: str, reason: str) -> None:
 def record_token_expiration(token_type: str, seconds_until_expiry: float) -> None:
     """Record time until token expiration."""
     try:
-        AUTH_TOKEN_EXPIRATION.labels(token_type=token_type).observe(seconds_until_expiry)
+        AUTH_TOKEN_EXPIRATION.labels(token_type=token_type).observe(
+            seconds_until_expiry
+        )
     except Exception:
         pass
 

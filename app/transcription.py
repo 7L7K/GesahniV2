@@ -19,6 +19,7 @@ from fastapi import HTTPException, WebSocket
 try:  # pragma: no cover - exercised when adapter is present
     from .adapters.voice.pipecat_adapter import PipecatSession
 except Exception:  # pragma: no cover - keep tests and offline runs working
+
     class PipecatSession:  # type: ignore
         def __init__(self, *_, **__):
             pass
@@ -34,6 +35,8 @@ except Exception:  # pragma: no cover - keep tests and offline runs working
             if False:
                 yield b""  # pragma: no cover - never executed
             return
+
+
 from .transcribe import has_speech
 
 try:  # pragma: no cover - executed when openai is available

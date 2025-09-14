@@ -44,4 +44,3 @@ export function useHealthPolling(intervalMs: number = 15000) {
 
   return { health, hasChecked, llamaDegraded };
 }
-

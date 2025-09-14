@@ -60,6 +60,7 @@ except ImportError:
 
     try:
         from passlib.context import CryptContext
+
         pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
     except ImportError:
         pwd_context = None
@@ -94,6 +95,7 @@ except ImportError:
     # Stub router for when auth module is unavailable
     try:
         from fastapi import APIRouter
+
         router = APIRouter(tags=["Auth"])
     except ImportError:
         router = None

@@ -30,5 +30,3 @@ export function clearFeaturesCache() {
     _cache = null;
     try { sessionStorage.removeItem('features'); } catch (e) { /* ignore */ }
 }
-
-

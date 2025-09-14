@@ -298,7 +298,9 @@ class QdrantVectorStore:
                 points.append(PointStruct(id=mem_id, vector=vec, payload=payload))
                 ids.append(mem_id)
             except Exception:
-                logger.exception("qdrant.batch_upsert_user_memories failed to embed/text=%s", text)
+                logger.exception(
+                    "qdrant.batch_upsert_user_memories failed to embed/text=%s", text
+                )
                 continue
 
         if points:
@@ -437,7 +439,9 @@ class QdrantVectorStore:
             )
             # Try to log operation id and point counts (best-effort)
             try:
-                op_id = getattr(resp, "operation_id", None) if resp is not None else None
+                op_id = (
+                    getattr(resp, "operation_id", None) if resp is not None else None
+                )
             except Exception:
                 op_id = None
             try:
@@ -619,7 +623,10 @@ class QdrantVectorStore:
         try:
             self.client.delete_collection(collection_name=col)
             try:
-                logger.info("qdrant.drop_collection", extra={"meta": {"collection": col, "user_id": user_id}})
+                logger.info(
+                    "qdrant.drop_collection",
+                    extra={"meta": {"collection": col, "user_id": user_id}},
+                )
             except Exception:
                 pass
             return True
@@ -648,11 +655,20 @@ class QdrantVectorStore:
                 )
                 return False
             payload = {"user_id": user_id, "text": new_text, "updated_at": time.time()}
-            self.client.upsert(collection_name=col, points=[PointStruct(id=mem_id, vector=vec, payload=payload)])
+            self.client.upsert(
+                collection_name=col,
+                points=[PointStruct(id=mem_id, vector=vec, payload=payload)],
+            )
             try:
                 logger.info(
                     "qdrant.update_user_memory",
-                    extra={"meta": {"collection": col, "user_id": user_id, "mem_id": mem_id}},
+                    extra={
+                        "meta": {
+                            "collection": col,
+                            "user_id": user_id,
+                            "mem_id": mem_id,
+                        }
+                    },
                 )
             except Exception:
                 pass

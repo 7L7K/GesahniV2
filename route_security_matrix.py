@@ -43,7 +43,9 @@ class RouteAnalysis:
     protection: str  # public | token | token+csrf | admin
     csrf_required: bool
     admin_required: bool
-    exempt_reason: str  # oauth_callback | webhook | compat_redirect | token_exchange | none
+    exempt_reason: (
+        str  # oauth_callback | webhook | compat_redirect | token_exchange | none
+    )
     in_schema: bool
     evidence: list[str]
     route_obj: APIRoute
@@ -208,7 +210,9 @@ class RouteSecurityAnalyzer:
         if routes:
             probe = routes[0].dependant
             if probe is not None:
-                dependant_keys = sorted([k for k in dir(probe) if not k.startswith("_")])
+                dependant_keys = sorted(
+                    [k for k in dir(probe) if not k.startswith("_")]
+                )
                 logger.info(f"DEPENDANT_KEYS: {dependant_keys}")
                 print(f"DEPENDANT_KEYS: {dependant_keys}")
 
@@ -238,28 +242,32 @@ class RouteSecurityAnalyzer:
                 hidden_by_design = self._is_hidden_by_design(route.path, is_compat)
 
                 # Classify protection with precedence
-                protection, csrf_required, admin_required, evidence_list = self._classify_route(
-                    route, dep_names, flattened, is_compat, exempt_reason
+                protection, csrf_required, admin_required, evidence_list = (
+                    self._classify_route(
+                        route, dep_names, flattened, is_compat, exempt_reason
+                    )
                 )
 
                 for method in sorted(m for m in route.methods or [] if m != "HEAD"):
                     analysis = RouteAnalysis(
-            method=method,
+                        method=method,
                         path_template=route.path,
                         handler_qualname=handler_qual,
-            protection=protection,
-            csrf_required=csrf_required,
-            admin_required=admin_required,
-            exempt_reason=exempt_reason,
+                        protection=protection,
+                        csrf_required=csrf_required,
+                        admin_required=admin_required,
+                        exempt_reason=exempt_reason,
                         in_schema=in_schema,
                         evidence=evidence_list,
                         route_obj=route,
                     )
                     # Store hidden_by_design flag for validation
-                    analysis.__dict__['hidden_by_design'] = hidden_by_design
+                    analysis.__dict__["hidden_by_design"] = hidden_by_design
                     self.routes.append(analysis)
             except Exception as e:
-                logger.warning(f"Failed to analyze route {getattr(route, 'path', '?')}: {e}")
+                logger.warning(
+                    f"Failed to analyze route {getattr(route, 'path', '?')}: {e}"
+                )
 
         self._validate_policies()
 
@@ -333,18 +341,25 @@ class RouteSecurityAnalyzer:
         if ADMIN_NAMES.intersection(dep_names):
             return "admin", False, True, evidence_list
 
-        if is_write and self.csrf_enabled and exempt_reason not in {
-            "oauth_callback",
-            "webhook",
-            "compat_redirect",
-            "token_exchange",
-        }:
+        if (
+            is_write
+            and self.csrf_enabled
+            and exempt_reason
+            not in {
+                "oauth_callback",
+                "webhook",
+                "compat_redirect",
+                "token_exchange",
+            }
+        ):
             if CSRF_NAMES.intersection(dep_names):
                 return "token+csrf", True, False, evidence_list
             # Token only for now; policy error will be raised if CSRF missing
             return "token", False, False, evidence_list
 
-        if AUTH_NAMES.intersection(dep_names) or self._has_security_scheme(route, flattened):
+        if AUTH_NAMES.intersection(dep_names) or self._has_security_scheme(
+            route, flattened
+        ):
             return "token", False, False, evidence_list
 
         return "public", False, False, evidence_list
@@ -363,12 +378,18 @@ class RouteSecurityAnalyzer:
                 )
 
             # ERROR: Write operations must be token+csrf unless exempt (only when CSRF is enabled)
-            if self.csrf_enabled and r.method in {"POST", "PUT", "PATCH", "DELETE"} and r.protection != "token+csrf" and r.exempt_reason not in {
-                "oauth_callback",
-                "webhook",
-                "compat_redirect",
-                "token_exchange",
-            }:
+            if (
+                self.csrf_enabled
+                and r.method in {"POST", "PUT", "PATCH", "DELETE"}
+                and r.protection != "token+csrf"
+                and r.exempt_reason
+                not in {
+                    "oauth_callback",
+                    "webhook",
+                    "compat_redirect",
+                    "token_exchange",
+                }
+            ):
                 self.errors.append(
                     PolicyError(
                         method=r.method,
@@ -383,8 +404,12 @@ class RouteSecurityAnalyzer:
             # This warning is disabled as per requirements - compat routes are expected to be hidden
 
             # WARNING: Canonical routes should be present in schema (unless hidden by design)
-            hidden_by_design = getattr(r, 'hidden_by_design', False)
-            if r.path_template.startswith("/v1/") and not r.in_schema and not hidden_by_design:
+            hidden_by_design = getattr(r, "hidden_by_design", False)
+            if (
+                r.path_template.startswith("/v1/")
+                and not r.in_schema
+                and not hidden_by_design
+            ):
                 self.warnings.append(
                     PolicyWarning(
                         method=r.method,
@@ -408,7 +433,9 @@ class RouteSecurityAnalyzer:
                 if r.method == w.method and r.path_template == w.path:
                     matching_route = r
                     break
-            if matching_route and not getattr(matching_route, 'hidden_by_design', False):
+            if matching_route and not getattr(
+                matching_route, "hidden_by_design", False
+            ):
                 filtered_warnings.append(w)
 
         out: list[str] = []
@@ -416,7 +443,9 @@ class RouteSecurityAnalyzer:
         out.append("## Summary")
         out.append(f"- **Total**: {len(self.routes)}")
         out.append(f"- **Errors**: {len(self.errors)}")
-        out.append(f"- **Warnings (after allowlist)**: {len(filtered_warnings)} (raw: {len(self.warnings)})")
+        out.append(
+            f"- **Warnings (after allowlist)**: {len(filtered_warnings)} (raw: {len(self.warnings)})"
+        )
         for key in ["public", "token", "token+csrf", "admin"]:
             out.append(f"- **{key}**: {len(grouped.get(key, []))}")
 
@@ -425,8 +454,12 @@ class RouteSecurityAnalyzer:
             if not routes:
                 continue
             out.append(f"\n## {key.upper()} Routes ({len(routes)})\n")
-            out.append("| Method | Path | Handler | CSRF | Admin | Exempt | InSchema | Evidence |")
-            out.append("|--------|------|---------|------|-------|--------|----------|----------|")
+            out.append(
+                "| Method | Path | Handler | CSRF | Admin | Exempt | InSchema | Evidence |"
+            )
+            out.append(
+                "|--------|------|---------|------|-------|--------|----------|----------|"
+            )
             for r in routes:
                 out.append(
                     f"| {r.method} | `{r.path_template}` | `{r.handler_qualname}` | "
@@ -483,12 +516,18 @@ class RouteSecurityAnalyzer:
         return json.dumps(payload, indent=2)
 
 
-def generate_issue_report(errors: list[PolicyError], warnings: list[PolicyWarning], routes: list[RouteAnalysis]) -> str:
+def generate_issue_report(
+    errors: list[PolicyError],
+    warnings: list[PolicyWarning],
+    routes: list[RouteAnalysis],
+) -> str:
     out: list[str] = []
     if errors:
         out.append("## POLICY ERRORS\n")
         for e in errors:
-            out.append(f"- [ERROR] {e.error_type}: {e.method} {e.path} — {e.description}")
+            out.append(
+                f"- [ERROR] {e.error_type}: {e.method} {e.path} — {e.description}"
+            )
 
     # Filter warnings to exclude hidden-by-design routes
     filtered_warnings = []
@@ -498,13 +537,15 @@ def generate_issue_report(errors: list[PolicyError], warnings: list[PolicyWarnin
             if r.method == w.method and r.path_template == w.path:
                 matching_route = r
                 break
-        if matching_route and not getattr(matching_route, 'hidden_by_design', False):
+        if matching_route and not getattr(matching_route, "hidden_by_design", False):
             filtered_warnings.append(w)
 
     if filtered_warnings:
         out.append("\n## WARNINGS (after allowlist)\n")
         for w in filtered_warnings:
-            out.append(f"- [WARN] {w.warning_type}: {w.method} {w.path} — {w.description}")
+            out.append(
+                f"- [WARN] {w.warning_type}: {w.method} {w.path} — {w.description}"
+            )
     return "\n".join(out) or "(no issues)"
 
 
@@ -516,7 +557,9 @@ def _print_dependant_explain(sample_route: APIRoute) -> None:  # pragma: no cove
 
     # Print available attributes
     try:
-        print("Dependants dir:", sorted([n for n in dir(dep) if not n.startswith('__')]))
+        print(
+            "Dependants dir:", sorted([n for n in dir(dep) if not n.startswith("__")])
+        )
     except Exception:
         pass
     try:
@@ -541,7 +584,10 @@ def _print_dependant_explain(sample_route: APIRoute) -> None:  # pragma: no cove
         for attr in ["dependencies", "sub_dependants", "dependants"]:
             deps = getattr(d, attr, None)
             if deps is not None:
-                print("  " * indent + f"  └─ {attr}: {len(deps) if hasattr(deps, '__len__') else '?'} items")
+                print(
+                    "  " * indent
+                    + f"  └─ {attr}: {len(deps) if hasattr(deps, '__len__') else '?'} items"
+                )
                 for sd in deps:
                     render(sd, indent + 1)
                 break
@@ -570,7 +616,12 @@ def main() -> None:
     )
 
     args = parser.parse_args()
-    csrf_enabled_flag = str(args.csrf_enabled).strip().lower() in {"1", "true", "yes", "on"}
+    csrf_enabled_flag = str(args.csrf_enabled).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     analyzer = RouteSecurityAnalyzer(csrf_enabled=csrf_enabled_flag)
     analyzer.analyze_all_routes()
@@ -594,12 +645,14 @@ def main() -> None:
             if r.method == w.method and r.path_template == w.path:
                 matching_route = r
                 break
-        if matching_route and not getattr(matching_route, 'hidden_by_design', False):
+        if matching_route and not getattr(matching_route, "hidden_by_design", False):
             filtered_warnings_count += 1
 
     # Print concise summary
     print("=== ROUTE SECURITY MATRIX SUMMARY ===")
-    print(f"Total: {len(analyzer.routes)} | Errors: {len(analyzer.errors)} | Warnings: {filtered_warnings_count} (filtered from {len(analyzer.warnings)} raw)")
+    print(
+        f"Total: {len(analyzer.routes)} | Errors: {len(analyzer.errors)} | Warnings: {filtered_warnings_count} (filtered from {len(analyzer.warnings)} raw)"
+    )
 
     if args.md:
         with open(args.md, "w") as f:

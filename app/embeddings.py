@@ -150,6 +150,7 @@ async def _embed_openai(text: str) -> list[float]:
         # Flatten any nested structure and ensure length matches EMBED_DIM if set
         try:
             from app.config_runtime import CONFIG
+
             exp_dim = CONFIG.embed_dim
         except Exception:
             exp_dim = int(os.getenv("EMBED_DIM", "1536"))

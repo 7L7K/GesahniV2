@@ -22,6 +22,7 @@ def get_router_rules() -> dict[str, Any]:
     except (FileNotFoundError, yaml.YAMLError) as e:
         # Return default values if file not found or invalid
         import logging
+
         logger = logging.getLogger(__name__)
         logger.warning(f"Failed to load router rules from {rules_path}: {e}")
         return {}
@@ -34,4 +35,5 @@ def get_router_rules() -> dict[str, Any]:
 def get_cached_router_rules() -> dict[str, Any]:
     """Get cached router rules, loading from file if not cached."""
     from ..infra.router_rules import get_router_rules_cache
+
     return get_router_rules_cache()

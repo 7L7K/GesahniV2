@@ -9,6 +9,7 @@ from .logging_config import req_id_var
 try:  # best-effort import
     from .otel_utils import get_trace_id_hex
 except Exception:  # pragma: no cover
+
     def get_trace_id_hex() -> str | None:  # type: ignore
         return None
 
@@ -46,9 +47,7 @@ def _ulid() -> str:
 
 
 def _now_iso() -> str:
-    return datetime.now(UTC).isoformat(timespec="seconds").replace(
-        "+00:00", "Z"
-    )
+    return datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
 
 
 def build_error(
@@ -105,9 +104,17 @@ def shape_from_status(
     if status_code == 400:
         code, msg = "bad_request", default_message or "bad request"
     elif status_code == 401:
-        code, msg, hint = "unauthorized", default_message or "unauthorized", "missing or invalid token"
+        code, msg, hint = (
+            "unauthorized",
+            default_message or "unauthorized",
+            "missing or invalid token",
+        )
     elif status_code == 403:
-        code, msg, hint = "forbidden", default_message or "forbidden", "missing scope or not allowed"
+        code, msg, hint = (
+            "forbidden",
+            default_message or "forbidden",
+            "missing scope or not allowed",
+        )
     elif status_code == 404:
         code, msg = "not_found", default_message or "not found"
     elif status_code == 405:
@@ -117,7 +124,10 @@ def shape_from_status(
     elif status_code == 413:
         code, msg = "payload_too_large", default_message or "payload too large"
     elif status_code == 415:
-        code, msg = "unsupported_media_type", default_message or "unsupported media type"
+        code, msg = (
+            "unsupported_media_type",
+            default_message or "unsupported media type",
+        )
     elif status_code == 422:
         code, msg = "invalid_input", default_message or "invalid input"
     elif status_code == 429:
@@ -160,6 +170,12 @@ def enveloped_route(fn):
         except HTTPException:
             raise
         except Exception as e:
-            raise_enveloped("internal", "internal error", hint="try again shortly", details={"error": str(e)}, status=500)
+            raise_enveloped(
+                "internal",
+                "internal error",
+                hint="try again shortly",
+                details={"error": str(e)},
+                status=500,
+            )
 
     return _inner

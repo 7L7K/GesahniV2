@@ -2521,7 +2521,7 @@ tests/unit/test_ws_helper_unit.py::test_ws_helper_includes_token_query_logic,FAI
 tests/unit/test_ws_origin_check.py::test_ws_origin_policy[http://localhost:3000-True],FAILED
 
 
-9/9/2025 3:00 PM: 
+9/9/2025 3:00 PM:
 Test Results Summary:
 ✅ 1,327 tests PASSED
 ❌ 1,028 tests FAILED
@@ -2546,7 +2546,7 @@ Rate Limiting (429 errors) - Many failures are due to rate limiting blocking tes
 JWT_SECRET Configuration - Some tests fail because JWT secret is too short
 Routing Issues (405 errors) - Some endpoints returning method not allowed
 Missing Functions - A few cookie functions are missing from the module
- 
+
 4:45
 Cookie Tests Results - Second Run
 The cookie tests show consistent performance with the previous run:
@@ -2563,4 +2563,3 @@ Cookie Tests Current Status
 ❌ FAILED: 91 tests (39.4% fail rate)
 ⏭️ SKIPPED: 1 test
 ❌ ERROR: 1 test
-

@@ -64,8 +64,10 @@ async def healthz_root() -> JSONResponse:
         # Defensive: should not happen, but keep contract stable
         try:
             import logging
+
             logging.getLogger(__name__).error(
-                "health.failed", extra={"meta": {"endpoint": "healthz", "error": str(e)}}
+                "health.failed",
+                extra={"meta": {"endpoint": "healthz", "error": str(e)}},
             )
         except Exception:
             pass
@@ -101,6 +103,7 @@ async def health_live() -> JSONResponse:
         # Defensive: should not happen, but keep contract stable
         try:
             import logging
+
             logging.getLogger(__name__).error(
                 "health.failed", extra={"meta": {"endpoint": "live", "error": str(e)}}
             )
@@ -125,9 +128,9 @@ async def health_live() -> JSONResponse:
                                 "components": {
                                     "jwt_secret": {"status": "healthy"},
                                     "db": {"status": "healthy"},
-                                    "vector_store": {"status": "healthy"}
-                                }
-                            }
+                                    "vector_store": {"status": "healthy"},
+                                },
+                            },
                         },
                         "degraded": {
                             "summary": "Some components degraded",
@@ -137,9 +140,9 @@ async def health_live() -> JSONResponse:
                                 "components": {
                                     "jwt_secret": {"status": "healthy"},
                                     "db": {"status": "healthy"},
-                                    "vector_store": {"status": "degraded"}
-                                }
-                            }
+                                    "vector_store": {"status": "degraded"},
+                                },
+                            },
                         },
                         "unhealthy": {
                             "summary": "Critical components unhealthy",
@@ -149,16 +152,16 @@ async def health_live() -> JSONResponse:
                                 "components": {
                                     "jwt_secret": {"status": "unhealthy"},
                                     "db": {"status": "healthy"},
-                                    "vector_store": {"status": "healthy"}
+                                    "vector_store": {"status": "healthy"},
                                 },
-                                "failing": ["jwt_secret"]
-                            }
-                        }
+                                "failing": ["jwt_secret"],
+                            },
+                        },
                     }
                 }
-            }
+            },
         }
-    }
+    },
 )
 async def health_ready() -> JSONResponse:
     """Core readiness with structured component status.
@@ -184,7 +187,9 @@ async def health_ready() -> JSONResponse:
         _m.HEALTH_CHECK_DURATION_SECONDS.labels("jwt").observe(time.perf_counter() - t)
     except Exception:
         pass
-    components["jwt_secret"] = {"status": "healthy" if jwt_result == "ok" else "unhealthy"}
+    components["jwt_secret"] = {
+        "status": "healthy" if jwt_result == "ok" else "unhealthy"
+    }
 
     # Database check
     t = time.perf_counter()
@@ -244,16 +249,14 @@ async def health_ready() -> JSONResponse:
         for comp, data in components.items():
             st = str(data.get("status", "unhealthy"))
             # Consider degraded as ok for availability purposes
-            HEALTH_DEPS_OK.labels(component=comp).set(1.0 if st in {"healthy", "degraded", "ok"} else 0.0)
+            HEALTH_DEPS_OK.labels(component=comp).set(
+                1.0 if st in {"healthy", "degraded", "ok"} else 0.0
+            )
     except Exception:
         pass
 
     # Build response with expected fields for tests and consumers
-    response_data = {
-        "status": overall_status,
-        "ok": ok,
-        "components": components
-    }
+    response_data = {"status": overall_status, "ok": ok, "components": components}
 
     if unhealthy_components:
         # Legacy key `failing` is expected by some consumers/tests; keep it for
@@ -328,8 +331,12 @@ async def ping_vendor_health(
     except Exception as e:
         try:
             import logging
+
             logging.getLogger(__name__).error(
-                "health.failed", extra={"meta": {"endpoint": "vendor", "vendor": vendor, "error": str(e)}}
+                "health.failed",
+                extra={
+                    "meta": {"endpoint": "vendor", "vendor": vendor, "error": str(e)}
+                },
             )
         except Exception:
             pass
@@ -406,6 +413,7 @@ async def health_combined() -> JSONResponse:
 
         # Normalize bodies when returned as JSONResponse
         import json
+
         def to_obj(x: object) -> dict:
             if isinstance(x, JSONResponse):
                 try:
@@ -422,27 +430,32 @@ async def health_combined() -> JSONResponse:
         r = to_obj(ready)
         d = to_obj(deps)
 
-        checks: dict[str, str] = { 'backend': 'ok' }
-        for name, comp in (r.get('components') or {}).items():
-            st = str((comp or {}).get('status') or 'unhealthy')
-            checks[name] = 'ok' if st == 'healthy' else ('degraded' if st == 'degraded' else 'error')
-        for name, st in (d.get('checks') or {}).items():
+        checks: dict[str, str] = {"backend": "ok"}
+        for name, comp in (r.get("components") or {}).items():
+            st = str((comp or {}).get("status") or "unhealthy")
+            checks[name] = (
+                "ok"
+                if st == "healthy"
+                else ("degraded" if st == "degraded" else "error")
+            )
+        for name, st in (d.get("checks") or {}).items():
             checks.setdefault(name, str(st))
 
-        overall = 'ok'
-        if (r.get('status') == 'fail'):
-            overall = 'fail'
-        elif (r.get('status') == 'degraded') or (d.get('status') == 'degraded'):
-            overall = 'degraded'
+        overall = "ok"
+        if r.get("status") == "fail":
+            overall = "fail"
+        elif (r.get("status") == "degraded") or (d.get("status") == "degraded"):
+            overall = "degraded"
 
-        resp = JSONResponse({ 'status': overall, 'checks': checks })
-        resp.headers['Cache-Control'] = 'no-store'
+        resp = JSONResponse({"status": overall, "checks": checks})
+        resp.headers["Cache-Control"] = "no-store"
         return resp
     except Exception:
         # Always return 200 with a minimal fail snapshot on any exception
-        resp = JSONResponse({ 'status': 'fail', 'checks': { 'backend': 'error' } })
-        resp.headers['Cache-Control'] = 'no-store'
+        resp = JSONResponse({"status": "fail", "checks": {"backend": "error"}})
+        resp.headers["Cache-Control"] = "no-store"
         return resp
+
 
 @router.get("/health/vector_store")
 @router.get("/v1/health/vector_store")
@@ -509,21 +522,25 @@ async def health_vector_store() -> dict:
                     "examples": {
                         "healthy": {
                             "summary": "Qdrant is healthy",
-                            "value": {"ok": True, "status": "ok"}
+                            "value": {"ok": True, "status": "ok"},
                         },
                         "unhealthy": {
                             "summary": "Qdrant is not responding",
-                            "value": {"ok": False, "status": "error", "error": "Connection timeout"}
+                            "value": {
+                                "ok": False,
+                                "status": "error",
+                                "error": "Connection timeout",
+                            },
                         },
                         "skipped": {
                             "summary": "Qdrant not configured",
-                            "value": {"ok": False, "status": "skipped"}
-                        }
+                            "value": {"ok": False, "status": "skipped"},
+                        },
                     }
                 }
-            }
+            },
         }
-    }
+    },
 )
 async def health_qdrant() -> dict[str, Any]:
     """Check Qdrant health status."""
@@ -544,21 +561,25 @@ async def health_qdrant() -> dict[str, Any]:
                     "examples": {
                         "healthy": {
                             "summary": "Chroma is healthy",
-                            "value": {"ok": True, "status": "ok"}
+                            "value": {"ok": True, "status": "ok"},
                         },
                         "unhealthy": {
                             "summary": "Chroma is not responding",
-                            "value": {"ok": False, "status": "error", "error": "Connection timeout"}
+                            "value": {
+                                "ok": False,
+                                "status": "error",
+                                "error": "Connection timeout",
+                            },
                         },
                         "skipped": {
                             "summary": "Chroma not configured as vector store",
-                            "value": {"ok": False, "status": "skipped"}
-                        }
+                            "value": {"ok": False, "status": "skipped"},
+                        },
                     }
                 }
-            }
+            },
         }
-    }
+    },
 )
 async def health_chroma() -> dict[str, Any]:
     """Check Chroma health status."""

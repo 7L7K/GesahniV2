@@ -11,6 +11,7 @@ from pathlib import Path
 DB = Path("third_party_tokens.db")
 THIRTY_DAYS = 30 * 24 * 3600
 
+
 def main():
     if not DB.exists():
         print("DB not found, skipping")
@@ -20,7 +21,9 @@ def main():
     cur = conn.cursor()
     # tokens considered stale if updated_at or last_refresh_at older than threshold
     cutoff = now - THIRTY_DAYS
-    cur.execute("SELECT id, user_id, provider, last_refresh_at, updated_at FROM third_party_tokens WHERE is_valid = 1")
+    cur.execute(
+        "SELECT id, user_id, provider, last_refresh_at, updated_at FROM third_party_tokens WHERE is_valid = 1"
+    )
     rows = cur.fetchall()
     stale = []
     for r in rows:
@@ -31,12 +34,14 @@ def main():
 
     for tid, uid, provider in stale:
         print(f"Invalidating stale token: {tid} ({uid}/{provider})")
-        cur.execute("UPDATE third_party_tokens SET is_valid = 0, updated_at = ? WHERE id = ?", (now, tid))
+        cur.execute(
+            "UPDATE third_party_tokens SET is_valid = 0, updated_at = ? WHERE id = ?",
+            (now, tid),
+        )
 
     conn.commit()
     conn.close()
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()
-
-

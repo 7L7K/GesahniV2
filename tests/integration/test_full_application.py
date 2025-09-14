@@ -2,6 +2,7 @@
 Integration tests that verify the full application works end-to-end.
 These tests start the actual server and make HTTP requests.
 """
+
 import os
 import signal
 import subprocess
@@ -18,11 +19,15 @@ def running_server(port=8010):
     """Context manager that starts the server and cleans it up."""
     # Start the server
     cmd = [
-        sys.executable, "-m", "uvicorn",
+        sys.executable,
+        "-m",
+        "uvicorn",
         "app.main:create_app",
-        "--host", "127.0.0.1",
-        "--port", str(port),
-        "--reload"
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(port),
+        "--reload",
     ]
 
     env = os.environ.copy()
@@ -33,7 +38,7 @@ def running_server(port=8010):
         env=env,
         preexec_fn=os.setsid,  # Create new process group
         stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE
+        stderr=subprocess.PIPE,
     )
 
     try:
@@ -69,7 +74,10 @@ def test_full_application_startup():
 
         for endpoint in endpoints:
             response = requests.get(f"{base_url}{endpoint}", timeout=5)
-            assert response.status_code in [200, 404], f"Endpoint {endpoint} should respond"
+            assert response.status_code in [
+                200,
+                404,
+            ], f"Endpoint {endpoint} should respond"
 
 
 @pytest.mark.integration
@@ -98,7 +106,7 @@ def test_cors_preflight():
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "POST",
             },
-            timeout=5
+            timeout=5,
         )
 
         assert response.status_code in [200, 204], "OPTIONS request should succeed"
@@ -107,12 +115,14 @@ def test_cors_preflight():
         cors_headers = [
             "access-control-allow-origin",
             "access-control-allow-methods",
-            "access-control-allow-headers"
+            "access-control-allow-headers",
         ]
 
         response_headers_lower = {k.lower(): v for k, v in response.headers.items()}
         for header in cors_headers:
-            assert header in response_headers_lower, f"CORS header {header} should be present"
+            assert (
+                header in response_headers_lower
+            ), f"CORS header {header} should be present"
 
 
 @pytest.mark.integration
@@ -156,12 +166,16 @@ def test_rate_limiting_disabled_in_ci():
         rate_limit_headers = [
             "x-ratelimit-limit",
             "x-ratelimit-remaining",
-            "x-ratelimit-reset"
+            "x-ratelimit-reset",
         ]
 
-        response_headers_lower = {k.lower(): v for k, v in last_response.headers.items()}
+        response_headers_lower = {
+            k.lower(): v for k, v in last_response.headers.items()
+        }
         for header in rate_limit_headers:
-            assert header not in response_headers_lower, f"Rate limit header {header} should not be present in CI"
+            assert (
+                header not in response_headers_lower
+            ), f"Rate limit header {header} should not be present in CI"
 
 
 @pytest.mark.integration
@@ -171,7 +185,9 @@ def test_request_id_header():
         response = requests.get(f"{base_url}/health", timeout=5)
 
         # Should have X-Request-ID header
-        assert "x-request-id" in response.headers, "Response should have X-Request-ID header"
+        assert (
+            "x-request-id" in response.headers
+        ), "Response should have X-Request-ID header"
 
         request_id = response.headers["x-request-id"]
         assert len(request_id) > 0, "Request ID should not be empty"
@@ -199,7 +215,9 @@ def test_error_response_format():
         assert "method" in details, "Details should have method"
 
         # Check that X-Error-Code header is present
-        assert "x-error-code" in response.headers, "Response should have X-Error-Code header"
+        assert (
+            "x-error-code" in response.headers
+        ), "Response should have X-Error-Code header"
 
 
 @pytest.mark.integration
@@ -223,11 +241,7 @@ def test_v1_routes_exist():
     """Test that v1 API routes exist."""
     with running_server() as base_url:
         # Test some core v1 routes
-        routes_to_test = [
-            "/v1/ask",
-            "/v1/auth",
-            "/v1/admin"
-        ]
+        routes_to_test = ["/v1/ask", "/v1/auth", "/v1/admin"]
 
         for route in routes_to_test:
             # For routes that require authentication, we expect 401/403

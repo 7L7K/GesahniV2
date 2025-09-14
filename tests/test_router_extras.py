@@ -20,7 +20,9 @@ def test_llama_override():
     from app.router.entrypoint import route_prompt
 
     result = asyncio.run(
-        route_prompt({"prompt": "hello", "model_override": "llama3:8b"}, req_id="codex-sweep")
+        route_prompt(
+            {"prompt": "hello", "model_override": "llama3:8b"}, req_id="codex-sweep"
+        )
     )
 
     # Check routed vendor/model shape (backend/vendor normalized by handler)

@@ -13,5 +13,3 @@ User-facing behavior rules for failures:
 
 - Log full diagnostic details internally but never surface PII in the
   short user-facing message.
-
-

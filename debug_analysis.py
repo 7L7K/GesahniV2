@@ -2,6 +2,7 @@
 """
 Debug the endpoint analysis
 """
+
 import re
 
 
@@ -18,19 +19,23 @@ def debug_file(file_path: str):
     print("=" * 50)
 
     # Split content into lines for easier processing
-    lines = content.split('\n')
+    lines = content.split("\n")
     i = 0
 
     while i < len(lines):
         line = lines[i].strip()
 
         # Look for router decorators (single line or multi-line)
-        router_match = re.match(r'@router\.(post|put|patch|delete)\s*\(', line, re.IGNORECASE)
+        router_match = re.match(
+            r"@router\.(post|put|patch|delete)\s*\(", line, re.IGNORECASE
+        )
         if router_match:
             method = router_match.group(1).upper()
             # Look for the path in this line or the next few lines
             path = None
-            search_lines = [line] + lines[i+1:i+5]  # Check current line and next 4
+            search_lines = [line] + lines[
+                i + 1 : i + 5
+            ]  # Check current line and next 4
             for search_line in search_lines:
                 path_match = re.search(r'["\']([^"\']+)["\']', search_line.strip())
                 if path_match:
@@ -47,7 +52,7 @@ def debug_file(file_path: str):
             j = i + 1
             while j < len(lines) and j < i + 20:  # Look ahead up to 20 lines
                 func_line = lines[j].strip()
-                func_match = re.match(r'def\s+(\w+)\s*\(', func_line)
+                func_match = re.match(r"def\s+(\w+)\s*\(", func_line)
                 if func_match:
                     func_name = func_match.group(1)
                     print(f"  Function: {func_name} at line {j+1}")
@@ -59,31 +64,35 @@ def debug_file(file_path: str):
                 func_start = j
                 k = j + 1
                 while k < len(lines) and k < j + 50:  # Look ahead up to 50 lines
-                    if lines[k].strip().startswith('def ') or lines[k].strip().startswith('@router.'):
+                    if lines[k].strip().startswith("def ") or lines[
+                        k
+                    ].strip().startswith("@router."):
                         break
                     k += 1
 
                 func_body_lines = lines[func_start:k]
-                func_body = '\n'.join(func_body_lines)
+                func_body = "\n".join(func_body_lines)
 
                 # Also include the decorator lines for dependency checking
                 decorator_start = i
-                while decorator_start > 0 and not lines[decorator_start-1].strip().startswith('def '):
+                while decorator_start > 0 and not lines[
+                    decorator_start - 1
+                ].strip().startswith("def "):
                     decorator_start -= 1
 
-                full_func_block = '\n'.join(lines[decorator_start:k])
+                full_func_block = "\n".join(lines[decorator_start:k])
 
                 print("  Full function block (first 200 chars):")
                 print(f"    {full_func_block[:200]}...")
 
                 # Check for various auth patterns
-                has_get_current_user_id = 'get_current_user_id' in full_func_block
-                has_require_user = 'require_user' in full_func_block
-                has_require_auth = 'require_auth' in full_func_block
-                has_csrf_validate = 'csrf_validate' in full_func_block
-                has_require_scope = 'require_scope' in full_func_block
-                has_require_roles = 'require_roles' in full_func_block
-                has_optional_require_scope = 'optional_require_scope' in full_func_block
+                has_get_current_user_id = "get_current_user_id" in full_func_block
+                has_require_user = "require_user" in full_func_block
+                has_require_auth = "require_auth" in full_func_block
+                has_csrf_validate = "csrf_validate" in full_func_block
+                has_require_scope = "require_scope" in full_func_block
+                has_require_roles = "require_roles" in full_func_block
+                has_optional_require_scope = "optional_require_scope" in full_func_block
 
                 print("  Auth patterns found:")
                 print(f"    get_current_user_id: {has_get_current_user_id}")
@@ -97,5 +106,6 @@ def debug_file(file_path: str):
 
         i += 1
 
+
 if __name__ == "__main__":
-    debug_file('app/api/ask.py')
+    debug_file("app/api/ask.py")

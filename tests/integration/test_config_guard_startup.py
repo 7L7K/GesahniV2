@@ -1,6 +1,7 @@
 """
 Integration tests for config guard in actual startup scenarios.
 """
+
 from unittest.mock import patch
 
 import pytest
@@ -15,13 +16,17 @@ class TestConfigGuardStartup:
     @pytest.mark.asyncio
     async def test_weak_jwt_prevents_startup_in_prod(self):
         """Test that weak JWT secret prevents app startup in prod."""
-        with patch.dict("os.environ", {
-            "ENV": "prod",
-            "JWT_SECRET": "weak",  # Too short
-            "COOKIES_SECURE": "1",
-            "COOKIES_SAMESITE": "strict",
-            "REQ_ID_ENABLED": "1"
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "prod",
+                "JWT_SECRET": "weak",  # Too short
+                "COOKIES_SECURE": "1",
+                "COOKIES_SAMESITE": "strict",
+                "REQ_ID_ENABLED": "1",
+            },
+            clear=True,
+        ):
             app = create_app()
             with pytest.raises(RuntimeError) as exc_info:
                 async with lifespan(app):
@@ -33,13 +38,17 @@ class TestConfigGuardStartup:
     @pytest.mark.asyncio
     async def test_insecure_cookies_prevent_startup_in_prod(self):
         """Test that insecure cookies prevent app startup in prod."""
-        with patch.dict("os.environ", {
-            "ENV": "prod",
-            "JWT_SECRET": "a" * 32,
-            "COOKIES_SECURE": "0",  # Insecure
-            "COOKIES_SAMESITE": "strict",
-            "REQ_ID_ENABLED": "1"
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "prod",
+                "JWT_SECRET": "a" * 32,
+                "COOKIES_SECURE": "0",  # Insecure
+                "COOKIES_SAMESITE": "strict",
+                "REQ_ID_ENABLED": "1",
+            },
+            clear=True,
+        ):
             app = create_app()
             with pytest.raises(RuntimeError) as exc_info:
                 async with lifespan(app):
@@ -50,13 +59,17 @@ class TestConfigGuardStartup:
     @pytest.mark.asyncio
     async def test_weak_samesite_prevents_startup_in_prod(self):
         """Test that weak SameSite prevents app startup in prod."""
-        with patch.dict("os.environ", {
-            "ENV": "prod",
-            "JWT_SECRET": "a" * 32,
-            "COOKIES_SECURE": "1",
-            "COOKIES_SAMESITE": "lax",  # Not strict
-            "REQ_ID_ENABLED": "1"
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "prod",
+                "JWT_SECRET": "a" * 32,
+                "COOKIES_SECURE": "1",
+                "COOKIES_SAMESITE": "lax",  # Not strict
+                "REQ_ID_ENABLED": "1",
+            },
+            clear=True,
+        ):
             app = create_app()
             with pytest.raises(RuntimeError) as exc_info:
                 async with lifespan(app):
@@ -67,13 +80,17 @@ class TestConfigGuardStartup:
     @pytest.mark.asyncio
     async def test_disabled_request_ids_prevent_startup_in_prod(self):
         """Test that disabled request IDs prevent app startup in prod."""
-        with patch.dict("os.environ", {
-            "ENV": "prod",
-            "JWT_SECRET": "a" * 32,
-            "COOKIES_SECURE": "1",
-            "COOKIES_SAMESITE": "strict",
-            "REQ_ID_ENABLED": "0"  # Disabled
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "prod",
+                "JWT_SECRET": "a" * 32,
+                "COOKIES_SECURE": "1",
+                "COOKIES_SAMESITE": "strict",
+                "REQ_ID_ENABLED": "0",  # Disabled
+            },
+            clear=True,
+        ):
             app = create_app()
             with pytest.raises(RuntimeError) as exc_info:
                 async with lifespan(app):
@@ -84,13 +101,17 @@ class TestConfigGuardStartup:
     @pytest.mark.asyncio
     async def test_valid_prod_config_allows_startup(self):
         """Test that valid prod config allows app startup."""
-        with patch.dict("os.environ", {
-            "ENV": "prod",
-            "JWT_SECRET": "a" * 32,
-            "COOKIES_SECURE": "1",
-            "COOKIES_SAMESITE": "strict",
-            "REQ_ID_ENABLED": "1"
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "prod",
+                "JWT_SECRET": "a" * 32,
+                "COOKIES_SECURE": "1",
+                "COOKIES_SAMESITE": "strict",
+                "REQ_ID_ENABLED": "1",
+            },
+            clear=True,
+        ):
             app = create_app()
             # Should complete successfully
             async with lifespan(app):
@@ -99,14 +120,18 @@ class TestConfigGuardStartup:
     @pytest.mark.asyncio
     async def test_dev_mode_allows_weak_config(self):
         """Test that dev mode allows weak config (guardrails skipped)."""
-        with patch.dict("os.environ", {
-            "ENV": "prod",
-            "DEV_MODE": "1",  # Dev mode enabled
-            "JWT_SECRET": "weak",  # Would be rejected without dev mode
-            "COOKIES_SECURE": "0",  # Would be rejected without dev mode
-            "COOKIES_SAMESITE": "lax",  # Would be rejected without dev mode
-            "REQ_ID_ENABLED": "0"  # Would be rejected without dev mode
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "prod",
+                "DEV_MODE": "1",  # Dev mode enabled
+                "JWT_SECRET": "weak",  # Would be rejected without dev mode
+                "COOKIES_SECURE": "0",  # Would be rejected without dev mode
+                "COOKIES_SAMESITE": "lax",  # Would be rejected without dev mode
+                "REQ_ID_ENABLED": "0",  # Would be rejected without dev mode
+            },
+            clear=True,
+        ):
             app = create_app()
             # Should complete successfully (dev mode bypasses guards)
             async with lifespan(app):

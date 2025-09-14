@@ -3,6 +3,7 @@
 This module defines /v1/admin/* routes.
 Leaf module - no imports from app/router/__init__.py.
 """
+
 import logging
 
 from fastapi import APIRouter, Depends, Request
@@ -17,21 +18,27 @@ router = APIRouter(tags=["Admin"])
 # Admin scope requirement - proper implementation with 403 responses
 def require_admin():
     """Require admin scope - raises 403 for unauthorized access."""
+
     async def dependency(request: Request):
         # Use new auth contract helper for consistent 401/403 handling
         from app.security.auth_contract import require_auth
+
         await require_auth(request, required_scopes=["admin:read"])
         return request
+
     return dependency
 
 
 def require_scope(scope: str):
     """Require specific scope - raises 403 for unauthorized access."""
+
     async def dependency(request: Request):
         # Use new auth contract helper for consistent 401/403 handling
         from app.security.auth_contract import require_auth
+
         await require_auth(request, required_scopes=[scope])
         return request
+
     return dependency
 
 
@@ -138,5 +145,5 @@ async def admin_flags_post(request: Request):
     except Exception as e:
         return JSONResponse(
             status_code=400,
-            content={"error": "Invalid request format", "detail": str(e)}
+            content={"error": "Invalid request format", "detail": str(e)},
         )

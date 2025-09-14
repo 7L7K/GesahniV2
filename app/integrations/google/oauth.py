@@ -29,6 +29,7 @@ class GoogleOAuthError(Exception):
 
 class InvalidGrantError(GoogleOAuthError):
     """Special exception for invalid_grant errors (user revoked consent)."""
+
     pass
 
 
@@ -37,14 +38,19 @@ class GoogleOAuth:
         self.client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
         self.client_secret = os.getenv("GOOGLE_CLIENT_SECRET", "").strip()
         self.redirect_uri = os.getenv("GOOGLE_REDIRECT_URI", "").strip()
-        self.scopes = os.getenv("GOOGLE_SCOPES", "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly").strip()
+        self.scopes = os.getenv(
+            "GOOGLE_SCOPES",
+            "openid https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/calendar.readonly",
+        ).strip()
 
         # Do not raise during construction; allow callers/tests to construct
         # the helper even when env vars are not populated. Validation that
         # credentials exist should be performed at the integration callsite
         # (e.g. when building real flows or hitting Google's endpoints).
         if not self.client_id or not self.client_secret:
-            logger.debug("Google OAuth credentials not configured (GOOGLE_CLIENT_ID/SECRET missing)")
+            logger.debug(
+                "Google OAuth credentials not configured (GOOGLE_CLIENT_ID/SECRET missing)"
+            )
 
     def get_authorization_url(self, state: str) -> str:
         from urllib.parse import urlencode
@@ -61,41 +67,62 @@ class GoogleOAuth:
         }
         return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
-    async def exchange_code_for_tokens(self, code: str, code_verifier: str | None = None) -> dict[str, Any]:
+    async def exchange_code_for_tokens(
+        self, code: str, code_verifier: str | None = None
+    ) -> dict[str, Any]:
         # Enforce PKCE presence and length
         if not code_verifier or not (43 <= len(code_verifier) <= 128):
             from .constants import ERR_OAUTH_EXCHANGE_FAILED
             from .errors import OAuthError as _OAuthError
 
-            raise _OAuthError(code=ERR_OAUTH_EXCHANGE_FAILED, http_status=400, reason="missing_or_invalid_pkce", extra=None)
+            raise _OAuthError(
+                code=ERR_OAUTH_EXCHANGE_FAILED,
+                http_status=400,
+                reason="missing_or_invalid_pkce",
+                extra=None,
+            )
 
         # Call unified async token exchange helper and emit metrics
         from ...metrics import GOOGLE_TOKEN_EXCHANGE_FAILED, GOOGLE_TOKEN_EXCHANGE_OK
+
         try:
             td = await async_token_exchange(code, code_verifier=code_verifier)
             try:
                 scopes_hash = "unknown"
-                GOOGLE_TOKEN_EXCHANGE_OK.labels(user_id="unknown", scopes_hash=scopes_hash).inc()
+                GOOGLE_TOKEN_EXCHANGE_OK.labels(
+                    user_id="unknown", scopes_hash=scopes_hash
+                ).inc()
             except Exception:
                 pass
             return td
         except OAuthError:
             # Integration layer will have sanitized the OAuthError; emit failure metric and re-raise
             try:
-                GOOGLE_TOKEN_EXCHANGE_FAILED.labels(user_id="unknown", reason="oauth_error").inc()
+                GOOGLE_TOKEN_EXCHANGE_FAILED.labels(
+                    user_id="unknown", reason="oauth_error"
+                ).inc()
             except Exception:
                 pass
             raise
         except Exception as e:
-            logger.error("Token exchange unexpected error", extra={"meta": {"error": str(e)}})
+            logger.error(
+                "Token exchange unexpected error", extra={"meta": {"error": str(e)}}
+            )
             try:
-                GOOGLE_TOKEN_EXCHANGE_FAILED.labels(user_id="unknown", reason="internal_error").inc()
+                GOOGLE_TOKEN_EXCHANGE_FAILED.labels(
+                    user_id="unknown", reason="internal_error"
+                ).inc()
             except Exception:
                 pass
             from .constants import ERR_OAUTH_EXCHANGE_FAILED
             from .errors import OAuthError as _OAuthError
 
-            raise _OAuthError(code=ERR_OAUTH_EXCHANGE_FAILED, http_status=500, reason="internal_error", extra=None)
+            raise _OAuthError(
+                code=ERR_OAUTH_EXCHANGE_FAILED,
+                http_status=500,
+                reason="internal_error",
+                extra=None,
+            )
 
     async def refresh_access_token(self, refresh_token: str) -> dict[str, Any]:
         token_url = "https://oauth2.googleapis.com/token"
@@ -114,7 +141,9 @@ class GoogleOAuth:
                 try:
                     r = await client.post(token_url, data=data, headers=headers)
                 except Exception:
-                    raise GoogleOAuthError(f"Token refresh failed: network error: {exc}")
+                    raise GoogleOAuthError(
+                        f"Token refresh failed: network error: {exc}"
+                    )
 
             if r.status_code != 200:
                 # Check for invalid_grant error (user revoked consent)
@@ -122,10 +151,14 @@ class GoogleOAuth:
                     error_data = r.json()
                     if error_data.get("error") == "invalid_grant":
                         # Create a special error for invalid_grant to distinguish from other failures
-                        raise InvalidGrantError(f"Token refresh failed due to invalid_grant: {r.status_code} {r.text}")
+                        raise InvalidGrantError(
+                            f"Token refresh failed due to invalid_grant: {r.status_code} {r.text}"
+                        )
                 except Exception:
                     pass  # Fall through to generic error
-                raise GoogleOAuthError(f"Token refresh failed: {r.status_code} {r.text}")
+                raise GoogleOAuthError(
+                    f"Token refresh failed: {r.status_code} {r.text}"
+                )
             td = r.json()
             now = int(time.time())
             expires_in = int(td.get("expires_in", 3600))
@@ -153,7 +186,12 @@ async def calendar_next_event(access_token: str) -> dict | None:
     """Small probe: return the next upcoming event for the primary calendar."""
     headers = {"Authorization": f"Bearer {access_token}"}
     url = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
-    params = {"orderBy": "startTime", "singleEvents": True, "maxResults": 1, "timeMin": time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+    params = {
+        "orderBy": "startTime",
+        "singleEvents": True,
+        "maxResults": 1,
+        "timeMin": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+    }
     async with httpx.AsyncClient(timeout=10.0) as client:
         r = await client.get(url, headers=headers, params=params)
         if r.status_code != 200:
@@ -167,7 +205,12 @@ def make_authorize_url(state: str) -> str:
     return GoogleOAuth().get_authorization_url(state)
 
 
-async def exchange_code(code: str, state: str | None = None, verify_state: bool = True, code_verifier: str | None = None):
+async def exchange_code(
+    code: str,
+    state: str | None = None,
+    verify_state: bool = True,
+    code_verifier: str | None = None,
+):
     """Exchange an authorization code for Google credentials.
 
     If `state` is provided and `verify_state` is True, the state will be verified
@@ -180,21 +223,32 @@ async def exchange_code(code: str, state: str | None = None, verify_state: bool 
         except Exception:
             from ..error_envelope import raise_enveloped
 
-            raise_enveloped("invalid_state", "Invalid state", hint="Retry the OAuth flow", status=400)
+            raise_enveloped(
+                "invalid_state",
+                "Invalid state",
+                hint="Retry the OAuth flow",
+                status=400,
+            )
 
     oauth = GoogleOAuth()
     td = await oauth.exchange_code_for_tokens(code, code_verifier)
 
     # Create Google credentials object
-    if not _GOOGLE_AVAILABLE or _Credentials is None:  # pragma: no cover - env-dependent
+    if (
+        not _GOOGLE_AVAILABLE or _Credentials is None
+    ):  # pragma: no cover - env-dependent
         from ..error_envelope import raise_enveloped
-        raise_enveloped("google_unavailable", "google credentials unavailable", status=501)
+
+        raise_enveloped(
+            "google_unavailable", "google credentials unavailable", status=501
+        )
 
     now = int(time.time())
     expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
 
     # Convert expires_at timestamp to datetime
     from datetime import UTC, datetime
+
     expiry_dt = datetime.fromtimestamp(expires_at, tz=UTC)
 
     creds = _Credentials(
@@ -246,6 +300,7 @@ async def exchange_code(code: str, state: str | None = None, verify_state: bool 
 async def refresh_token(refresh_token: str) -> dict[str, Any]:
     oauth = GoogleOAuth()
     return await oauth.refresh_access_token(refresh_token)
+
 
 import base64
 import hashlib
@@ -347,7 +402,9 @@ def _verify_state(state: str) -> dict:
     except Exception:
         from ...error_envelope import raise_enveloped
 
-        raise_enveloped("invalid_state", "Invalid state", hint="retry the OAuth flow", status=400)
+        raise_enveloped(
+            "invalid_state", "Invalid state", hint="retry the OAuth flow", status=400
+        )
 
 
 def create_flow(scopes: list[str] | None = None):
@@ -375,13 +432,16 @@ def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str
 
     # Debug: Log what scopes will be used
     current_scopes = get_google_scopes()
-    logger.info("🎵 GOOGLE BUILD_AUTH_URL: Scopes being used", extra={
-        "meta": {
-            "user_id": user_id,
-            "scopes": current_scopes,
-            "scopes_count": len(current_scopes)
-        }
-    })
+    logger.info(
+        "🎵 GOOGLE BUILD_AUTH_URL: Scopes being used",
+        extra={
+            "meta": {
+                "user_id": user_id,
+                "scopes": current_scopes,
+                "scopes_count": len(current_scopes),
+            }
+        },
+    )
 
     flow = create_flow()
     # Ensure redirect_uri is explicitly set on the Flow before generating the
@@ -397,7 +457,6 @@ def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str
         state = _sign_state({"user_id": user_id})
     flow.state = state
     return flow.authorization_url()[0], state
-
 
 
 def refresh_if_needed(creds: Any) -> Any:
@@ -444,7 +503,9 @@ def creds_to_record(creds: Any) -> dict:
     except Exception as e:  # pragma: no cover - defensive
         from ..error_envelope import raise_enveloped
 
-        raise_enveloped("bad_credentials_object", f"bad credentials object: {e}", status=400)
+        raise_enveloped(
+            "bad_credentials_object", f"bad credentials object: {e}", status=400
+        )
 
 
 def record_to_creds(record):
@@ -453,7 +514,9 @@ def record_to_creds(record):
     ):  # pragma: no cover - env-dependent
         from ..error_envelope import raise_enveloped
 
-        raise_enveloped("google_unavailable", "google credentials unavailable", status=501)
+        raise_enveloped(
+            "google_unavailable", "google credentials unavailable", status=501
+        )
     return _Credentials(
         token=record.access_token,
         refresh_token=record.refresh_token,

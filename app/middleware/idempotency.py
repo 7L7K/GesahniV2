@@ -27,6 +27,7 @@ class IdempotencyStore:
             redis_url = os.getenv("REDIS_URL")
             if redis_url:
                 from redis import Redis
+
                 self._redis_client = Redis.from_url(redis_url, decode_responses=True)
                 # Test connection
                 self._redis_client.ping()
@@ -34,7 +35,9 @@ class IdempotencyStore:
             else:
                 logger.info("Idempotency store using in-memory backend (no REDIS_URL)")
         except Exception as e:
-            logger.warning(f"Redis unavailable for idempotency store, using in-memory: {e}")
+            logger.warning(
+                f"Redis unavailable for idempotency store, using in-memory: {e}"
+            )
             self._redis_client = None
 
         # In-memory fallback
@@ -46,8 +49,15 @@ class IdempotencyStore:
         raw = f"idempotency:{idempotency_key}:{method}:{path}"
         return hashlib.sha256(raw.encode()).hexdigest()
 
-    def store_response(self, idempotency_key: str, method: str, path: str,
-                      status_code: int, content: Any, ttl_seconds: int = 86400) -> None:
+    def store_response(
+        self,
+        idempotency_key: str,
+        method: str,
+        path: str,
+        status_code: int,
+        content: Any,
+        ttl_seconds: int = 86400,
+    ) -> None:
         """Store a response for an idempotency key with TTL."""
         cache_key = self._get_key(idempotency_key, method, path)
         data = {
@@ -171,18 +181,18 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
         try:
             # Basic validation - should be at least 8 characters and contain some variety
             if len(idempotency_key) < 8 or len(set(idempotency_key)) < 4:
-                logger.warning(f"Invalid idempotency key format: {idempotency_key[:16]}...")
+                logger.warning(
+                    f"Invalid idempotency key format: {idempotency_key[:16]}..."
+                )
                 raise HTTPException(
-                    status_code=400,
-                    detail="Invalid Idempotency-Key format"
+                    status_code=400, detail="Invalid Idempotency-Key format"
                 )
         except HTTPException:
             raise
         except Exception:
             logger.warning(f"Invalid idempotency key format: {idempotency_key[:16]}...")
             raise HTTPException(
-                status_code=400,
-                detail="Invalid Idempotency-Key format"
+                status_code=400, detail="Invalid Idempotency-Key format"
             )
 
         # Read the request body for hashing
@@ -190,7 +200,9 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
 
         # Check if we have a stored response for this idempotency key
         store = get_idempotency_store()
-        stored_response = store.get_response(idempotency_key, request.method, request.url.path)
+        stored_response = store.get_response(
+            idempotency_key, request.method, request.url.path
+        )
 
         if stored_response:
             # Create a hash of the current request
@@ -200,34 +212,39 @@ class IdempotencyMiddleware(BaseHTTPMiddleware):
             stored_hash = stored_response.get("request_hash")
             if stored_hash and stored_hash != current_request_hash:
                 # Different request with same idempotency key - conflict
-                logger.warning(f"Idempotency key reuse with different request: {idempotency_key[:8]}...")
+                logger.warning(
+                    f"Idempotency key reuse with different request: {idempotency_key[:8]}..."
+                )
                 raise HTTPException(
                     status_code=409,
                     detail={
                         "error": "Idempotency key conflict",
                         "message": "The provided Idempotency-Key was used for a different request",
-                        "code": "idempotency_conflict"
-                    }
+                        "code": "idempotency_conflict",
+                    },
                 )
 
             # Return the stored response - extract the actual response from the stored data
-            logger.info(f"Returning cached idempotent response for key: {idempotency_key[:8]}...")
+            logger.info(
+                f"Returning cached idempotent response for key: {idempotency_key[:8]}..."
+            )
             stored_content = stored_response["content"]
-            logger.debug(f"Stored content type: {type(stored_content)}, content: {stored_content}")
+            logger.debug(
+                f"Stored content type: {type(stored_content)}, content: {stored_content}"
+            )
 
             if isinstance(stored_content, dict) and "response" in stored_content:
                 # Return the original response format
                 logger.debug("Extracting response from stored content")
                 return JSONResponse(
                     status_code=stored_response["status_code"],
-                    content=stored_content["response"]
+                    content=stored_content["response"],
                 )
             else:
                 # Fallback for older format
                 logger.debug("Using stored content directly (fallback)")
                 return JSONResponse(
-                    status_code=stored_response["status_code"],
-                    content=stored_content
+                    status_code=stored_response["status_code"], content=stored_content
                 )
 
         # Create a hash of this request for future comparison

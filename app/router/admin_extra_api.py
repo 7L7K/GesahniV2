@@ -5,6 +5,7 @@ clients expect at top-level paths. These try to call richer admin helpers
 when available but degrade gracefully to lightweight shapes used by the
 alias fallbacks.
 """
+
 from __future__ import annotations
 
 import logging
@@ -91,8 +92,13 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
         except Exception as e:
             logger.exception("admin.bootstrap_vector_store: store init failed: %s", e)
             if strict:
-                return JSONResponse({"detail": "vector_store_misconfigured", "error": str(e)}, status_code=400)
-            return JSONResponse({"status": "error", "detail": "init_failed"}, status_code=202)
+                return JSONResponse(
+                    {"detail": "vector_store_misconfigured", "error": str(e)},
+                    status_code=400,
+                )
+            return JSONResponse(
+                {"status": "error", "detail": "init_failed"}, status_code=202
+            )
 
         # If store initialised, attempt bootstrap via admin helper if present
         try:
@@ -100,12 +106,15 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
 
             _q_bootstrap(coll, settings.embed_dim())
         except Exception:
-            logger.info("admin.bootstrap_vector_store: bootstrap helper missing or failed; returning accepted")
+            logger.info(
+                "admin.bootstrap_vector_store: bootstrap helper missing or failed; returning accepted"
+            )
     except Exception as e:
         logger.exception("admin.bootstrap_vector_store: unexpected error: %s", e)
         if strict:
-            return JSONResponse({"detail": "vector_store_error", "error": str(e)}, status_code=500)
+            return JSONResponse(
+                {"detail": "vector_store_error", "error": str(e)}, status_code=500
+            )
         return JSONResponse({"status": "accepted", "collection": coll}, status_code=202)
 
     return JSONResponse({"status": "accepted", "collection": coll}, status_code=202)
-

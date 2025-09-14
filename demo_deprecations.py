@@ -3,6 +3,7 @@
 Demonstration of API deprecation functionality.
 Shows deprecated routes and their OpenAPI documentation.
 """
+
 from fastapi.testclient import TestClient
 
 from app.main import create_app
@@ -64,16 +65,20 @@ def demo_deprecations():
             content = f.read()
 
         # Count deprecated endpoints
-        lines = content.split('\n')
-        table_lines = [line for line in lines if '|' in line and ('GET' in line or 'POST' in line)]
-        print(f"  📄 DEPRECATIONS.md exists with {len(table_lines)} documented deprecated endpoints")
+        lines = content.split("\n")
+        table_lines = [
+            line for line in lines if "|" in line and ("GET" in line or "POST" in line)
+        ]
+        print(
+            f"  📄 DEPRECATIONS.md exists with {len(table_lines)} documented deprecated endpoints"
+        )
 
         # Show a few examples
         if table_lines:
             print("\n  📋 Examples from documentation:")
             for line in table_lines[:3]:  # Show first 3 examples
-                if 'GET' in line or 'POST' in line:
-                    parts = [part.strip() for part in line.split('|') if part.strip()]
+                if "GET" in line or "POST" in line:
+                    parts = [part.strip() for part in line.split("|") if part.strip()]
                     if len(parts) >= 2:
                         print(f"    • {parts[1]}")
 

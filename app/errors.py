@@ -1,4 +1,4 @@
-'''Application-level errors for routers and backends.'''
+"""Application-level errors for routers and backends."""
 
 
 class BackendUnavailableError(RuntimeError):
@@ -6,5 +6,3 @@ class BackendUnavailableError(RuntimeError):
 
     def __init__(self, message: str):
         super().__init__(message)
-
-

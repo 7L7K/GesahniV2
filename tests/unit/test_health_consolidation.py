@@ -9,6 +9,7 @@ This test verifies that:
    - GET /v1/healthz/ready
 4. Only canonical endpoints appear in OpenAPI schema
 """
+
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.testclient import TestClient
@@ -39,6 +40,7 @@ def test_health_consolidation():
 
         # Mock compat router with redirects (must come first)
         compat_router = APIRouter(include_in_schema=False)
+
         @compat_router.get("/health")
         def mock_health_redirect():
             return RedirectResponse(url="/v1/health", status_code=308)
@@ -49,6 +51,7 @@ def test_health_consolidation():
 
         # Mock health router with canonical endpoints
         health_router = APIRouter()
+
         @health_router.get("/v1/health")
         def mock_v1_health():
             return {"status": "ok"}
@@ -57,7 +60,9 @@ def test_health_consolidation():
         def mock_healthz_live():
             return {"status": "ok"}
 
-        @health_router.get("/healthz/ready")  # Note: healthz endpoints are at root level
+        @health_router.get(
+            "/healthz/ready"
+        )  # Note: healthz endpoints are at root level
         def mock_healthz_ready():
             return {"status": "ok", "ok": True}
 
@@ -67,11 +72,13 @@ def test_health_consolidation():
 
         # Mock status router
         status_router = APIRouter()
+
         @status_router.get("/status")
         def mock_status():
             return {"status": "ok"}
 
         status_public_router = APIRouter()
+
         @status_public_router.get("/rate_limit_status")
         def mock_rate_limit_status():
             return {"backend": "ok"}
@@ -137,6 +144,7 @@ def test_health_schema_inclusion():
         from fastapi import APIRouter
 
         health_router = APIRouter()
+
         @health_router.get("/v1/health")
         def mock_v1_health():
             return {"status": "ok"}
@@ -163,11 +171,13 @@ def test_health_schema_inclusion():
             return {"ok": True, "status": "ok"}
 
         status_router = APIRouter()
+
         @status_router.get("/status")
         def mock_status():
             return {"status": "ok"}
 
         status_public_router = APIRouter()
+
         @status_public_router.get("/rate_limit_status")
         def mock_rate_limit_status():
             return {"backend": "ok"}
@@ -207,6 +217,7 @@ def test_health_redirect_behavior():
 
     # Health router with canonical endpoints
     health_router = APIRouter()
+
     @health_router.get("/v1/health")
     def v1_health():
         return {"status": "ok", "canonical": True}
@@ -225,6 +236,7 @@ def test_health_redirect_behavior():
 
     # Compat router with redirects
     compat_router = APIRouter(include_in_schema=False)
+
     @compat_router.get("/health")
     def health_redirect():
         return RedirectResponse(url="/v1/health", status_code=308)

@@ -18,10 +18,12 @@ def test_oauth_flow():
     # Step 1: Test login URL generation
     print("\n1️⃣ Testing Login URL Generation")
     try:
-        response = requests.get("http://localhost:8000/v1/google/auth/login_url", timeout=10)
+        response = requests.get(
+            "http://localhost:8000/v1/google/auth/login_url", timeout=10
+        )
         if response.status_code == 200:
             data = response.json()
-            auth_url = data.get('auth_url', '')
+            auth_url = data.get("auth_url", "")
 
             print("✅ Login URL generated successfully")
             print(f"📨 Auth URL: {auth_url[:80]}...")
@@ -30,7 +32,13 @@ def test_oauth_flow():
             parsed = urlparse(auth_url)
             params = parse_qs(parsed.query)
 
-            required_params = ['client_id', 'redirect_uri', 'response_type', 'scope', 'state']
+            required_params = [
+                "client_id",
+                "redirect_uri",
+                "response_type",
+                "scope",
+                "state",
+            ]
             missing_params = [p for p in required_params if p not in params]
 
             if missing_params:
@@ -69,7 +77,9 @@ def test_oauth_flow():
         response = requests.get("http://localhost:3000", timeout=10)
         if response.status_code == 200:
             print("✅ Frontend is accessible")
-            print("   Note: Frontend rendering is client-side, Google Connect UI may not be visible in raw HTML")
+            print(
+                "   Note: Frontend rendering is client-side, Google Connect UI may not be visible in raw HTML"
+            )
         else:
             print(f"❌ Frontend check failed: HTTP {response.status_code}")
             return False
@@ -81,18 +91,27 @@ def test_oauth_flow():
     print("\n4️⃣ Testing OAuth Callback Endpoint Validation")
     try:
         # Test missing parameters
-        response = requests.get("http://localhost:8000/v1/google/auth/callback", timeout=10)
+        response = requests.get(
+            "http://localhost:8000/v1/google/auth/callback", timeout=10
+        )
         if response.status_code == 400:
             print("✅ Callback endpoint properly validates missing parameters")
         else:
-            print(f"⚠️ Unexpected response for missing params: HTTP {response.status_code}")
+            print(
+                f"⚠️ Unexpected response for missing params: HTTP {response.status_code}"
+            )
 
         # Test with invalid state
-        response = requests.get("http://localhost:8000/v1/google/auth/callback?code=test&state=invalid", timeout=10)
+        response = requests.get(
+            "http://localhost:8000/v1/google/auth/callback?code=test&state=invalid",
+            timeout=10,
+        )
         if response.status_code == 400:
             print("✅ Callback endpoint properly validates invalid state")
         else:
-            print(f"⚠️ Unexpected response for invalid state: HTTP {response.status_code}")
+            print(
+                f"⚠️ Unexpected response for invalid state: HTTP {response.status_code}"
+            )
 
     except Exception as e:
         print(f"❌ Callback validation test failed: {e}")
@@ -107,7 +126,7 @@ def test_oauth_flow():
         elif response.status_code == 200:
             data = response.json()
             # Check if Google config is present (redacted or not)
-            google_config = {k: v for k, v in data.items() if 'google' in k.lower()}
+            google_config = {k: v for k, v in data.items() if "google" in k.lower()}
             if google_config:
                 print("✅ Google configuration is present in backend config")
             else:
@@ -138,6 +157,7 @@ def test_oauth_flow():
 
     return True
 
+
 def test_manual_oauth_callback():
     """Test the OAuth callback with a simulated successful flow."""
     print("\n🧪 Testing OAuth Callback Simulation")
@@ -153,6 +173,7 @@ def test_manual_oauth_callback():
 
     print("\n✅ All backend components are ready for OAuth flow!")
     return True
+
 
 if __name__ == "__main__":
     print("🔐 Google OAuth Integration Test Suite")

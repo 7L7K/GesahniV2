@@ -38,10 +38,11 @@ def test_auth_post_helper_handles_csrf_automatically():
     client = TestClient(pytest.importorskip("app.main").create_app())
 
     # First, login to establish auth session
-    login_response = client.post("/v1/auth/login", json={
-        "username": "testuser",
-        "password": "secret123"
-    }, allow_redirects=True)
+    login_response = client.post(
+        "/v1/auth/login",
+        json={"username": "testuser", "password": "secret123"},
+        allow_redirects=True,
+    )
 
     # Login should succeed (even if user doesn't exist, auth flow should handle it)
     assert login_response.status_code in [200, 201, 204]
@@ -58,10 +59,11 @@ def test_csrf_skipped_for_bootstrap_requests():
     client = TestClient(pytest.importorskip("app.main").create_app())
 
     # POST request without any auth cookies should succeed (bootstrap scenario)
-    response = auth_post(client, "/v1/auth/register", json={
-        "username": "newuser",
-        "password": "secret123"
-    })
+    response = auth_post(
+        client,
+        "/v1/auth/register",
+        json={"username": "newuser", "password": "secret123"},
+    )
 
     # Should succeed because no auth cookies are present (bootstrap path)
     assert response.status_code in [200, 201, 400]  # 400 is ok if user exists
@@ -72,10 +74,11 @@ def test_csrf_enforced_after_auth_cookies_present():
     client = TestClient(pytest.importorskip("app.main").create_app())
 
     # First establish auth session
-    login_response = client.post("/v1/auth/login", json={
-        "username": "testuser",
-        "password": "secret123"
-    }, allow_redirects=True)
+    login_response = client.post(
+        "/v1/auth/login",
+        json={"username": "testuser", "password": "secret123"},
+        allow_redirects=True,
+    )
     assert login_response.status_code in [200, 201, 204]
 
     # Now try a POST without CSRF - should fail
@@ -90,10 +93,11 @@ def test_auth_helpers_work_for_all_http_methods():
     client = TestClient(pytest.importorskip("app.main").create_app())
 
     # Login first
-    client.post("/v1/auth/login", json={
-        "username": "testuser",
-        "password": "secret123"
-    }, allow_redirects=True)
+    client.post(
+        "/v1/auth/login",
+        json={"username": "testuser", "password": "secret123"},
+        allow_redirects=True,
+    )
 
     # Test auth helper methods with endpoints that actually support them
     methods_and_responses = [
@@ -106,7 +110,12 @@ def test_auth_helpers_work_for_all_http_methods():
         try:
             response = method_func(client, endpoint)
             # Should succeed or return expected auth-related status
-            assert response.status_code in [200, 204, 404, 405]  # 404/405 if endpoint doesn't exist
+            assert response.status_code in [
+                200,
+                204,
+                404,
+                405,
+            ]  # 404/405 if endpoint doesn't exist
         except Exception as e:
             # If endpoint doesn't exist, that's ok for this test
             if "404" in str(e) or "405" in str(e):
@@ -129,11 +138,17 @@ def test_apple_callback_supports_get_and_post():
 
     # Test GET method (should not return 405)
     response = client.get("/v1/auth/apple/callback?state=test-state&code=fake-code")
-    assert response.status_code != 405, f"GET method should be supported, got {response.status_code}"
+    assert (
+        response.status_code != 405
+    ), f"GET method should be supported, got {response.status_code}"
 
     # Test POST method (should not return 405)
-    response = client.post("/v1/auth/apple/callback", data={"state": "test-state", "code": "fake-code"})
-    assert response.status_code != 405, f"POST method should be supported, got {response.status_code}"
+    response = client.post(
+        "/v1/auth/apple/callback", data={"state": "test-state", "code": "fake-code"}
+    )
+    assert (
+        response.status_code != 405
+    ), f"POST method should be supported, got {response.status_code}"
 
 
 def test_logout_all_supports_post_not_delete():
@@ -142,11 +157,15 @@ def test_logout_all_supports_post_not_delete():
 
     # POST should be supported (may require auth/CSRF but shouldn't be 405)
     response = client.post("/v1/auth/logout_all")
-    assert response.status_code != 405, f"POST method should be supported for logout_all, got {response.status_code}"
+    assert (
+        response.status_code != 405
+    ), f"POST method should be supported for logout_all, got {response.status_code}"
 
     # DELETE should return 405 (method not allowed)
     response = client.delete("/v1/auth/logout_all")
-    assert response.status_code == 405, "DELETE method should not be supported for logout_all"
+    assert (
+        response.status_code == 405
+    ), "DELETE method should not be supported for logout_all"
 
 
 def test_spotify_disconnect_supports_delete():
@@ -155,7 +174,9 @@ def test_spotify_disconnect_supports_delete():
 
     # DELETE should be supported (may require auth/CSRF but shouldn't be 405)
     response = client.delete("/v1/spotify/disconnect")
-    assert response.status_code != 405, f"DELETE method should be supported for Spotify disconnect, got {response.status_code}"
+    assert (
+        response.status_code != 405
+    ), f"DELETE method should be supported for Spotify disconnect, got {response.status_code}"
 
 
 def test_legacy_redirects_with_allow_redirects_true():
@@ -175,18 +196,15 @@ def test_csrf_helpers_with_custom_headers():
     client = TestClient(pytest.importorskip("app.main").create_app())
 
     # Login first
-    client.post("/v1/auth/login", json={
-        "username": "testuser",
-        "password": "secret123"
-    }, allow_redirects=True)
+    client.post(
+        "/v1/auth/login",
+        json={"username": "testuser", "password": "secret123"},
+        allow_redirects=True,
+    )
 
     # Use auth_post with custom headers
     custom_headers = {"X-Custom-Header": "test-value"}
-    response = auth_post(
-        client,
-        "/v1/auth/logout",
-        headers=custom_headers
-    )
+    response = auth_post(client, "/v1/auth/logout", headers=custom_headers)
 
     # Should succeed and custom headers should be preserved
     assert response.status_code in [200, 204]
@@ -197,18 +215,19 @@ def test_bootstrap_vs_authenticated_csrf_behavior():
     client = TestClient(pytest.importorskip("app.main").create_app())
 
     # Test 1: Bootstrap state (no auth cookies) - should skip CSRF
-    bootstrap_response = client.post("/v1/auth/register", json={
-        "username": "bootstrap_test",
-        "password": "secret123"
-    })
+    bootstrap_response = client.post(
+        "/v1/auth/register",
+        json={"username": "bootstrap_test", "password": "secret123"},
+    )
     # Should not be blocked by CSRF (may fail for other reasons like user exists)
     assert bootstrap_response.status_code != 403
 
     # Test 2: Authenticated state - should enforce CSRF
-    login_response = client.post("/v1/auth/login", json={
-        "username": "testuser",
-        "password": "secret123"
-    }, allow_redirects=True)
+    login_response = client.post(
+        "/v1/auth/login",
+        json={"username": "testuser", "password": "secret123"},
+        allow_redirects=True,
+    )
     assert login_response.status_code in [200, 201, 204]
 
     # Now POST without CSRF should fail

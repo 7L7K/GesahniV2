@@ -3,6 +3,7 @@
 Database setup script for tests.
 Ensures all required tables exist for test execution.
 """
+
 import asyncio
 import os
 import sqlite3
@@ -11,6 +12,7 @@ from pathlib import Path
 
 # Add the app directory to the Python path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 
 def create_missing_tables():
     """Create missing tables that tests expect to exist."""
@@ -68,7 +70,7 @@ def create_missing_tables():
                 last_login DATETIME,
                 request_count INTEGER DEFAULT 0
             );
-        """
+        """,
     }
 
     # Main database files to check/update
@@ -78,7 +80,7 @@ def create_missing_tables():
         "third_party_tokens.db",
         f"{test_db_dir}/auth.db",
         f"{test_db_dir}/users.db",
-        f"{test_db_dir}/third_party_tokens.db"
+        f"{test_db_dir}/third_party_tokens.db",
     ]
 
     for db_file in db_files:
@@ -98,6 +100,7 @@ def create_missing_tables():
         except Exception as e:
             print(f"  ✗ Failed to setup {db_file}: {e}")
             continue
+
 
 async def async_db_setup():
     """Async database setup for stores that need it."""
@@ -119,7 +122,13 @@ async def async_db_setup():
         try:
             # Token DAO setup
             dao = _auth_tokens.TokenDAO(
-                str(getattr(_auth_tokens.TokenDAO, "DEFAULT_DB_PATH", "third_party_tokens.db"))
+                str(
+                    getattr(
+                        _auth_tokens.TokenDAO,
+                        "DEFAULT_DB_PATH",
+                        "third_party_tokens.db",
+                    )
+                )
             )
             await dao._ensure_table()
             print("  ✓ Token store tables ensured")
@@ -143,6 +152,7 @@ async def async_db_setup():
     except Exception as e:
         print(f"Async setup failed: {e}")
 
+
 def main():
     """Main setup function."""
     print("🚀 Setting up test databases...")
@@ -161,6 +171,7 @@ def main():
         print(f"Async setup failed: {e}")
 
     print("✅ Database setup complete!")
+
 
 if __name__ == "__main__":
     main()

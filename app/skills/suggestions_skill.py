@@ -23,13 +23,18 @@ def _save_suggestions(lst: list[dict]) -> None:
         import json
 
         _SUG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _SUG_PATH.write_text(json.dumps(lst, ensure_ascii=False, indent=2), encoding="utf-8")
+        _SUG_PATH.write_text(
+            json.dumps(lst, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     except Exception:
         pass
 
 
 class SuggestionsSkill(Skill):
-    PATTERNS = [re.compile(r"show suggestions", re.I), re.compile(r"dismiss suggestion (?P<idx>\d+)", re.I)]
+    PATTERNS = [
+        re.compile(r"show suggestions", re.I),
+        re.compile(r"dismiss suggestion (?P<idx>\d+)", re.I),
+    ]
 
     async def run(self, prompt: str, match) -> str:
         gd = match.groupdict()
@@ -39,7 +44,12 @@ class SuggestionsSkill(Skill):
             if 0 <= idx < len(s):
                 s.pop(idx)
                 _save_suggestions(s)
-                await record_action("suggestion.dismiss", idempotency_key=None, metadata={"idx": idx}, reversible=False)
+                await record_action(
+                    "suggestion.dismiss",
+                    idempotency_key=None,
+                    metadata={"idx": idx},
+                    reversible=False,
+                )
                 return "Suggestion dismissed."
             return "No such suggestion."
         s = _load_suggestions()
@@ -62,13 +72,19 @@ _SUGGESTIONS: list[dict[str, Any]] = []
 
 
 class SuggestionsSkill(Skill):
-    PATTERNS = [re.compile(r"show suggestions", re.I), re.compile(r"accept suggestion (?P<id>\d+)", re.I), re.compile(r"dismiss suggestion (?P<id>\d+)", re.I)]
+    PATTERNS = [
+        re.compile(r"show suggestions", re.I),
+        re.compile(r"accept suggestion (?P<id>\d+)", re.I),
+        re.compile(r"dismiss suggestion (?P<id>\d+)", re.I),
+    ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
         if match.re.pattern.startswith("show"):
             if not _SUGGESTIONS:
                 return "No suggestions right now."
-            return "; ".join(f"{i}. {s.get('proposal')}" for i, s in enumerate(_SUGGESTIONS, 1))
+            return "; ".join(
+                f"{i}. {s.get('proposal')}" for i, s in enumerate(_SUGGESTIONS, 1)
+            )
         if match.re.pattern.startswith("accept"):
             idx = int(match.group("id")) - 1
             if 0 <= idx < len(_SUGGESTIONS):
@@ -88,6 +104,5 @@ class SuggestionsSkill(Skill):
     def push_suggestion(sugg: dict[str, Any]) -> None:
         _SUGGESTIONS.append(sugg)
 
+
 __all__ = ["SuggestionsSkill"]
-
-

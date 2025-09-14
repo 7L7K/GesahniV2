@@ -14,4 +14,3 @@ for r in app.routes:
 
 for methods, path, name, kind in sorted(rows, key=lambda x: ("/".join(x[0]), x[1])):
     print(f"{'/'.join(methods):8}  {path:40}  {name}  [{kind}]")
-

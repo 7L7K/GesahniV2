@@ -22,7 +22,9 @@ logger = logging.getLogger(__name__)
 # Exceptions
 class NonceConsumedError(Exception):
     """Raised when a state nonce has already been consumed (replay attempt)."""
+
     pass
+
 
 # In-memory nonce store for one-time state consumption (anti-replay protection)
 _nonce_store = set()
@@ -41,7 +43,9 @@ def _cleanup_nonce_store():
             # Remove oldest entries (simplified cleanup)
             items_to_remove = len(_nonce_store) - (_nonce_store_max_size // 2)
             _nonce_store.clear()  # Simplified: clear and rebuild
-            logger.warning(f"🧹 Cleaned up nonce store (removed {items_to_remove} entries)")
+            logger.warning(
+                f"🧹 Cleaned up nonce store (removed {items_to_remove} entries)"
+            )
 
 
 def store_nonce(nonce: str) -> bool:
@@ -148,7 +152,9 @@ def verify_signed_state(state: str, consume_nonce_on_success: bool = True) -> bo
     try:
         parts = state.split(":")
         if len(parts) != 4:
-            logger.warning(f"🚨 Invalid state format: expected 4 parts, got {len(parts)}")
+            logger.warning(
+                f"🚨 Invalid state format: expected 4 parts, got {len(parts)}"
+            )
             return False
 
         timestamp, random_token, nonce, signature = parts
@@ -199,7 +205,7 @@ def generate_pkce_verifier() -> str:
     verifier_bytes = secrets.token_bytes(32)
 
     # Base64url encode (RFC 7636 compliant)
-    verifier = base64.urlsafe_b64encode(verifier_bytes).decode('ascii').rstrip('=')
+    verifier = base64.urlsafe_b64encode(verifier_bytes).decode("ascii").rstrip("=")
 
     logger.debug(f"🔐 Generated PKCE verifier (length: {len(verifier)})")
     return verifier
@@ -216,10 +222,10 @@ def generate_pkce_challenge(verifier: str) -> str:
         str: SHA256 hash of verifier, base64url encoded
     """
     # SHA256 hash the verifier
-    digest = hashlib.sha256(verifier.encode('ascii')).digest()
+    digest = hashlib.sha256(verifier.encode("ascii")).digest()
 
     # Base64url encode the hash
-    challenge = base64.urlsafe_b64encode(digest).decode('ascii').rstrip('=')
+    challenge = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
 
     logger.debug("🔏 Generated PKCE challenge from verifier")
     return challenge

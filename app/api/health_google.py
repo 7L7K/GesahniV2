@@ -36,10 +36,11 @@ async def health_google(request: Request):
             "last_changed_at": entry.get("last_changed_at"),
         }
 
-    return JSONResponse({
-        "connected": True,
-        "provider_iss": getattr(t, "provider_iss", None),
-        "provider_sub": getattr(t, "provider_sub", None),
-        "services": services,
-    })
-
+    return JSONResponse(
+        {
+            "connected": True,
+            "provider_iss": getattr(t, "provider_iss", None),
+            "provider_sub": getattr(t, "provider_sub", None),
+            "services": services,
+        }
+    )

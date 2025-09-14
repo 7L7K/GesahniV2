@@ -26,7 +26,10 @@ class OkResponse(CommonOkResponse):
 )
 async def ui_duck(body: DuckBody, user_id: str = Depends(get_current_user_id)):
     # Simulate alert duck: temp cap with restore
-    await music_command(type("_", (), {"command": "volume", "volume": body.level, "temporary": True})(), user_id)  # type: ignore[arg-type]
+    await music_command(
+        type("_", (), {"command": "volume", "volume": body.level, "temporary": True})(),
+        user_id,
+    )  # type: ignore[arg-type]
     return {"status": "ok"}
 
 

@@ -47,7 +47,9 @@ class TestSafeDecodeUrl:
     def test_decode_with_spaces(self):
         """Test decoding with spaces."""
         assert safe_decode_url("hello%20world") == "hello world"
-        assert safe_decode_url("hello+world") == "hello+world"  # + is not converted here
+        assert (
+            safe_decode_url("hello+world") == "hello+world"
+        )  # + is not converted here
 
 
 class TestIsAuthPath:
@@ -106,7 +108,9 @@ class TestSanitizeRedirectPath:
     def test_protocol_relative_rejected(self):
         """Test protocol-relative URLs are rejected."""
         assert sanitize_redirect_path("//evil.com") == DEFAULT_FALLBACK
-        assert sanitize_redirect_path("///evil.com") == "/evil.com"  # Triple slash is valid
+        assert (
+            sanitize_redirect_path("///evil.com") == "/evil.com"
+        )  # Triple slash is valid
 
     def test_non_slash_start_rejected(self):
         """Test paths not starting with / are rejected."""
@@ -125,18 +129,25 @@ class TestSanitizeRedirectPath:
     def test_fragment_stripping(self):
         """Test that fragments are stripped."""
         assert sanitize_redirect_path("/dashboard#section") == "/dashboard"
-        assert sanitize_redirect_path("/settings?tab=profile#anchor") == "/settings?tab=profile"
+        assert (
+            sanitize_redirect_path("/settings?tab=profile#anchor")
+            == "/settings?tab=profile"
+        )
 
     def test_nested_next_removal(self):
         """Test that nested ?next= parameters trigger fallback for security."""
         assert sanitize_redirect_path("/dashboard?next=%2Fsettings") == "/dashboard"
         # When next= parameters are removed, fallback to default for security
-        assert sanitize_redirect_path("/path?other=param&next=%2Fevil") == DEFAULT_FALLBACK
+        assert (
+            sanitize_redirect_path("/path?other=param&next=%2Fevil") == DEFAULT_FALLBACK
+        )
 
     def test_double_encoding_handled(self):
         """Test that double encoding is properly handled."""
         assert sanitize_redirect_path("%252Fdashboard") == "/dashboard"
-        assert sanitize_redirect_path("%252Flogin") == DEFAULT_FALLBACK  # Even if decoded to auth path
+        assert (
+            sanitize_redirect_path("%252Flogin") == DEFAULT_FALLBACK
+        )  # Even if decoded to auth path
 
     def test_slash_normalization(self):
         """Test that multiple slashes are normalized."""
@@ -166,7 +177,9 @@ class TestGetSafeRedirectTarget:
     def test_invalid_next_param_falls_back(self):
         """Test invalid next parameter falls back to default."""
         mock_request = Mock()
-        result = get_safe_redirect_target(mock_request, "/login")  # Auth path should be rejected
+        result = get_safe_redirect_target(
+            mock_request, "/login"
+        )  # Auth path should be rejected
         assert result == DEFAULT_FALLBACK
 
     def test_gs_next_cookie_used(self):

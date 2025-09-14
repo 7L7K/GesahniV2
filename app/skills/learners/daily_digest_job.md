@@ -16,5 +16,3 @@ Plan for a daily summarization job:
 
 Privacy & retention:
 - Keep digest local only; honor PII redaction settings.
-
-

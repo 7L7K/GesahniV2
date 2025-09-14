@@ -21,8 +21,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.chaos import (
-    is_chaos_enabled, log_chaos_status,
-    chaos_wrap_async, chaos_vector_operation_sync
+    is_chaos_enabled,
+    log_chaos_status,
+    chaos_wrap_async,
+    chaos_vector_operation_sync,
 )
 
 
@@ -75,7 +77,10 @@ async def demo_scheduler_chaos():
         print(f"\n  Attempt {i+1}:")
         try:
             from app.chaos import chaos_scheduler_operation
-            result = await chaos_scheduler_operation(f"demo_task_{i}", mock_scheduler_task)
+
+            result = await chaos_scheduler_operation(
+                f"demo_task_{i}", mock_scheduler_task
+            )
             print(f"    ✅ Success: {result}")
         except Exception as e:
             print(f"    💥 Chaos injected: {e}")

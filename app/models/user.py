@@ -160,44 +160,32 @@ async def delete_user_async(user: User) -> None:
 
 def get_session():
     """Deprecated: Use get_async_session() instead."""
-    raise RuntimeError(
-        "Legacy datastore path hit — not allowed in Postgres-only mode"
-    )
+    raise RuntimeError("Legacy datastore path hit — not allowed in Postgres-only mode")
 
 
 def create_user(db, username: str, hashed_password: str) -> User:
     """Deprecated: Use create_user_async() instead."""
-    raise RuntimeError(
-        "Legacy datastore path hit — not allowed in Postgres-only mode"
-    )
+    raise RuntimeError("Legacy datastore path hit — not allowed in Postgres-only mode")
 
 
 def get_user(db, username: str) -> User | None:
     """Deprecated: Use get_user_async() instead."""
-    raise RuntimeError(
-        "Legacy datastore path hit — not allowed in Postgres-only mode"
-    )
+    raise RuntimeError("Legacy datastore path hit — not allowed in Postgres-only mode")
 
 
 def list_users(db) -> Iterable[User]:
     """Deprecated: Use list_users_async() instead."""
-    raise RuntimeError(
-        "Legacy datastore path hit — not allowed in Postgres-only mode"
-    )
+    raise RuntimeError("Legacy datastore path hit — not allowed in Postgres-only mode")
 
 
 def update_login(db, user: User) -> User:
     """Deprecated: Use update_login_async() instead."""
-    raise RuntimeError(
-        "Legacy datastore path hit — not allowed in Postgres-only mode"
-    )
+    raise RuntimeError("Legacy datastore path hit — not allowed in Postgres-only mode")
 
 
 def delete_user(db, user: User) -> None:
     """Deprecated: Use delete_user_async() instead."""
-    raise RuntimeError(
-        "Legacy datastore path hit — not allowed in Postgres-only mode"
-    )
+    raise RuntimeError("Legacy datastore path hit — not allowed in Postgres-only mode")
 
 
 __all__ = [

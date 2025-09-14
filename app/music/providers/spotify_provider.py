@@ -22,7 +22,14 @@ class SpotifyProvider:
         return self.client
 
     # ---- Base provider interface (adapted) ---------------------------------
-    async def play(self, entity_id: str, entity_type: str, *, device_id: str | None = None, position_ms: int | None = None) -> None:
+    async def play(
+        self,
+        entity_id: str,
+        entity_type: str,
+        *,
+        device_id: str | None = None,
+        position_ms: int | None = None,
+    ) -> None:
         """Start or resume playback for a track/album/playlist.
 
         For tracks: send URIs. For album/playlist: use context_uri.
@@ -37,7 +44,7 @@ class SpotifyProvider:
                     pass
 
             uri = entity_id if ":" in (entity_id or "") else None
-            
+
             uris = None
             context_uri = None
             et = (entity_type or "track").lower()
@@ -111,7 +118,9 @@ class SpotifyProvider:
                         name=d.get("name") or "Unknown",
                         type=d.get("type") or "unknown",
                         volume=d.get("volume_percent"),
-                        active=bool(d.get("is_active") or d.get("is_restricted") is False),
+                        active=bool(
+                            d.get("is_active") or d.get("is_restricted") is False
+                        ),
                     )
                 )
             return out
@@ -141,7 +150,9 @@ class SpotifyProvider:
                     track = Track(
                         id=item.get("id") or "",
                         title=item.get("name") or "",
-                        artist=", ".join([a.get("name", "") for a in item.get("artists", [])]),
+                        artist=", ".join(
+                            [a.get("name", "") for a in item.get("artists", [])]
+                        ),
                         album=(item.get("album") or {}).get("name", ""),
                         duration_ms=int(item.get("duration_ms") or 0),
                         explicit=bool(item.get("explicit")),
@@ -158,14 +169,25 @@ class SpotifyProvider:
                     )
             return PlaybackState(
                 is_playing=bool(st.get("is_playing") if st else False),
-                progress_ms=int(st.get("progress_ms") if st and st.get("progress_ms") is not None else 0),
+                progress_ms=int(
+                    st.get("progress_ms")
+                    if st and st.get("progress_ms") is not None
+                    else 0
+                ),
                 track=track,
                 device=device,
                 shuffle=False,
                 repeat="off",
             )
         except Exception:
-            return PlaybackState(is_playing=False, progress_ms=0, track=None, device=None, shuffle=False, repeat="off")
+            return PlaybackState(
+                is_playing=False,
+                progress_ms=0,
+                track=None,
+                device=None,
+                shuffle=False,
+                repeat="off",
+            )
 
     async def set_volume(self, level: int) -> None:
         try:
@@ -187,7 +209,9 @@ class SpotifyProvider:
                     Track(
                         id=t.get("id"),
                         title=t.get("name"),
-                        artist=", ".join([a.get("name", "") for a in t.get("artists", [])]),
+                        artist=", ".join(
+                            [a.get("name", "") for a in t.get("artists", [])]
+                        ),
                         album=(t.get("album") or {}).get("name", ""),
                         duration_ms=int(t.get("duration_ms") or 0),
                         explicit=bool(t.get("explicit")),
@@ -224,4 +248,3 @@ class SpotifyProvider:
             return tracks
         except Exception:
             return []
-

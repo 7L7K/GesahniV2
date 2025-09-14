@@ -9,7 +9,9 @@ import jwt
 from app.auth.constants import JWT_ALG, JWT_AUD, JWT_ISS, JWT_SECRET
 
 
-def mint_test_jwt(payload: dict[str, Any], ttl_seconds: int = 3600, token_type: str = "access") -> str:
+def mint_test_jwt(
+    payload: dict[str, Any], ttl_seconds: int = 3600, token_type: str = "access"
+) -> str:
     """Mint a test JWT using unified constants.
 
     Args:
@@ -21,7 +23,9 @@ def mint_test_jwt(payload: dict[str, Any], ttl_seconds: int = 3600, token_type: 
         JWT token string
     """
     # Get JWT secret from environment or use test default
-    secret = os.getenv("JWT_SECRET") or JWT_SECRET or "test-jwt-secret-key-for-testing-only"
+    secret = (
+        os.getenv("JWT_SECRET") or JWT_SECRET or "test-jwt-secret-key-for-testing-only"
+    )
 
     # Augment payload with standard claims
     now = datetime.now(UTC)
@@ -33,7 +37,7 @@ def mint_test_jwt(payload: dict[str, Any], ttl_seconds: int = 3600, token_type: 
         "iat": int(now.timestamp()),
         "exp": int(exp.timestamp()),
         "type": token_type,
-        **payload
+        **payload,
     }
 
     return jwt.encode(full_payload, secret, algorithm=JWT_ALG)
@@ -54,7 +58,9 @@ def mint_access_token(user_id: str, ttl_seconds: int = 3600, **extra_payload) ->
     return mint_test_jwt(payload, ttl_seconds, "access")
 
 
-def mint_refresh_token(user_id: str, jti: str = None, ttl_seconds: int = 86400, **extra_payload) -> str:
+def mint_refresh_token(
+    user_id: str, jti: str = None, ttl_seconds: int = 86400, **extra_payload
+) -> str:
     """Mint a test refresh token for a user.
 
     Args:

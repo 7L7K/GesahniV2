@@ -1,4 +1,5 @@
 """Public route snapshot test - regression tripwire for critical routes."""
+
 import importlib
 
 
@@ -10,17 +11,19 @@ def test_public_route_snapshot():
     got = sorted({r.path for r in app.routes if hasattr(r, "methods")})
 
     # Critical public routes that should always be available
-    expected = sorted([
-        "/health",
-        "/healthz",
-        "/healthz/live",
-        "/healthz/deps",
-        "/health/vector_store",
-        "/v1/health",
-        "/v1/health/vector_store",
-        "/v1/ping",
-        "/v1/vendor-health",
-    ])
+    expected = sorted(
+        [
+            "/health",
+            "/healthz",
+            "/healthz/live",
+            "/healthz/deps",
+            "/health/vector_store",
+            "/v1/health",
+            "/v1/health/vector_store",
+            "/v1/ping",
+            "/v1/vendor-health",
+        ]
+    )
 
     for p in expected:
         assert p in got, f"Missing critical public route: {p}"

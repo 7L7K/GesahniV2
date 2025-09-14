@@ -12,7 +12,9 @@ from datetime import datetime
 from pathlib import Path
 
 
-def generate_mock_hey_csv(output_file: Path, endpoint: str, base_response_time: float = 50.0):
+def generate_mock_hey_csv(
+    output_file: Path, endpoint: str, base_response_time: float = 50.0
+):
     """Generate a mock CSV file that simulates hey output."""
 
     # Simulate realistic response time distribution
@@ -37,18 +39,20 @@ def generate_mock_hey_csv(output_file: Path, endpoint: str, base_response_time: 
     p99_time = response_times[int(len(response_times) * 0.99)]
 
     # Create CSV content (hey format)
-    with open(output_file, 'w', newline='') as f:
+    with open(output_file, "w", newline="") as f:
         writer = csv.writer(f)
         # hey CSV format: total,avg,min,max,p50,p95,p99
-        writer.writerow([
-            len(response_times),  # total requests
-            avg_time,  # avg
-            min_time,  # min
-            max_time,  # max
-            p50_time,  # p50
-            p95_time,  # p95
-            p99_time   # p99
-        ])
+        writer.writerow(
+            [
+                len(response_times),  # total requests
+                avg_time,  # avg
+                min_time,  # min
+                max_time,  # max
+                p50_time,  # p50
+                p95_time,  # p95
+                p99_time,  # p99
+            ]
+        )
 
     print(f"✅ Generated mock results for {endpoint}:")
     print(f"   P95: {p95_time:.1f}ms, Avg: {avg_time:.1f}ms, Max: {max_time:.1f}ms")
@@ -61,16 +65,18 @@ def create_mock_baselines():
     baselines_dir.mkdir(exist_ok=True)
 
     endpoints = [
-        ("/v1/healthz/live", 25.0),    # Fast health check
-        ("/v1/whoami", 75.0),          # Auth check with some processing
-        ("/v1/auth/login", 150.0),     # Login with validation
-        ("/v1/music/command", 100.0)   # Music command processing
+        ("/v1/healthz/live", 25.0),  # Fast health check
+        ("/v1/whoami", 75.0),  # Auth check with some processing
+        ("/v1/auth/login", 150.0),  # Login with validation
+        ("/v1/music/command", 100.0),  # Music command processing
     ]
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
     for endpoint, base_time in endpoints:
-        baseline_file = baselines_dir / f"{endpoint.replace('/', '_').lstrip('_')}_baseline.json"
+        baseline_file = (
+            baselines_dir / f"{endpoint.replace('/', '_').lstrip('_')}_baseline.json"
+        )
 
         # Generate slightly better baseline performance (simulating optimization)
         baseline_p95 = base_time * 0.8  # 20% better than current
@@ -85,12 +91,13 @@ def create_mock_baselines():
                 "max_response_time": baseline_p95 * 3.0,
                 "p50_response_time": baseline_p95 * 0.5,
                 "p95_response_time": baseline_p95,
-                "p99_response_time": baseline_p95 * 1.5
-            }
+                "p99_response_time": baseline_p95 * 1.5,
+            },
         }
 
-        with open(baseline_file, 'w') as f:
+        with open(baseline_file, "w") as f:
             import json
+
             json.dump(baseline_data, f, indent=2)
 
         print(f"✅ Created baseline for {endpoint}: P95 = {baseline_p95:.1f}ms")
@@ -110,10 +117,13 @@ def main():
 
     # Generate mock results for each endpoint
     endpoints = [
-        ("/v1/healthz/live", 30.0),    # Current performance (slightly worse than baseline)
-        ("/v1/whoami", 90.0),          # Current performance
-        ("/v1/auth/login", 180.0),     # Current performance (regression!)
-        ("/v1/music/command", 120.0)   # Current performance
+        (
+            "/v1/healthz/live",
+            30.0,
+        ),  # Current performance (slightly worse than baseline)
+        ("/v1/whoami", 90.0),  # Current performance
+        ("/v1/auth/login", 180.0),  # Current performance (regression!)
+        ("/v1/music/command", 120.0),  # Current performance
     ]
 
     for endpoint, base_time in endpoints:
@@ -131,11 +141,18 @@ def main():
     import subprocess
     import sys
 
-    result = subprocess.run([
-        sys.executable, "scripts/perf_analyzer.py",
-        "--results-dir", str(results_dir),
-        "--threshold", "20.0"
-    ], capture_output=True, text=True)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/perf_analyzer.py",
+            "--results-dir",
+            str(results_dir),
+            "--threshold",
+            "20.0",
+        ],
+        capture_output=True,
+        text=True,
+    )
 
     print("Analyzer output:")
     print(result.stdout)

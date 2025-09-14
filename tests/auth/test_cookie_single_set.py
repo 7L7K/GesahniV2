@@ -3,6 +3,7 @@
 This test ensures that the canonical cookie system works correctly and
 prevents setting multiple cookies with the same name in a single response.
 """
+
 import os
 
 import pytest
@@ -14,10 +15,13 @@ def _create_test_app(cookie_canon: str):
     """Create a test app with auth router, setting environment before imports."""
     # Set environment variables BEFORE importing modules
     os.environ["COOKIE_CANON"] = cookie_canon
-    os.environ["JWT_SECRET"] = "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long"
+    os.environ["JWT_SECRET"] = (
+        "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long"
+    )
 
     # Force reload of web.cookies module to pick up new environment
     import sys
+
     if "app.web.cookies" in sys.modules:
         del sys.modules["app.web.cookies"]
     if "app.web" in sys.modules:
@@ -31,11 +35,14 @@ def _create_test_app(cookie_canon: str):
     return app
 
 
-@pytest.mark.parametrize("cookie_canon,expected_names", [
-    ("legacy", {"access_token", "refresh_token", "__session"}),
-    ("gsnh", {"GSNH_AT", "GSNH_RT", "GSNH_SESS"}),
-    ("host", {"__Host-access_token", "__Host-refresh_token", "__Host-__session"}),
-])
+@pytest.mark.parametrize(
+    "cookie_canon,expected_names",
+    [
+        ("legacy", {"access_token", "refresh_token", "__session"}),
+        ("gsnh", {"GSNH_AT", "GSNH_RT", "GSNH_SESS"}),
+        ("host", {"__Host-access_token", "__Host-refresh_token", "__Host-__session"}),
+    ],
+)
 def test_single_cookie_set(cookie_canon: str, expected_names: set[str]):
     """Test that each cookie name appears exactly once in auth responses.
 
@@ -50,9 +57,15 @@ def test_single_cookie_set(cookie_canon: str, expected_names: set[str]):
 
     with TestClient(test_app) as client:
         # Try to register a test user (might fail if already exists)
-        register_resp = client.post("/v1/register", json={"username": unique_username, "password": "test_pass"})
+        register_resp = client.post(
+            "/v1/register", json={"username": unique_username, "password": "test_pass"}
+        )
         # Accept both success and conflict (user already exists)
-        assert register_resp.status_code in [200, 201, 409], f"Failed to register user: {register_resp.text}"
+        assert register_resp.status_code in [
+            200,
+            201,
+            409,
+        ], f"Failed to register user: {register_resp.text}"
 
         # Now try to login and check cookies
         login_resp = client.post(f"/v1/auth/login?username={unique_username}")
@@ -74,12 +87,16 @@ def test_single_cookie_set(cookie_canon: str, expected_names: set[str]):
             print(f"Actual names: {actual_names}")
 
         # Verify all expected cookie names are present
-        assert expected_names.issubset(actual_names), f"Missing cookies: {expected_names - actual_names}. Found: {actual_names}"
+        assert expected_names.issubset(
+            actual_names
+        ), f"Missing cookies: {expected_names - actual_names}. Found: {actual_names}"
 
         # Most importantly: verify each cookie name appears exactly once
         # This is the key regression test - we should never set duplicate cookie names
         for cookie_name in expected_names:
-            assert cookie_name in cookie_jar, f"Cookie '{cookie_name}' not found in cookie jar"
+            assert (
+                cookie_name in cookie_jar
+            ), f"Cookie '{cookie_name}' not found in cookie jar"
             # Since we're using a dict-like structure, duplicates would overwrite each other
             # So we just need to verify the cookie exists
 
@@ -99,10 +116,18 @@ def test_cookie_names_consistency(cookie_canon: str, monkeypatch):
     from app.web.cookies import NAMES
 
     # Verify that NAMES has all required attributes
-    assert hasattr(NAMES, 'access'), f"NAMES missing 'access' attribute in {cookie_canon} mode"
-    assert hasattr(NAMES, 'refresh'), f"NAMES missing 'refresh' attribute in {cookie_canon} mode"
-    assert hasattr(NAMES, 'session'), f"NAMES missing 'session' attribute in {cookie_canon} mode"
-    assert hasattr(NAMES, 'csrf'), f"NAMES missing 'csrf' attribute in {cookie_canon} mode"
+    assert hasattr(
+        NAMES, "access"
+    ), f"NAMES missing 'access' attribute in {cookie_canon} mode"
+    assert hasattr(
+        NAMES, "refresh"
+    ), f"NAMES missing 'refresh' attribute in {cookie_canon} mode"
+    assert hasattr(
+        NAMES, "session"
+    ), f"NAMES missing 'session' attribute in {cookie_canon} mode"
+    assert hasattr(
+        NAMES, "csrf"
+    ), f"NAMES missing 'csrf' attribute in {cookie_canon} mode"
 
     # Verify names are non-empty strings
     assert NAMES.access, f"NAMES.access is empty in {cookie_canon} mode"

@@ -44,9 +44,17 @@ def resolve_db_path(env_var: str, default_name: str) -> Path:
         return _DB_CACHE[env_var]
 
     # 3) Under pytest: fallback to tempdir with a short digest
-    is_pytest = bool(os.getenv("PYTEST_CURRENT_TEST")) or bool(os.getenv("PYTEST_RUNNING")) or ("pytest" in sys.modules)
+    is_pytest = (
+        bool(os.getenv("PYTEST_CURRENT_TEST"))
+        or bool(os.getenv("PYTEST_RUNNING"))
+        or ("pytest" in sys.modules)
+    )
     if is_pytest:
-        ident = os.getenv("PYTEST_CURRENT_TEST") or os.getenv("PYTEST_RUNNING") or str(os.getpid())
+        ident = (
+            os.getenv("PYTEST_CURRENT_TEST")
+            or os.getenv("PYTEST_RUNNING")
+            or str(os.getpid())
+        )
         digest = hashlib.md5(ident.encode()).hexdigest()[:8]
         p = Path(tempfile.gettempdir()) / f".tmp_{env_var.lower()}_{digest}.db"
         _DB_CACHE[env_var] = p.resolve()

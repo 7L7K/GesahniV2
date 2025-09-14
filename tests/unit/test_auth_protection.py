@@ -50,7 +50,10 @@ class TestAuthProtectionNormalization:
                 # These should NOT return 401/403 - they should handle gracefully
                 # or return appropriate business logic errors, not auth errors
                 response = client.request(method, endpoint)
-                assert response.status_code not in [401, 403], f"{endpoint} returned {response.status_code} (auth required)"
+                assert response.status_code not in [
+                    401,
+                    403,
+                ], f"{endpoint} returned {response.status_code} (auth required)"
 
     # ============================================================================
     # AUTH-ONLY ROUTES: Token required, CSRF not required
@@ -122,7 +125,10 @@ class TestAuthProtectionNormalization:
             headers = {"Authorization": f"Bearer {valid_token}"}
             response = client.request(method, endpoint, headers=headers)
             # Should return 403 (CSRF required) or 400 (CSRF missing)
-            assert response.status_code in [400, 403], f"{endpoint} should require CSRF token"
+            assert response.status_code in [
+                400,
+                403,
+            ], f"{endpoint} should require CSRF token"
 
     def test_protected_routes_accept_token_and_csrf(self, client, valid_token):
         """Protected routes should accept valid token + CSRF."""
@@ -138,11 +144,14 @@ class TestAuthProtectionNormalization:
         for method, endpoint in protected_endpoints:
             headers = {
                 "Authorization": f"Bearer {valid_token}",
-                "X-CSRF-Token": csrf_token
+                "X-CSRF-Token": csrf_token,
             }
             response = client.request(method, endpoint, headers=headers)
             # Should not return 401/403 (auth/CSRF failure) - may return other errors
-            assert response.status_code not in [401, 403], f"{endpoint} should accept token + CSRF"
+            assert response.status_code not in [
+                401,
+                403,
+            ], f"{endpoint} should accept token + CSRF"
 
     # ============================================================================
     # CROSS-SITE SCENARIO TESTING
@@ -172,11 +181,15 @@ class TestAuthProtectionNormalization:
         for method, endpoint in all_protected_endpoints:
             headers = {"Authorization": f"Bearer {malformed_token}"}
             response = client.request(method, endpoint, headers=headers)
-            assert response.status_code == 401, f"{endpoint} should reject malformed token"
+            assert (
+                response.status_code == 401
+            ), f"{endpoint} should reject malformed token"
 
     def test_expired_tokens_rejected(self, client):
         """All auth-required routes should reject expired tokens."""
-        expired_token = make_access({"user_id": "test_user"}, ttl_s=-3600)  # Expired 1 hour ago
+        expired_token = make_access(
+            {"user_id": "test_user"}, ttl_s=-3600
+        )  # Expired 1 hour ago
 
         all_protected_endpoints = [
             ("POST", "/v1/auth/logout"),
@@ -188,7 +201,9 @@ class TestAuthProtectionNormalization:
         for method, endpoint in all_protected_endpoints:
             headers = {"Authorization": f"Bearer {expired_token}"}
             response = client.request(method, endpoint, headers=headers)
-            assert response.status_code == 401, f"{endpoint} should reject expired token"
+            assert (
+                response.status_code == 401
+            ), f"{endpoint} should reject expired token"
 
 
 class TestProtectionModeDocumentation:
@@ -232,7 +247,7 @@ class TestProtectionModeConstants:
         expected_modes = {
             "public": "No auth, no CSRF required",
             "auth_only": "Token required, CSRF not required",
-            "protected": "Token + CSRF required"
+            "protected": "Token + CSRF required",
         }
 
         assert PROTECTION_MODES == expected_modes

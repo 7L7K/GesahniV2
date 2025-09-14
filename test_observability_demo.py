@@ -4,12 +4,10 @@ Demo script to show observability hooks for redirect flow.
 This demonstrates the blocked /login?next=/login case and shows example log lines.
 """
 
-import os
 import sys
-import logging
 
 # Add app to path
-sys.path.insert(0, '/Users/kingal/2025/GesahniV2')
+sys.path.insert(0, "/Users/kingal/2025/GesahniV2")
 
 print("🔍 Redirect Flow Observability Demo")
 print("=" * 60)
@@ -33,7 +31,7 @@ print()
 
 print("📝 STRUCTURED LOGGING:")
 print("All logs include these fields:")
-print("  - component: \"auth.redirect\"")
+print('  - component: "auth.redirect"')
 print("  - reason: One of the metric reasons above")
 print("  - input_len: Length of input string")
 print("  - output_path: Resulting sanitized path")
@@ -46,14 +44,14 @@ print("🎯 EXAMPLE: Blocked /login?next=/login case")
 print("=" * 50)
 print("Input: /login")
 print("Expected output: / (fallback)")
-print("Expected metric: auth_redirect_sanitized_total{reason=\"blocked_auth_path\"} += 1")
+print('Expected metric: auth_redirect_sanitized_total{reason="blocked_auth_path"} += 1')
 print()
 
 print("📋 SAMPLE LOG LINE:")
 print("2024-01-15 10:30:45 INFO Redirect sanitization")
-print("{\"component\": \"auth.redirect\", \"reason\": \"blocked_auth_path\",")
-print(" \"input_len\": 6, \"output_path\": \"/\", \"cookie_present\": false,")
-print(" \"env\": \"dev\", \"raw_path\": \"/login\"}")
+print('{"component": "auth.redirect", "reason": "blocked_auth_path",')
+print(' "input_len": 6, "output_path": "/", "cookie_present": false,')
+print(' "env": "dev", "raw_path": "/login"}')
 print()
 
 print("🔗 INTEGRATION POINTS:")

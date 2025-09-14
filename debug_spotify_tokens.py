@@ -17,7 +17,7 @@ def check_spotify_tokens():
     db_paths = [
         "third_party_tokens.db",
         "data/third_party_tokens.db",
-        "app/third_party_tokens.db"
+        "app/third_party_tokens.db",
     ]
 
     db_file = None
@@ -37,7 +37,9 @@ def check_spotify_tokens():
         cursor = conn.cursor()
 
         # Check if table exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='third_party_tokens'")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='third_party_tokens'"
+        )
         table_exists = cursor.fetchone()
 
         if not table_exists:
@@ -53,7 +55,17 @@ def check_spotify_tokens():
         print(f"📊 Table columns: {column_names}")
 
         # Build query based on available columns
-        select_columns = ["id", "user_id", "provider", "access_token", "refresh_token", "expires_at", "scope", "created_at", "updated_at"]
+        select_columns = [
+            "id",
+            "user_id",
+            "provider",
+            "access_token",
+            "refresh_token",
+            "expires_at",
+            "scope",
+            "created_at",
+            "updated_at",
+        ]
         if "invalid" in column_names:
             select_columns.append("invalid")
 
@@ -71,13 +83,17 @@ def check_spotify_tokens():
             print(f"  ID: {row_data.get('id')}")
             print(f"  User ID: {row_data.get('user_id')}")
             print(f"  Provider: {row_data.get('provider')}")
-            print(f"  Access Token: {'✅ Present' if row_data.get('access_token') else '❌ Missing'} ({len(row_data.get('access_token') or '')} chars)")
-            print(f"  Refresh Token: {'✅ Present' if row_data.get('refresh_token') else '❌ Missing'} ({len(row_data.get('refresh_token') or '')} chars)")
+            print(
+                f"  Access Token: {'✅ Present' if row_data.get('access_token') else '❌ Missing'} ({len(row_data.get('access_token') or '')} chars)"
+            )
+            print(
+                f"  Refresh Token: {'✅ Present' if row_data.get('refresh_token') else '❌ Missing'} ({len(row_data.get('refresh_token') or '')} chars)"
+            )
             print(f"  Expires At: {row_data.get('expires_at')}")
             print(f"  Scope: {row_data.get('scope')}")
             print(f"  Created At: {row_data.get('created_at')}")
             print(f"  Updated At: {row_data.get('updated_at')}")
-            if 'invalid' in row_data:
+            if "invalid" in row_data:
                 print(f"  Invalid: {row_data.get('invalid')}")
 
         # Also check for any tokens at all
@@ -86,7 +102,9 @@ def check_spotify_tokens():
         print(f"\n📊 Total tokens in database: {total_count}")
 
         # Check for all providers
-        cursor.execute("SELECT provider, COUNT(*) FROM third_party_tokens GROUP BY provider")
+        cursor.execute(
+            "SELECT provider, COUNT(*) FROM third_party_tokens GROUP BY provider"
+        )
         provider_counts = cursor.fetchall()
 
         print("\n📊 Tokens by provider:")
@@ -97,6 +115,7 @@ def check_spotify_tokens():
 
     except Exception as e:
         print(f"❌ Error checking database: {e}")
+
 
 if __name__ == "__main__":
     check_spotify_tokens()

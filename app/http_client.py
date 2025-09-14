@@ -1,4 +1,3 @@
-
 import httpx
 
 from .settings import settings
@@ -14,8 +13,8 @@ def build_httpx_client(timeout: float | None = None, **kwargs) -> httpx.Client:
     return client
 
 
-def build_async_httpx_client(timeout: float | None = None, **kwargs) -> httpx.AsyncClient:
+def build_async_httpx_client(
+    timeout: float | None = None, **kwargs
+) -> httpx.AsyncClient:
     t = timeout or settings.HTTP_CLIENT_TIMEOUT
     return httpx.AsyncClient(timeout=t, follow_redirects=True, **kwargs)
-
-

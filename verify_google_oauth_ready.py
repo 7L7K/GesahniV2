@@ -19,7 +19,7 @@ from datetime import datetime
 import requests
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 
 def check_server_status():
@@ -42,7 +42,9 @@ def check_server_status():
             return False
     except Exception as e:
         print(f"❌ Server not responding: {e}")
-        print("   Start with: uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload")
+        print(
+            "   Start with: uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+        )
         return False
 
 
@@ -52,7 +54,9 @@ def check_oauth_endpoints():
 
     try:
         # Test login URL generation
-        response = requests.get("http://127.0.0.1:8000/v1/auth/google/login_url", timeout=5)
+        response = requests.get(
+            "http://127.0.0.1:8000/v1/auth/google/login_url", timeout=5
+        )
         if response.status_code == 200:
             data = response.json()
             auth_url = data.get("auth_url", "")
@@ -82,7 +86,9 @@ def check_user_authentication():
             print("✅ Protected endpoints properly secured")
             return True
         else:
-            print(f"⚠️ Protected endpoint returned {response.status_code} (expected 401)")
+            print(
+                f"⚠️ Protected endpoint returned {response.status_code} (expected 401)"
+            )
             return False
     except Exception as e:
         print(f"❌ Authentication check failed: {e}")
@@ -103,7 +109,11 @@ def check_recent_logs():
         with open(log_file) as f:
             lines = f.readlines()[-20:]  # Last 20 lines
 
-        oauth_lines = [line for line in lines if any(keyword in line.lower() for keyword in ['google', 'oauth', 'auth'])]
+        oauth_lines = [
+            line
+            for line in lines
+            if any(keyword in line.lower() for keyword in ["google", "oauth", "auth"])
+        ]
 
         if oauth_lines:
             print(f"✅ Found {len(oauth_lines)} recent OAuth-related log entries")
@@ -125,9 +135,13 @@ def run_quick_tests():
     print("\n🧪 Running Quick Test Suite...")
 
     try:
-        result = subprocess.run([
-            sys.executable, "test_end_to_end_oauth.py"
-        ], capture_output=True, text=True, timeout=30, cwd=os.path.dirname(__file__))
+        result = subprocess.run(
+            [sys.executable, "test_end_to_end_oauth.py"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            cwd=os.path.dirname(__file__),
+        )
 
         if result.returncode == 0:
             print("✅ All OAuth tests passed")
@@ -155,7 +169,7 @@ def main():
         ("OAuth Endpoints", check_oauth_endpoints),
         ("User Authentication", check_user_authentication),
         ("Recent Logs", check_recent_logs),
-        ("Test Suite", run_quick_tests)
+        ("Test Suite", run_quick_tests),
     ]
 
     results = []
@@ -199,7 +213,11 @@ def main():
         print("\nThe missing_provider_iss error is completely resolved! 🎉")
 
     else:
-        failed_checks = [name for (name, _), result in zip(checks, results, strict=False) if not result]
+        failed_checks = [
+            name
+            for (name, _), result in zip(checks, results, strict=False)
+            if not result
+        ]
         print(f"\n❌ {total - passed} check(s) failed:")
         for check in failed_checks:
             print(f"   • {check}")

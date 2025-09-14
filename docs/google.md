@@ -18,4 +18,3 @@ Token rotation path
 1) Refresh flow returns a new refresh_token
 2) DAO inserts a new row, invalidates previous row, and sets `replaced_by_id`
 3) `scope_union_since` preserved; `service_state` remains unchanged
-

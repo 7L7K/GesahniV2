@@ -32,5 +32,3 @@ Implementation notes:
 - Use low-cardinality labels only. Avoid per-prompt values.
 - Record metrics at the boundaries (before/after selector, before/after LLM)
 - Emit health counters (llm_fallback_count_total) to monitor fallback volume/cost.
-
-

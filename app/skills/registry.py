@@ -149,4 +149,3 @@ def register_builtin_skills() -> None:
         pass
 
     _builtins_registered = True
-

@@ -9,6 +9,7 @@ For each endpoint, tests:
 - Token without CSRF => 403 Forbidden
 - Token + CSRF => 2xx Success
 """
+
 import os
 
 import pytest
@@ -19,6 +20,7 @@ try:
     from tests.conftest import client
 except ImportError:
     from app.main import app
+
     client = TestClient(app)
 
 # Enable CSRF for testing
@@ -34,13 +36,17 @@ TEST_PAYLOADS = {
     "care_session": {"resident_id": "test_resident", "alert_id": "test_alert"},
     "care_session_patch": {"status": "completed"},
     "tts_speak": {"text": "Hello world"},
-    "ha_service": {"domain": "light", "service": "turn_on", "data": {"entity_id": "light.test"}},
+    "ha_service": {
+        "domain": "light",
+        "service": "turn_on",
+        "data": {"entity_id": "light.test"},
+    },
     "revoke_session": {},
     "spotify_disconnect": {},
     "mint_access": {"user_id": "test_user", "ttl_minutes": 15},
     "revoke_pat": {},
     "admin_flags": {"key": "TEST_FLAG", "value": "test_value"},
-    "admin_backup": {"destination": "/tmp/backup"}
+    "admin_backup": {"destination": "/tmp/backup"},
 }
 
 # Protected endpoints to test
@@ -52,11 +58,26 @@ PROTECTED_ENDPOINTS: list[tuple[str, str, str, str]] = [
     ("POST", "/v1/music/restore", "music_restore", "Music volume restore endpoint"),
     ("POST", "/v1/music/vibe", "music_vibe", "Music set vibe endpoint"),
     ("POST", "/v1/care/sessions", "care_session", "Create care session endpoint"),
-    ("PATCH", "/v1/care/sessions/{session_id}", "care_session_patch", "Patch care session endpoint"),
+    (
+        "PATCH",
+        "/v1/care/sessions/{session_id}",
+        "care_session_patch",
+        "Patch care session endpoint",
+    ),
     ("POST", "/v1/tts/speak", "tts_speak", "TTS speak endpoint"),
     ("POST", "/v1/ha/service", "ha_service", "Home Assistant service endpoint"),
-    ("POST", "/v1/me/sessions/{sid}/revoke", "revoke_session", "Revoke user session endpoint"),
-    ("DELETE", "/v1/spotify/disconnect", "spotify_disconnect", "Spotify disconnect endpoint"),
+    (
+        "POST",
+        "/v1/me/sessions/{sid}/revoke",
+        "revoke_session",
+        "Revoke user session endpoint",
+    ),
+    (
+        "DELETE",
+        "/v1/spotify/disconnect",
+        "spotify_disconnect",
+        "Spotify disconnect endpoint",
+    ),
     ("POST", "/dev/mint_access", "mint_access", "Mint access token endpoint"),
     ("DELETE", "/v1/pats/{pat_id}", "revoke_pat", "Revoke PAT endpoint"),
     # Admin endpoints
@@ -99,7 +120,7 @@ class TestWriteProtection:
         path: str,
         payload: dict,
         auth_token: str = None,
-        csrf_token: str = None
+        csrf_token: str = None,
     ):
         """Make an HTTP request with optional auth and CSRF tokens."""
         headers = {}
@@ -120,7 +141,7 @@ class TestWriteProtection:
             path,
             json=payload,
             headers=headers,
-            cookies={"csrf_token": csrf_token} if csrf_token else None
+            cookies={"csrf_token": csrf_token} if csrf_token else None,
         )
 
     @pytest.mark.parametrize("method,path,payload_key,description", PROTECTED_ENDPOINTS)
@@ -130,7 +151,7 @@ class TestWriteProtection:
         method: str,
         path: str,
         payload_key: str,
-        description: str
+        description: str,
     ):
         """Test that endpoints return 401 when no auth token is provided."""
         payload = TEST_PAYLOADS[payload_key]
@@ -150,15 +171,14 @@ class TestWriteProtection:
         method: str,
         path: str,
         payload_key: str,
-        description: str
+        description: str,
     ):
         """Test that endpoints reject invalid tokens when CSRF is bypassed for Bearer auth."""
         payload = TEST_PAYLOADS[payload_key]
 
         # Use an invalid token that should fail auth validation
         response = self._make_request(
-            client, method, path, payload,
-            auth_token="Bearer invalid_token_for_testing"
+            client, method, path, payload, auth_token="Bearer invalid_token_for_testing"
         )
 
         # Should return 401 (unauthorized) for invalid Bearer token
@@ -177,15 +197,18 @@ class TestWriteProtection:
         method: str,
         path: str,
         payload_key: str,
-        description: str
+        description: str,
     ):
         """Test that endpoints return 2xx when both token and CSRF are provided."""
         payload = TEST_PAYLOADS[payload_key]
 
         response = self._make_request(
-            client, method, path, payload,
+            client,
+            method,
+            path,
+            payload,
             auth_token=test_user_token,
-            csrf_token=csrf_token
+            csrf_token=csrf_token,
         )
 
         # Should return success (2xx) with both auth and CSRF
@@ -219,18 +242,28 @@ class TestWriteProtectionReport:
             total_tests += 1
             response = client.request(method.lower(), path, json=payload)
             if response.status_code != 401:
-                failures.append(f"❌ {method} {path} - No token: expected 401, got {response.status_code}")
-                report_lines.append(f"  ❌ No token: expected 401, got {response.status_code}")
+                failures.append(
+                    f"❌ {method} {path} - No token: expected 401, got {response.status_code}"
+                )
+                report_lines.append(
+                    f"  ❌ No token: expected 401, got {response.status_code}"
+                )
             else:
                 report_lines.append("  ✅ No token: 401 (correct)")
 
             # Test 2: Token without CSRF (mock implementation)
             total_tests += 1
             headers = {"Authorization": "Bearer mock_token"}
-            response = client.request(method.lower(), path, json=payload, headers=headers)
+            response = client.request(
+                method.lower(), path, json=payload, headers=headers
+            )
             if response.status_code != 403:
-                failures.append(f"❌ {method} {path} - Token without CSRF: expected 403, got {response.status_code}")
-                report_lines.append(f"  ❌ Token without CSRF: expected 403, got {response.status_code}")
+                failures.append(
+                    f"❌ {method} {path} - Token without CSRF: expected 403, got {response.status_code}"
+                )
+                report_lines.append(
+                    f"  ❌ Token without CSRF: expected 403, got {response.status_code}"
+                )
             else:
                 report_lines.append("  ✅ Token without CSRF: 403 (correct)")
 
@@ -238,13 +271,19 @@ class TestWriteProtectionReport:
             total_tests += 1
             headers = {
                 "Authorization": "Bearer mock_token",
-                "X-CSRF-Token": "mock_csrf_token"
+                "X-CSRF-Token": "mock_csrf_token",
             }
             cookies = {"csrf_token": "mock_csrf_token"}
-            response = client.request(method.lower(), path, json=payload, headers=headers, cookies=cookies)
+            response = client.request(
+                method.lower(), path, json=payload, headers=headers, cookies=cookies
+            )
             if not (200 <= response.status_code < 300):
-                failures.append(f"❌ {method} {path} - Token with CSRF: expected 2xx, got {response.status_code}")
-                report_lines.append(f"  ❌ Token with CSRF: expected 2xx, got {response.status_code}")
+                failures.append(
+                    f"❌ {method} {path} - Token with CSRF: expected 2xx, got {response.status_code}"
+                )
+                report_lines.append(
+                    f"  ❌ Token with CSRF: expected 2xx, got {response.status_code}"
+                )
             else:
                 report_lines.append("  ✅ Token with CSRF: 2xx (correct)")
 
@@ -261,7 +300,9 @@ class TestWriteProtectionReport:
             for failure in failures:
                 report_lines.append(f"  {failure}")
         else:
-            report_lines.append("\n🎉 All tests passed! Write protection is working correctly.")
+            report_lines.append(
+                "\n🎉 All tests passed! Write protection is working correctly."
+            )
 
         # Print the report
         report = "\n".join(report_lines)
@@ -272,12 +313,15 @@ class TestWriteProtectionReport:
             f.write(report)
 
         # Assert no failures for CI
-        assert len(failures) == 0, "Write protection failures detected:\n" + "\n".join(failures)
+        assert len(failures) == 0, "Write protection failures detected:\n" + "\n".join(
+            failures
+        )
 
 
 if __name__ == "__main__":
     # Allow running the report generation standalone
     from app.main import app
+
     test_client = TestClient(app)
 
     report_test = TestWriteProtectionReport()

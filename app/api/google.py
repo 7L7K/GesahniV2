@@ -24,12 +24,6 @@ router = APIRouter(prefix="/google")
 integrations_router = APIRouter(prefix="/integrations/google")
 
 
-
-
-
-
-
-
 # New canonical integrations endpoints
 @integrations_router.get("/status")
 async def integrations_google_status(request: Request):
@@ -41,13 +35,17 @@ async def integrations_google_status(request: Request):
 async def google_disconnect(request: Request):
     try:
         from ..deps.user import resolve_user_id
+
         user_id = resolve_user_id(request=request)
         if user_id == "anon":
             raise Exception("unauthenticated")
     except Exception:
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
 
     success = await mark_invalid(user_id, "google")
     if success:
@@ -63,9 +61,6 @@ async def integrations_google_disconnect(request: Request):
     """Canonical Google disconnect endpoint at /v1/integrations/google/disconnect"""
     # Reuse existing disconnect logic
     return await google_disconnect(request)
-
-
-
 
 
 async def google_status(request: Request):
@@ -87,20 +82,34 @@ async def google_status(request: Request):
     ]
 
     if not token:
-        return JSONResponse({"connected": False, "required_scopes_ok": False, "scopes": [], "expires_at": None, "last_refresh_at": None, "degraded_reason": "no_token", "services": {}}, status_code=200)
+        return JSONResponse(
+            {
+                "connected": False,
+                "required_scopes_ok": False,
+                "scopes": [],
+                "expires_at": None,
+                "last_refresh_at": None,
+                "degraded_reason": "no_token",
+                "services": {},
+            },
+            status_code=200,
+        )
 
     # Check if token is marked as invalid (due to revocation)
     if not token.is_valid:
-        return JSONResponse({
-            "connected": False,
-            "required_scopes_ok": False,
-            "scopes": [],
-            "expires_at": token.expires_at,
-            "last_refresh_at": token.last_refresh_at,
-            "refreshed": False,
-            "degraded_reason": "consent_revoked",
-            "services": {}
-        }, status_code=200)
+        return JSONResponse(
+            {
+                "connected": False,
+                "required_scopes_ok": False,
+                "scopes": [],
+                "expires_at": token.expires_at,
+                "last_refresh_at": token.last_refresh_at,
+                "refreshed": False,
+                "degraded_reason": "consent_revoked",
+                "services": {},
+            },
+            status_code=200,
+        )
 
     # Check scopes
     token_scopes = (token.scope or "").split()
@@ -109,6 +118,7 @@ async def google_status(request: Request):
     # Scope drift detection: log missing scopes once per day per user
     if not required_ok:
         import logging
+
         logger = logging.getLogger(__name__)
 
         # Calculate missing scopes
@@ -116,31 +126,39 @@ async def google_status(request: Request):
 
         # Log scope drift detection (once per day to avoid noise)
         import hashlib
+
         scope_drift_key = f"{current_user}:google:scope_drift:{hashlib.md5(''.join(missing_scopes).encode()).hexdigest()[:8]}"
         today = str(int(time.time()) // 86400)  # Day-based key
 
         # Simple in-memory cache for daily logging (could be Redis in production)
-        if not hasattr(logger, '_scope_drift_cache'):
+        if not hasattr(logger, "_scope_drift_cache"):
             logger._scope_drift_cache = set()
 
         cache_key = f"{scope_drift_key}:{today}"
         if cache_key not in logger._scope_drift_cache:
             logger._scope_drift_cache.add(cache_key)
-            logger.warning("🔍 GOOGLE SCOPE DRIFT: Missing required scopes detected", extra={
-                "meta": {
-                    "user_id": current_user,
-                    "missing_scopes": missing_scopes,
-                    "current_scopes": token_scopes,
-                    "required_scopes": required_scopes
-                }
-            })
+            logger.warning(
+                "🔍 GOOGLE SCOPE DRIFT: Missing required scopes detected",
+                extra={
+                    "meta": {
+                        "user_id": current_user,
+                        "missing_scopes": missing_scopes,
+                        "current_scopes": token_scopes,
+                        "required_scopes": required_scopes,
+                    }
+                },
+            )
 
             # Emit metrics for missing scopes
             try:
                 from .metrics import AUTH_IDENTITY_RESOLVE
+
                 for scope in missing_scopes:
                     # Use existing metric with scope info
-                    AUTH_IDENTITY_RESOLVE.labels(source="google_scope_drift", result=f"missing_{scope.split('/')[-1]}").inc()
+                    AUTH_IDENTITY_RESOLVE.labels(
+                        source="google_scope_drift",
+                        result=f"missing_{scope.split('/')[-1]}",
+                    ).inc()
             except Exception:
                 pass
 
@@ -152,14 +170,27 @@ async def google_status(request: Request):
     if (token.expires_at - int(time.time())) < STALE_BUFFER:
         try:
             if not token.refresh_token:
-                return JSONResponse({"connected": False, "required_scopes_ok": required_ok, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": "expired_no_refresh"}, status_code=200)
+                return JSONResponse(
+                    {
+                        "connected": False,
+                        "required_scopes_ok": required_ok,
+                        "scopes": token_scopes,
+                        "expires_at": token.expires_at,
+                        "last_refresh_at": token.last_refresh_at,
+                        "refreshed": refreshed,
+                        "degraded_reason": "expired_no_refresh",
+                    },
+                    status_code=200,
+                )
             # Use deduped refresh implementation
             from ..integrations.google.refresh import refresh_dedup
 
             refreshed, td = await refresh_dedup(current_user, token.refresh_token)
             # persist refreshed tokens
             now = int(time.time())
-            expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
+            expires_at = int(
+                td.get("expires_at", now + int(td.get("expires_in", 3600)))
+            )
             new_token = ThirdPartyToken(
                 id=f"google:{secrets.token_hex(8)}",
                 user_id=current_user,
@@ -179,7 +210,18 @@ async def google_status(request: Request):
             refreshed = True  # Successfully refreshed
         except Exception as e:
             # Mark degraded on refresh failure
-            return JSONResponse({"connected": False, "required_scopes_ok": required_ok, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": f"refresh_failed: {str(e)[:200]}"}, status_code=200)
+            return JSONResponse(
+                {
+                    "connected": False,
+                    "required_scopes_ok": required_ok,
+                    "scopes": token_scopes,
+                    "expires_at": token.expires_at,
+                    "last_refresh_at": token.last_refresh_at,
+                    "refreshed": refreshed,
+                    "degraded_reason": f"refresh_failed: {str(e)[:200]}",
+                },
+                status_code=200,
+            )
 
     # Build services block from service_state JSON
     try:
@@ -201,7 +243,31 @@ async def google_status(request: Request):
 
     # If scopes missing, consider degraded
     if not required_ok:
-        return JSONResponse({"connected": True, "required_scopes_ok": False, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": "missing_scopes", "services": services}, status_code=200)
+        return JSONResponse(
+            {
+                "connected": True,
+                "required_scopes_ok": False,
+                "scopes": token_scopes,
+                "expires_at": token.expires_at,
+                "last_refresh_at": token.last_refresh_at,
+                "refreshed": refreshed,
+                "degraded_reason": "missing_scopes",
+                "services": services,
+            },
+            status_code=200,
+        )
 
     # All good
-    return JSONResponse({"connected": True, "required_scopes_ok": True, "scopes": token_scopes, "expires_at": token.expires_at, "last_refresh_at": token.last_refresh_at, "refreshed": refreshed, "degraded_reason": None, "services": services}, status_code=200)
+    return JSONResponse(
+        {
+            "connected": True,
+            "required_scopes_ok": True,
+            "scopes": token_scopes,
+            "expires_at": token.expires_at,
+            "last_refresh_at": token.last_refresh_at,
+            "refreshed": refreshed,
+            "degraded_reason": None,
+            "services": services,
+        },
+        status_code=200,
+    )

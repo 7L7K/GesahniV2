@@ -23,7 +23,10 @@ async def integrations_status(request: Request):
                 if profile is not None:
                     spotify_result = {"connected": True}
                 else:
-                    spotify_result = {"connected": False, "reason": "profile_check_failed"}
+                    spotify_result = {
+                        "connected": False,
+                        "reason": "profile_check_failed",
+                    }
             except RuntimeError as e:
                 spotify_result = {"connected": False, "reason": str(e)}
     except Exception as e:
@@ -45,7 +48,10 @@ async def integrations_status(request: Request):
                     # Degraded if expired and refresh would fail (we attempt probe)
                     now = int(time.time())
                     if (t.expires_at - now) < 300:
-                        google_result = {"status": "degraded", "reason": "refresh_failed"}
+                        google_result = {
+                            "status": "degraded",
+                            "reason": "refresh_failed",
+                        }
                     else:
                         google_result = {"status": "connected"}
     except Exception as e:
@@ -56,5 +62,3 @@ async def integrations_status(request: Request):
         "google": google_result,
         "home_assistant": {"connected": False},
     }
-
-

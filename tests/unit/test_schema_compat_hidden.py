@@ -3,6 +3,7 @@
 These tests verify that legacy compatibility endpoints (redirects) do not appear
 in the OpenAPI schema, maintaining a clean API surface for consumers.
 """
+
 from __future__ import annotations
 
 import pytest
@@ -67,7 +68,9 @@ class TestCompatRoutesHidden:
 
         # Check that none of the hidden patterns appear in the schema
         for pattern in hidden_patterns:
-            assert pattern not in paths, f"Hidden route '{pattern}' should not be in OpenAPI schema"
+            assert (
+                pattern not in paths
+            ), f"Hidden route '{pattern}' should not be in OpenAPI schema"
 
     def test_no_legacy_admin_paths_in_schema(self, openapi_schema):
         """Test that legacy /admin/* paths are not in OpenAPI schema."""
@@ -90,7 +93,9 @@ class TestCompatRoutesHidden:
         ]
 
         for pattern in legacy_admin_patterns:
-            assert pattern not in paths, f"Legacy admin route '{pattern}' should not be in OpenAPI schema"
+            assert (
+                pattern not in paths
+            ), f"Legacy admin route '{pattern}' should not be in OpenAPI schema"
 
     def test_no_legacy_spotify_integration_paths_in_schema(self, openapi_schema):
         """Test that legacy /v1/integrations/spotify/* paths are not in OpenAPI schema."""
@@ -105,7 +110,9 @@ class TestCompatRoutesHidden:
         ]
 
         for pattern in legacy_spotify_patterns:
-            assert pattern not in paths, f"Legacy Spotify integration route '{pattern}' should not be in OpenAPI schema"
+            assert (
+                pattern not in paths
+            ), f"Legacy Spotify integration route '{pattern}' should not be in OpenAPI schema"
 
     def test_canonical_categories_present_in_schema(self, openapi_schema):
         """Test that canonical API categories are present in the schema."""
@@ -157,7 +164,9 @@ class TestCompatRoutesHidden:
 
             # Assert that at least some paths from each category are present
             # These are core categories that should always be present
-            assert present_count > 0, f"Category '{category}' should have at least some paths present in schema, found {present_count}/{len(category_paths)}"
+            assert (
+                present_count > 0
+            ), f"Category '{category}' should have at least some paths present in schema, found {present_count}/{len(category_paths)}"
 
     def test_hidden_routers_not_exposed_in_schema(self, openapi_schema):
         """Test that routers with include_in_schema=False do not expose their routes."""
@@ -166,22 +175,37 @@ class TestCompatRoutesHidden:
         # All routes from routers that should be hidden
         hidden_router_patterns = [
             # From compat_api.py (include_in_schema=False)
-            "/whoami", "/health", "/status", "/spotify/status",
-            "/ask", "/google/status", "/v1/login", "/v1/logout", "/v1/register",
-            "/v1/refresh", "/v1/auth/google/callback", "/google/oauth/callback",
-            "/v1/integrations/spotify/status", "/v1/integrations/spotify/connect",
-            "/v1/integrations/spotify/callback", "/v1/integrations/spotify/disconnect",
-
+            "/whoami",
+            "/health",
+            "/status",
+            "/spotify/status",
+            "/ask",
+            "/google/status",
+            "/v1/login",
+            "/v1/logout",
+            "/v1/register",
+            "/v1/refresh",
+            "/v1/auth/google/callback",
+            "/google/oauth/callback",
+            "/v1/integrations/spotify/status",
+            "/v1/integrations/spotify/connect",
+            "/v1/integrations/spotify/callback",
+            "/v1/integrations/spotify/disconnect",
             # From debug.py (include_in_schema=False)
-            "/v1/debug/config", "/v1/debug/token-health", "/docs/ws",
-            "/v1/debug/oauth/routes", "/v1/debug/oauth/config", "/_diag/auth",
+            "/v1/debug/config",
+            "/v1/debug/token-health",
+            "/docs/ws",
+            "/v1/debug/oauth/routes",
+            "/v1/debug/oauth/config",
+            "/_diag/auth",
             "/v1/debug/oauth",
-
             # From util.py (include_in_schema=False)
-            "/csrf", "/ping",
-
+            "/csrf",
+            "/ping",
             # From various routers with include_in_schema=False (callbacks, mocks, etc.)
-            "/v1/google/callback", "/v1/spotify/callback", "/v1/spotify/callback-test",
+            "/v1/google/callback",
+            "/v1/spotify/callback",
+            "/v1/spotify/callback-test",
             "/mock/set_access_cookie",
         ]
 
@@ -189,9 +213,13 @@ class TestCompatRoutesHidden:
         exposed_hidden_paths = []
         for path in paths:
             for hidden_pattern in hidden_router_patterns:
-                if hidden_pattern == path or (path.startswith(hidden_pattern + "/") and hidden_pattern != "/"):
+                if hidden_pattern == path or (
+                    path.startswith(hidden_pattern + "/") and hidden_pattern != "/"
+                ):
                     hidden_exposed_count += 1
                     exposed_hidden_paths.append(path)
                     break
 
-        assert hidden_exposed_count == 0, f"Found {hidden_exposed_count} routes from hidden routers exposed in schema: {exposed_hidden_paths}"
+        assert (
+            hidden_exposed_count == 0
+        ), f"Found {hidden_exposed_count} routes from hidden routers exposed in schema: {exposed_hidden_paths}"

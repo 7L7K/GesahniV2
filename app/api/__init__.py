@@ -22,7 +22,6 @@ ROUTER_TAGS = {
     "app.api.care_ws": "Care",
     "app.api.contacts": "Care",
     "app.caregiver": "Care",
-
     # Music-related routers
     "app.api.music": "Music",
     "app.api.music_http": "Music",
@@ -30,15 +29,12 @@ ROUTER_TAGS = {
     "app.api.tv_music_sim": "Music",
     "app.api.tts": "Music",  # TTS is part of Music functionality
     "app.api.voices": "Music",
-
     # Calendar-related routers
     "app.api.calendar": "Calendar",
     "app.api.reminders": "Calendar",
-
     # TV-related routers
     "app.api.tv": "TV",
     "app.api.photos": "TV",
-
     # Admin-related routers
     "app.api.admin": "Admin",
     "app.api.admin_ui": "Admin",
@@ -53,7 +49,6 @@ ROUTER_TAGS = {
     "app.api.logs_simple": "Admin",
     "app.api.util": "Admin",
     "app.health": "Admin",
-
     # Auth-related routers
     "app.api.auth": "Auth",
     "app.api.auth_password": "Auth",
@@ -68,7 +63,6 @@ ROUTER_TAGS = {
     "app.api.me": "Auth",
     "app.auth": "Auth",
     "app.auth_device": "Auth",
-
     # Other routers (may need reassignment based on functionality)
     "app.api.capture": "Admin",  # Could be Care or Admin depending on use case
     "app.api.sessions_http": "Admin",

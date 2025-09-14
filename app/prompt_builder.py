@@ -318,7 +318,9 @@ class PromptBuilder:
         # Log once if falling back to approximate counting
         global _approx_counting_warned
         if tokens_est_method == "approx" and not _approx_counting_warned:
-            logger.info("PromptBuilder using approximate token counting (tiktoken not available)")
+            logger.info(
+                "PromptBuilder using approximate token counting (tiktoken not available)"
+            )
             _approx_counting_warned = True
         mem_list = memories.copy()
 

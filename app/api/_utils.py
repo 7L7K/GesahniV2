@@ -45,7 +45,9 @@ def raise_bad_request(
     details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 400 Bad Request error with envelope."""
-    raise_enveloped_error(code=code, message=message, status=400, hint=hint, details=details)
+    raise_enveloped_error(
+        code=code, message=message, status=400, hint=hint, details=details
+    )
 
 
 def raise_unauthorized(
@@ -56,7 +58,9 @@ def raise_unauthorized(
     details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 401 Unauthorized error with envelope."""
-    raise_enveloped_error(code=code, message=message, status=401, hint=hint, details=details)
+    raise_enveloped_error(
+        code=code, message=message, status=401, hint=hint, details=details
+    )
 
 
 def raise_forbidden(
@@ -67,7 +71,9 @@ def raise_forbidden(
     details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 403 Forbidden error with envelope."""
-    raise_enveloped_error(code=code, message=message, status=403, hint=hint, details=details)
+    raise_enveloped_error(
+        code=code, message=message, status=403, hint=hint, details=details
+    )
 
 
 def raise_not_found(
@@ -78,7 +84,9 @@ def raise_not_found(
     details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 404 Not Found error with envelope."""
-    raise_enveloped_error(code=code, message=message, status=404, hint=hint, details=details)
+    raise_enveloped_error(
+        code=code, message=message, status=404, hint=hint, details=details
+    )
 
 
 def raise_conflict(
@@ -89,7 +97,9 @@ def raise_conflict(
     details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 409 Conflict error with envelope."""
-    raise_enveloped_error(code=code, message=message, status=409, hint=hint, details=details)
+    raise_enveloped_error(
+        code=code, message=message, status=409, hint=hint, details=details
+    )
 
 
 def raise_internal_error(
@@ -100,7 +110,9 @@ def raise_internal_error(
     details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 500 Internal Server Error with envelope."""
-    raise_enveloped_error(code=code, message=message, status=500, hint=hint, details=details)
+    raise_enveloped_error(
+        code=code, message=message, status=500, hint=hint, details=details
+    )
 
 
 def raise_service_unavailable(
@@ -111,7 +123,9 @@ def raise_service_unavailable(
     details: dict[str, Any] | None = None,
 ) -> None:
     """Raise a 503 Service Unavailable error with envelope."""
-    raise_enveloped_error(code=code, message=message, status=503, hint=hint, details=details)
+    raise_enveloped_error(
+        code=code, message=message, status=503, hint=hint, details=details
+    )
 
 
 def validate_required_fields(data: dict[str, Any], required_fields: list[str]) -> None:
@@ -124,7 +138,9 @@ def validate_required_fields(data: dict[str, Any], required_fields: list[str]) -
     Raises:
         HTTPException: With envelope if any required fields are missing
     """
-    missing = [field for field in required_fields if field not in data or data[field] is None]
+    missing = [
+        field for field in required_fields if field not in data or data[field] is None
+    ]
     if missing:
         raise_bad_request(
             message=f"missing required fields: {', '.join(missing)}",

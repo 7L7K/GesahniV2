@@ -138,7 +138,8 @@ class InMemoryIdempotencyStore(IdempotencyStore):
             # Clean up expired entries
             now = time.monotonic()
             expired_keys = [
-                k for k in self._data.keys()
+                k
+                for k in self._data.keys()
                 if k not in self._cache or self._data[k].is_expired(ttl)
             ]
             for k in expired_keys:
@@ -161,6 +162,7 @@ def get_idempotency_store() -> IdempotencyStore:
     if _idempotency_store is None:
         # Initialize with default in-memory store
         import os
+
         maxsize = int(os.getenv("IDEMPOTENCY_CACHE_MAXSIZE", "10000"))
         ttl = float(os.getenv("IDEMPOTENCY_CACHE_TTL", "300"))  # 5 minutes default
         _idempotency_store = InMemoryIdempotencyStore(maxsize=maxsize, ttl=ttl)
@@ -175,7 +177,9 @@ def set_idempotency_store(store: IdempotencyStore) -> None:
     logger.info(f"Set idempotency store to: {type(store).__name__}")
 
 
-def make_idempotency_key(method: str, path: str, idempotency_key: str, user_id: str) -> str:
+def make_idempotency_key(
+    method: str, path: str, idempotency_key: str, user_id: str
+) -> str:
     """Create a stable cache key for idempotency.
 
     Key format: method:path:idempotency_key:user_id

@@ -11,4 +11,3 @@ export default function ServiceChip({ name, status }: { name: string; status: st
     </span>
   );
 }
-

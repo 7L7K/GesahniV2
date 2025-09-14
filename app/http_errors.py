@@ -26,7 +26,9 @@ def unauthorized(
     hdrs = {"WWW-Authenticate": "Bearer", "X-Error-Code": code, "Deprecation": "true"}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, details={"status_code": 401})
+    env = build_error(
+        code=code, message=message, hint=hint, details={"status_code": 401}
+    )
     return HTTPException(status_code=401, detail=env, headers=hdrs)
 
 
@@ -41,7 +43,9 @@ def forbidden(
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, details={"status_code": 403})
+    env = build_error(
+        code=code, message=message, hint=hint, details={"status_code": 403}
+    )
     return HTTPException(status_code=403, detail=env, headers=hdrs)
 
 
@@ -56,7 +60,9 @@ def not_found(
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, details={"status_code": 404})
+    env = build_error(
+        code=code, message=message, hint=hint, details={"status_code": 404}
+    )
     return HTTPException(status_code=404, detail=env, headers=hdrs)
 
 
@@ -71,7 +77,9 @@ def method_not_allowed(
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, details={"status_code": 405})
+    env = build_error(
+        code=code, message=message, hint=hint, details={"status_code": 405}
+    )
     return HTTPException(status_code=405, detail=env, headers=hdrs)
 
 
@@ -86,7 +94,9 @@ def payload_too_large(
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, details={"status_code": 413})
+    env = build_error(
+        code=code, message=message, hint=hint, details={"status_code": 413}
+    )
     return HTTPException(status_code=413, detail=env, headers=hdrs)
 
 
@@ -133,12 +143,19 @@ def internal_error(
 
 
 def http_error(
-    *, code: str, message: str, status: int = 400, hint: str | None = None, headers: Mapping[str, str] | None = None
+    *,
+    code: str,
+    message: str,
+    status: int = 400,
+    hint: str | None = None,
+    headers: Mapping[str, str] | None = None,
 ) -> HTTPException:
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, details={"status_code": status})
+    env = build_error(
+        code=code, message=message, hint=hint, details={"status_code": status}
+    )
     return HTTPException(status_code=status, detail=env, headers=hdrs)
 
 
@@ -146,11 +163,13 @@ def translate_validation_error(exc: ValidationError) -> HTTPException:
     """Translate Pydantic ValidationError to standardized HTTPException."""
     errors = []
     for error in exc.errors():
-        errors.append({
-            "field": ".".join(str(loc) for loc in error["loc"]),
-            "message": error["msg"],
-            "type": error["type"],
-        })
+        errors.append(
+            {
+                "field": ".".join(str(loc) for loc in error["loc"]),
+                "message": error["msg"],
+                "type": error["type"],
+            }
+        )
 
     return validation_error(errors=errors)
 
@@ -173,9 +192,15 @@ def translate_common_exception(exc: Exception) -> HTTPException:
     if isinstance(exc, KeyError):
         field = str(exc).strip("'\"")
         return validation_error(
-            errors=[{"field": field, "message": "Required field is missing", "type": "missing"}],
+            errors=[
+                {
+                    "field": field,
+                    "message": "Required field is missing",
+                    "type": "missing",
+                }
+            ],
             code="missing_required_field",
-            message=f"Missing required field: {field}"
+            message=f"Missing required field: {field}",
         )
 
     # Type errors
@@ -183,7 +208,7 @@ def translate_common_exception(exc: Exception) -> HTTPException:
         return validation_error(
             errors=[{"field": "request", "message": str(exc), "type": "type_error"}],
             code="invalid_type",
-            message="Type error in request data"
+            message="Type error in request data",
         )
 
     # Value errors (often invalid data)
@@ -191,7 +216,7 @@ def translate_common_exception(exc: Exception) -> HTTPException:
         return validation_error(
             errors=[{"field": "request", "message": str(exc), "type": "value_error"}],
             code="invalid_input",
-            message="Invalid input data"
+            message="Invalid input data",
         )
 
     # Timeout errors
@@ -200,7 +225,7 @@ def translate_common_exception(exc: Exception) -> HTTPException:
             code="timeout",
             message="Request timeout",
             status=504,
-            hint="try again later"
+            hint="try again later",
         )
 
     # Connection errors
@@ -209,7 +234,7 @@ def translate_common_exception(exc: Exception) -> HTTPException:
             code="service_unavailable",
             message="Service temporarily unavailable",
             status=503,
-            hint="try again shortly"
+            hint="try again shortly",
         )
 
     # File size exceeded

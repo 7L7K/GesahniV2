@@ -25,11 +25,23 @@ async def dryrun_router(payload: dict[str, Any]) -> dict[str, Any]:
 
     # Generate a mock response based on the prompt
     if isinstance(prompt, str):
-        answer = f"Dry-run response to: '{prompt[:50]}...'" if len(prompt) > 50 else f"Dry-run response to: '{prompt}'"
+        answer = (
+            f"Dry-run response to: '{prompt[:50]}...'"
+            if len(prompt) > 50
+            else f"Dry-run response to: '{prompt}'"
+        )
     elif isinstance(prompt, list):
         first_msg = prompt[0] if prompt else {}
-        content = first_msg.get("content", "") if isinstance(first_msg, dict) else str(first_msg)
-        answer = f"Dry-run response to chat: '{content[:50]}...'" if len(content) > 50 else f"Dry-run response to chat: '{content}'"
+        content = (
+            first_msg.get("content", "")
+            if isinstance(first_msg, dict)
+            else str(first_msg)
+        )
+        answer = (
+            f"Dry-run response to chat: '{content[:50]}...'"
+            if len(content) > 50
+            else f"Dry-run response to chat: '{content}'"
+        )
     else:
         answer = "Dry-run default response"
 
@@ -37,8 +49,5 @@ async def dryrun_router(payload: dict[str, Any]) -> dict[str, Any]:
         "backend": "dryrun",
         "model": model,
         "answer": answer,
-        "usage": {
-            "input_tokens": 0,
-            "output_tokens": 0
-        }
+        "usage": {"input_tokens": 0, "output_tokens": 0},
     }

@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SpotifyTokens:
     """Spotify token data structure."""
+
     access_token: str
     refresh_token: str
     expires_at: float
@@ -30,6 +31,7 @@ class SpotifyTokens:
 
 class SpotifyAuthError(RuntimeError):
     """Exception raised for Spotify authentication errors."""
+
     pass
 
 
@@ -62,43 +64,48 @@ class SpotifyClient:
 
     async def _get_tokens(self) -> SpotifyTokens | None:
         """Retrieve tokens from unified token store."""
-        logger.info("🎵 SPOTIFY CLIENT: _get_tokens called", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "provider": "spotify"
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY CLIENT: _get_tokens called",
+            extra={"meta": {"user_id": self.user_id, "provider": "spotify"}},
+        )
 
         token = await get_token(self.user_id, "spotify")
 
-        logger.info("🎵 SPOTIFY CLIENT: _get_tokens result", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "has_token": token is not None,
-                "token_id": getattr(token, 'id', None) if token else None,
-                "token_user_id": getattr(token, 'user_id', None) if token else None,
-                "token_provider": getattr(token, 'provider', None) if token else None,
-                "has_access_token": bool(getattr(token, 'access_token', None)) if token else False,
-                "has_refresh_token": bool(getattr(token, 'refresh_token', None)) if token else False,
-                "expires_at": getattr(token, 'expires_at', None) if token else None,
-                "scope": getattr(token, 'scope', None) if token else None
-            }
-        })
-
-        if not token:
-            logger.warning("🎵 SPOTIFY CLIENT: No token found in store", extra={
+        logger.info(
+            "🎵 SPOTIFY CLIENT: _get_tokens result",
+            extra={
                 "meta": {
                     "user_id": self.user_id,
-                    "provider": "spotify"
+                    "has_token": token is not None,
+                    "token_id": getattr(token, "id", None) if token else None,
+                    "token_user_id": getattr(token, "user_id", None) if token else None,
+                    "token_provider": (
+                        getattr(token, "provider", None) if token else None
+                    ),
+                    "has_access_token": (
+                        bool(getattr(token, "access_token", None)) if token else False
+                    ),
+                    "has_refresh_token": (
+                        bool(getattr(token, "refresh_token", None)) if token else False
+                    ),
+                    "expires_at": getattr(token, "expires_at", None) if token else None,
+                    "scope": getattr(token, "scope", None) if token else None,
                 }
-            })
+            },
+        )
+
+        if not token:
+            logger.warning(
+                "🎵 SPOTIFY CLIENT: No token found in store",
+                extra={"meta": {"user_id": self.user_id, "provider": "spotify"}},
+            )
             return None
 
         return SpotifyTokens(
             access_token=token.access_token,
             refresh_token=token.refresh_token,
             expires_at=token.expires_at,
-            scope=token.scope
+            scope=token.scope,
         )
 
     async def _store_tokens(self, tokens: SpotifyTokens) -> None:
@@ -139,13 +146,17 @@ class SpotifyClient:
             raise SpotifyAuthError("No refresh token available")
 
         try:
-            token_data = await self.oauth.refresh_access_token(current_tokens.refresh_token)
+            token_data = await self.oauth.refresh_access_token(
+                current_tokens.refresh_token
+            )
 
             new_tokens = SpotifyTokens(
                 access_token=token_data["access_token"],
-                refresh_token=token_data.get("refresh_token", current_tokens.refresh_token),
+                refresh_token=token_data.get(
+                    "refresh_token", current_tokens.refresh_token
+                ),
                 expires_at=int(token_data["expires_at"]),
-                scope=token_data.get("scope", current_tokens.scope)
+                scope=token_data.get("scope", current_tokens.scope),
             )
 
             await self._store_tokens(new_tokens)
@@ -160,102 +171,122 @@ class SpotifyClient:
 
     async def _get_valid_access_token(self) -> str:
         """Get a valid access token, refreshing if necessary."""
-        logger.info("🎵 SPOTIFY CLIENT: _get_valid_access_token called", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "provider": "spotify"
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY CLIENT: _get_valid_access_token called",
+            extra={"meta": {"user_id": self.user_id, "provider": "spotify"}},
+        )
 
         # Use the new robust token service
         from ...auth_store_tokens import get_valid_token_with_auto_refresh
 
-        logger.info("🎵 SPOTIFY CLIENT: Calling get_valid_token_with_auto_refresh", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "provider": "spotify",
-                "force_refresh": False
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY CLIENT: Calling get_valid_token_with_auto_refresh",
+            extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "provider": "spotify",
+                    "force_refresh": False,
+                }
+            },
+        )
 
         token = await get_valid_token_with_auto_refresh(
             self.user_id, "spotify", force_refresh=False
         )
 
-        logger.info("🎵 SPOTIFY CLIENT: get_valid_token_with_auto_refresh result", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "provider": "spotify",
-                "has_token": token is not None,
-                "token_type": type(token).__name__ if token else None,
-                "token_id": getattr(token, 'id', None) if token else None,
-                "token_user_id": getattr(token, 'user_id', None) if token else None,
-                "token_provider": getattr(token, 'provider', None) if token else None,
-                "has_access_token": bool(getattr(token, 'access_token', None)) if token else False,
-                "has_refresh_token": bool(getattr(token, 'refresh_token', None)) if token else False,
-                "expires_at": getattr(token, 'expires_at', None) if token else None,
-                "scope": getattr(token, 'scope', None) if token else None
-            }
-        })
-
-        if not token:
-            logger.error("🎵 SPOTIFY CLIENT: No valid Spotify tokens found", extra={
-                "meta": {
-                    "user_id": self.user_id,
-                    "provider": "spotify"
-                }
-            })
-            raise SpotifyAuthError("No valid Spotify tokens found")
-
-        # Double-check token is not expired (additional safety)
-        logger.info("🎵 SPOTIFY CLIENT: Checking token expiry", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "provider": "spotify",
-                "expires_at": getattr(token, 'expires_at', None),
-                "current_time": int(time.time()),
-                "is_expired_60s": getattr(token, 'is_expired', lambda x: True)(60)
-            }
-        })
-
-        if token.is_expired(60):  # 1 minute buffer
-            logger.warning("🎵 SPOTIFY CLIENT: Token expired, forcing refresh", extra={
+        logger.info(
+            "🎵 SPOTIFY CLIENT: get_valid_token_with_auto_refresh result",
+            extra={
                 "meta": {
                     "user_id": self.user_id,
                     "provider": "spotify",
-                    "expires_at": getattr(token, 'expires_at', None)
+                    "has_token": token is not None,
+                    "token_type": type(token).__name__ if token else None,
+                    "token_id": getattr(token, "id", None) if token else None,
+                    "token_user_id": getattr(token, "user_id", None) if token else None,
+                    "token_provider": (
+                        getattr(token, "provider", None) if token else None
+                    ),
+                    "has_access_token": (
+                        bool(getattr(token, "access_token", None)) if token else False
+                    ),
+                    "has_refresh_token": (
+                        bool(getattr(token, "refresh_token", None)) if token else False
+                    ),
+                    "expires_at": getattr(token, "expires_at", None) if token else None,
+                    "scope": getattr(token, "scope", None) if token else None,
                 }
-            })
+            },
+        )
+
+        if not token:
+            logger.error(
+                "🎵 SPOTIFY CLIENT: No valid Spotify tokens found",
+                extra={"meta": {"user_id": self.user_id, "provider": "spotify"}},
+            )
+            raise SpotifyAuthError("No valid Spotify tokens found")
+
+        # Double-check token is not expired (additional safety)
+        logger.info(
+            "🎵 SPOTIFY CLIENT: Checking token expiry",
+            extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "provider": "spotify",
+                    "expires_at": getattr(token, "expires_at", None),
+                    "current_time": int(time.time()),
+                    "is_expired_60s": getattr(token, "is_expired", lambda x: True)(60),
+                }
+            },
+        )
+
+        if token.is_expired(60):  # 1 minute buffer
+            logger.warning(
+                "🎵 SPOTIFY CLIENT: Token expired, forcing refresh",
+                extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "provider": "spotify",
+                        "expires_at": getattr(token, "expires_at", None),
+                    }
+                },
+            )
 
             # Force refresh if still expired
             token = await get_valid_token_with_auto_refresh(
                 self.user_id, "spotify", force_refresh=True
             )
 
-            logger.info("🎵 SPOTIFY CLIENT: Force refresh result", extra={
+            logger.info(
+                "🎵 SPOTIFY CLIENT: Force refresh result",
+                extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "provider": "spotify",
+                        "has_token_after_refresh": token is not None,
+                    }
+                },
+            )
+
+            if not token:
+                logger.error(
+                    "🎵 SPOTIFY CLIENT: Failed to refresh Spotify token",
+                    extra={"meta": {"user_id": self.user_id, "provider": "spotify"}},
+                )
+                raise SpotifyAuthError("Failed to refresh Spotify token")
+
+        logger.info(
+            "🎵 SPOTIFY CLIENT: Returning valid access token",
+            extra={
                 "meta": {
                     "user_id": self.user_id,
                     "provider": "spotify",
-                    "has_token_after_refresh": token is not None
+                    "token_length": (
+                        len(getattr(token, "access_token", "")) if token else 0
+                    ),
                 }
-            })
-
-            if not token:
-                logger.error("🎵 SPOTIFY CLIENT: Failed to refresh Spotify token", extra={
-                    "meta": {
-                        "user_id": self.user_id,
-                        "provider": "spotify"
-                    }
-                })
-                raise SpotifyAuthError("Failed to refresh Spotify token")
-
-        logger.info("🎵 SPOTIFY CLIENT: Returning valid access token", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "provider": "spotify",
-                "token_length": len(getattr(token, 'access_token', '')) if token else 0
-            }
-        })
+            },
+        )
 
         return token.access_token
 
@@ -323,7 +354,7 @@ class SpotifyClient:
                     headers=headers,
                     params=params,
                     json=json_body,
-                    timeout=timeout
+                    timeout=timeout,
                 )
 
                 if error:
@@ -335,7 +366,9 @@ class SpotifyClient:
                             headers["Authorization"] = f"Bearer {access_token}"
                             continue
                         except SpotifyAuthError:
-                            raise SpotifyAuthError("Authentication failed after token refresh")
+                            raise SpotifyAuthError(
+                                "Authentication failed after token refresh"
+                            )
 
                     # Handle other errors
                     self._record_failure()
@@ -365,7 +398,9 @@ class SpotifyClient:
                     await asyncio.sleep(delay)
                     continue
 
-                raise SpotifyAuthError(f"Request failed after {max_attempts} attempts: {e}")
+                raise SpotifyAuthError(
+                    f"Request failed after {max_attempts} attempts: {e}"
+                )
 
         # This should never be reached, but just in case
         raise SpotifyAuthError("Request failed")
@@ -386,29 +421,35 @@ class SpotifyClient:
         Retries on 5xx with backoff, refreshes on 401 once, and raises
         specialized exceptions for 403 (premium_required) and 429 (rate_limited).
         """
-        logger.info("🎵 SPOTIFY CLIENT: _proxy_request starting", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "method": method,
-                "path": path,
-                "params": params,
-                "has_json_body": json_body is not None,
-                "json_body_size": len(str(json_body)) if json_body else 0
-            }
-        })
+        logger.info(
+            "🎵 SPOTIFY CLIENT: _proxy_request starting",
+            extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "method": method,
+                    "path": path,
+                    "params": params,
+                    "has_json_body": json_body is not None,
+                    "json_body_size": len(str(json_body)) if json_body else 0,
+                }
+            },
+        )
 
         self._check_budget()
         timeout = self._get_timeout()
         url = f"{self.api_base}{path}"
 
-        logger.debug("🎵 SPOTIFY CLIENT: _proxy_request URL constructed", extra={
-            "meta": {
-                "user_id": self.user_id,
-                "method": method,
-                "url": url,
-                "timeout": timeout
-            }
-        })
+        logger.debug(
+            "🎵 SPOTIFY CLIENT: _proxy_request URL constructed",
+            extra={
+                "meta": {
+                    "user_id": self.user_id,
+                    "method": method,
+                    "url": url,
+                    "timeout": timeout,
+                }
+            },
+        )
 
         # Circuit breaker check
         if self._is_circuit_open():
@@ -424,35 +465,43 @@ class SpotifyClient:
         attempt = 0
         while attempt < 3:
             attempt += 1
-            logger.debug("🎵 SPOTIFY CLIENT: Making HTTP request", extra={
-                "meta": {
-                    "user_id": self.user_id,
-                    "attempt": attempt,
-                    "method": method,
-                    "url": url,
-                    "has_params": params is not None,
-                    "has_json_body": json_body is not None,
-                    "timeout": timeout
-                }
-            })
+            logger.debug(
+                "🎵 SPOTIFY CLIENT: Making HTTP request",
+                extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "attempt": attempt,
+                        "method": method,
+                        "url": url,
+                        "has_params": params is not None,
+                        "has_json_body": json_body is not None,
+                        "timeout": timeout,
+                    }
+                },
+            )
 
             async with httpx.AsyncClient(timeout=timeout) as client:
                 t0 = perf_counter()
-                r = await client.request(method, url, params=params, json=json_body, headers=headers)
+                r = await client.request(
+                    method, url, params=params, json=json_body, headers=headers
+                )
                 dt = perf_counter() - t0
 
-            logger.info("🎵 SPOTIFY CLIENT: HTTP response received", extra={
-                "meta": {
-                    "user_id": self.user_id,
-                    "attempt": attempt,
-                    "method": method,
-                    "path": path,
-                    "status_code": r.status_code,
-                    "response_time_ms": round(dt * 1000, 2),
-                    "headers": dict(r.headers),
-                    "response_size": len(r.text) if r.text else 0
-                }
-            })
+            logger.info(
+                "🎵 SPOTIFY CLIENT: HTTP response received",
+                extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "attempt": attempt,
+                        "method": method,
+                        "path": path,
+                        "status_code": r.status_code,
+                        "response_time_ms": round(dt * 1000, 2),
+                        "headers": dict(r.headers),
+                        "response_size": len(r.text) if r.text else 0,
+                    }
+                },
+            )
 
             # observe metrics
             try:
@@ -463,15 +512,18 @@ class SpotifyClient:
 
             # Handle rate limit explicitly with proper backoff
             if r.status_code == 429:
-                logger.warning("🎵 SPOTIFY CLIENT: Rate limited by Spotify", extra={
-                    "meta": {
-                        "user_id": self.user_id,
-                        "attempt": attempt,
-                        "method": method,
-                        "path": path,
-                        "retry_after_header": (r.headers or {}).get("Retry-After")
-                    }
-                })
+                logger.warning(
+                    "🎵 SPOTIFY CLIENT: Rate limited by Spotify",
+                    extra={
+                        "meta": {
+                            "user_id": self.user_id,
+                            "attempt": attempt,
+                            "method": method,
+                            "path": path,
+                            "retry_after_header": (r.headers or {}).get("Retry-After"),
+                        }
+                    },
+                )
 
                 try:
                     SPOTIFY_429.labels(path).inc()
@@ -480,30 +532,40 @@ class SpotifyClient:
                 retry_after = None
                 try:
                     retry_after = int((r.headers or {}).get("Retry-After", "0") or 0)
-                    logger.info("🎵 SPOTIFY CLIENT: Applying Retry-After backoff", extra={
-                        "meta": {"user_id": self.user_id, "retry_after": retry_after}
-                    })
+                    logger.info(
+                        "🎵 SPOTIFY CLIENT: Applying Retry-After backoff",
+                        extra={
+                            "meta": {
+                                "user_id": self.user_id,
+                                "retry_after": retry_after,
+                            }
+                        },
+                    )
                     # Apply backoff using the Retry-After header value
                     self._budget_manager.apply_backoff(retry_after)
                 except Exception:
                     # Apply exponential backoff if no Retry-After header
-                    logger.info("🎵 SPOTIFY CLIENT: Applying exponential backoff", extra={
-                        "meta": {"user_id": self.user_id}
-                    })
+                    logger.info(
+                        "🎵 SPOTIFY CLIENT: Applying exponential backoff",
+                        extra={"meta": {"user_id": self.user_id}},
+                    )
                     self._budget_manager.apply_backoff()
                 # Surface a specialized exception for UI
                 raise SpotifyRateLimitedError(retry_after, "rate_limited")
 
             if r.status_code == 401:
-                logger.warning("🎵 SPOTIFY CLIENT: 401 Unauthorized from Spotify", extra={
-                    "meta": {
-                        "user_id": self.user_id,
-                        "attempt": attempt,
-                        "method": method,
-                        "path": path,
-                        "max_attempts": 3
-                    }
-                })
+                logger.warning(
+                    "🎵 SPOTIFY CLIENT: 401 Unauthorized from Spotify",
+                    extra={
+                        "meta": {
+                            "user_id": self.user_id,
+                            "attempt": attempt,
+                            "method": method,
+                            "path": path,
+                            "max_attempts": 3,
+                        }
+                    },
+                )
 
                 try:
                     SPOTIFY_REFRESH.inc()
@@ -512,109 +574,139 @@ class SpotifyClient:
 
                 # Only attempt refresh on first attempt to avoid infinite loops
                 if attempt == 1:
-                    logger.info("🎵 SPOTIFY CLIENT: Attempting token refresh on 401", extra={
-                        "meta": {"user_id": self.user_id, "attempt": attempt}
-                    })
+                    logger.info(
+                        "🎵 SPOTIFY CLIENT: Attempting token refresh on 401",
+                        extra={"meta": {"user_id": self.user_id, "attempt": attempt}},
+                    )
 
                     # Check if token needs refresh based on expiry
                     from ...auth_store_tokens import get_token as _get_token
+
                     t = await _get_token(self.user_id, "spotify")
                     now = int(time.time())
 
-                    logger.debug("🎵 SPOTIFY CLIENT: Token status check", extra={
-                        "meta": {
-                            "user_id": self.user_id,
-                            "has_token": t is not None,
-                            "token_expires_at": getattr(t, 'expires_at', None) if t else None,
-                            "current_time": now,
-                            "token_expired": getattr(t, 'expires_at', 0) < now if t else None
-                        }
-                    })
+                    logger.debug(
+                        "🎵 SPOTIFY CLIENT: Token status check",
+                        extra={
+                            "meta": {
+                                "user_id": self.user_id,
+                                "has_token": t is not None,
+                                "token_expires_at": (
+                                    getattr(t, "expires_at", None) if t else None
+                                ),
+                                "current_time": now,
+                                "token_expired": (
+                                    getattr(t, "expires_at", 0) < now if t else None
+                                ),
+                            }
+                        },
+                    )
 
                     # Always attempt refresh on 401, regardless of expiry time
                     # Spotify may revoke tokens or have clock skew
                     try:
-                        logger.info("🎵 SPOTIFY CLIENT: Refreshing tokens", extra={
-                            "meta": {"user_id": self.user_id}
-                        })
+                        logger.info(
+                            "🎵 SPOTIFY CLIENT: Refreshing tokens",
+                            extra={"meta": {"user_id": self.user_id}},
+                        )
                         await self._refresh_tokens()
                         access_token = await self._get_valid_access_token()
                         headers["Authorization"] = f"Bearer {access_token}"
-                        logger.info("🎵 SPOTIFY CLIENT: Token refresh successful, retrying request", extra={
-                            "meta": {"user_id": self.user_id}
-                        })
+                        logger.info(
+                            "🎵 SPOTIFY CLIENT: Token refresh successful, retrying request",
+                            extra={"meta": {"user_id": self.user_id}},
+                        )
                         continue  # Retry with new token
                     except SpotifyAuthError as refresh_error:
-                        logger.error("🎵 SPOTIFY CLIENT: Token refresh failed", extra={
-                            "meta": {
-                                "user_id": self.user_id,
-                                "error": str(refresh_error)
-                            }
-                        })
+                        logger.error(
+                            "🎵 SPOTIFY CLIENT: Token refresh failed",
+                            extra={
+                                "meta": {
+                                    "user_id": self.user_id,
+                                    "error": str(refresh_error),
+                                }
+                            },
+                        )
                         # Refresh failed - token is invalid, user needs reauth
                         raise SpotifyAuthError("needs_reauth")
                 else:
-                    logger.error("🎵 SPOTIFY CLIENT: Giving up after failed refresh attempt", extra={
-                        "meta": {"user_id": self.user_id, "attempt": attempt}
-                    })
+                    logger.error(
+                        "🎵 SPOTIFY CLIENT: Giving up after failed refresh attempt",
+                        extra={"meta": {"user_id": self.user_id, "attempt": attempt}},
+                    )
                     # Already attempted refresh on first attempt, give up
                     raise SpotifyAuthError("needs_reauth")
 
             if r.status_code == 403:
-                logger.warning("🎵 SPOTIFY CLIENT: 403 Forbidden - Premium required or other permission issue", extra={
-                    "meta": {
-                        "user_id": self.user_id,
-                        "attempt": attempt,
-                        "method": method,
-                        "path": path,
-                        "status_code": r.status_code
-                    }
-                })
+                logger.warning(
+                    "🎵 SPOTIFY CLIENT: 403 Forbidden - Premium required or other permission issue",
+                    extra={
+                        "meta": {
+                            "user_id": self.user_id,
+                            "attempt": attempt,
+                            "method": method,
+                            "path": path,
+                            "status_code": r.status_code,
+                        }
+                    },
+                )
                 # Premium required or other forbidden reason
                 raise SpotifyPremiumRequiredError("premium_required")
 
             # Retry on server errors
             if r.status_code >= 500 and attempt < 3:
-                logger.warning("🎵 SPOTIFY CLIENT: Server error, retrying", extra={
-                    "meta": {
-                        "user_id": self.user_id,
-                        "attempt": attempt,
-                        "method": method,
-                        "path": path,
-                        "status_code": r.status_code,
-                        "retry_delay": 0.2 * attempt
-                    }
-                })
+                logger.warning(
+                    "🎵 SPOTIFY CLIENT: Server error, retrying",
+                    extra={
+                        "meta": {
+                            "user_id": self.user_id,
+                            "attempt": attempt,
+                            "method": method,
+                            "path": path,
+                            "status_code": r.status_code,
+                            "retry_delay": 0.2 * attempt,
+                        }
+                    },
+                )
                 await asyncio.sleep(0.2 * attempt)
                 continue
 
             # Record circuit state and handle backoff
             if r.status_code >= 500:
-                logger.warning("🎵 SPOTIFY CLIENT: Recording failure for circuit breaker", extra={
-                    "meta": {"user_id": self.user_id, "status_code": r.status_code}
-                })
+                logger.warning(
+                    "🎵 SPOTIFY CLIENT: Recording failure for circuit breaker",
+                    extra={
+                        "meta": {"user_id": self.user_id, "status_code": r.status_code}
+                    },
+                )
                 self._record_failure()
             else:
-                logger.info("🎵 SPOTIFY CLIENT: Request successful, clearing backoff", extra={
-                    "meta": {
-                        "user_id": self.user_id,
-                        "status_code": r.status_code,
-                        "attempt": attempt
-                    }
-                })
+                logger.info(
+                    "🎵 SPOTIFY CLIENT: Request successful, clearing backoff",
+                    extra={
+                        "meta": {
+                            "user_id": self.user_id,
+                            "status_code": r.status_code,
+                            "attempt": attempt,
+                        }
+                    },
+                )
                 self._record_success()
                 # Clear backoff on successful response
                 self._budget_manager.clear_backoff()
 
-            logger.info("🎵 SPOTIFY CLIENT: Returning response", extra={
-                "meta": {
-                    "user_id": self.user_id,
-                    "method": method,
-                    "path": path,
-                    "status_code": r.status_code,
-                    "final_attempt": attempt
-                }
-            })
+            logger.info(
+                "🎵 SPOTIFY CLIENT: Returning response",
+                extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "method": method,
+                        "path": path,
+                        "status_code": r.status_code,
+                        "final_attempt": attempt,
+                    }
+                },
+            )
             return r
 
     # ------------------------------------------------------------------
@@ -641,7 +733,6 @@ class SpotifyClient:
             except SpotifyAuthError:
                 raise RuntimeError("needs_reauth")
         return t.access_token
-
 
     def _is_circuit_open(self) -> bool:
         """Check if circuit breaker is open."""
@@ -680,51 +771,64 @@ class SpotifyClient:
 
     async def get_devices(self) -> list[dict[str, Any]]:
         """Get available playback devices (raw proxy semantics)."""
-        logger.info("🎵 SPOTIFY CLIENT: get_devices called", extra={
-            "meta": {"user_id": self.user_id}
-        })
+        logger.info(
+            "🎵 SPOTIFY CLIENT: get_devices called",
+            extra={"meta": {"user_id": self.user_id}},
+        )
 
         try:
             r = await self._proxy_request("GET", "/me/player/devices")
-            logger.info("🎵 SPOTIFY CLIENT: get_devices API response", extra={
-                "meta": {
-                    "user_id": self.user_id,
-                    "status_code": r.status_code,
-                    "headers": dict(r.headers),
-                    "response_time": getattr(r, '_response_time', None)
-                }
-            })
-
-            if r.status_code != 200:
-                logger.warning("🎵 SPOTIFY CLIENT: get_devices non-200 response", extra={
+            logger.info(
+                "🎵 SPOTIFY CLIENT: get_devices API response",
+                extra={
                     "meta": {
                         "user_id": self.user_id,
                         "status_code": r.status_code,
-                        "response_text": r.text[:500] if r.text else None
+                        "headers": dict(r.headers),
+                        "response_time": getattr(r, "_response_time", None),
                     }
-                })
+                },
+            )
+
+            if r.status_code != 200:
+                logger.warning(
+                    "🎵 SPOTIFY CLIENT: get_devices non-200 response",
+                    extra={
+                        "meta": {
+                            "user_id": self.user_id,
+                            "status_code": r.status_code,
+                            "response_text": r.text[:500] if r.text else None,
+                        }
+                    },
+                )
                 return []
 
             data = r.json() or {}
             devices = data.get("devices", [])
 
-            logger.info("🎵 SPOTIFY CLIENT: get_devices success", extra={
-                "meta": {
-                    "user_id": self.user_id,
-                    "device_count": len(devices),
-                    "devices": devices
-                }
-            })
+            logger.info(
+                "🎵 SPOTIFY CLIENT: get_devices success",
+                extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "device_count": len(devices),
+                        "devices": devices,
+                    }
+                },
+            )
 
             return devices
         except Exception as e:
-            logger.error("🎵 SPOTIFY CLIENT: get_devices error", extra={
-                "meta": {
-                    "user_id": self.user_id,
-                    "error": str(e),
-                    "error_type": type(e).__name__
-                }
-            })
+            logger.error(
+                "🎵 SPOTIFY CLIENT: get_devices error",
+                extra={
+                    "meta": {
+                        "user_id": self.user_id,
+                        "error": str(e),
+                        "error_type": type(e).__name__,
+                    }
+                },
+            )
             raise
 
     async def transfer_playback(self, device_id: str, play: bool = True) -> bool:
@@ -734,7 +838,9 @@ class SpotifyClient:
         )
         return r.status_code in (200, 202, 204)
 
-    async def play(self, uris: list[str] | None = None, context_uri: str | None = None) -> bool:
+    async def play(
+        self, uris: list[str] | None = None, context_uri: str | None = None
+    ) -> bool:
         """Start or resume playback (raw proxy)."""
         body = {}
         if uris:
@@ -762,7 +868,9 @@ class SpotifyClient:
     async def set_volume(self, volume_percent: int) -> bool:
         """Set playback volume (raw proxy)."""
         volume = max(0, min(100, volume_percent))
-        r = await self._proxy_request("PUT", "/me/player/volume", params={"volume_percent": volume})
+        r = await self._proxy_request(
+            "PUT", "/me/player/volume", params={"volume_percent": volume}
+        )
         return r.status_code in (200, 202, 204)
 
     async def get_queue(self) -> tuple[dict[str, Any] | None, list[dict[str, Any]]]:
@@ -814,11 +922,7 @@ class SpotifyClient:
 
     async def search_tracks(self, query: str, limit: int = 20) -> list[dict[str, Any]]:
         """Search for tracks."""
-        params = {
-            "q": query,
-            "type": "track",
-            "limit": max(1, min(50, limit))
-        }
+        params = {"q": query, "type": "track", "limit": max(1, min(50, limit))}
 
         response = await self._request("GET", "/search", params=params)
         if response.status_code != 200:

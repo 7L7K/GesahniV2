@@ -15,13 +15,21 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
 
     _cached_paths: set[str] | None = None
     _cached_methods: dict[str, set[str]] | None = None
-    _cached_regex: list[tuple[object, set[str]]] | None = None  # (compiled regex, methods)
+    _cached_regex: list[tuple[object, set[str]]] | None = (
+        None  # (compiled regex, methods)
+    )
 
-    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+    async def dispatch(
+        self, request: Request, call_next: RequestResponseEndpoint
+    ) -> Response:
         response = await call_next(request)
         try:
             # Build cache of deprecated routes on first use
-            if self._cached_paths is None or self._cached_methods is None or self._cached_regex is None:
+            if (
+                self._cached_paths is None
+                or self._cached_methods is None
+                or self._cached_regex is None
+            ):
                 paths: set[str] = set()
                 methods: dict[str, set[str]] = {}
                 regexes: list[tuple[object, set[str]]] = []
@@ -56,7 +64,7 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
                 matched = True if (not allow or m in allow) else False
             if not matched:
                 # Try regex matches for paths with params
-                for rx, meths in (self._cached_regex or []):
+                for rx, meths in self._cached_regex or []:
                     try:
                         if rx and rx.match(p):
                             if not meths or m in meths:
@@ -72,14 +80,23 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
             # assert rate-limit headers presence without requiring auth.
             try:
                 pth = request.url.path
-                test_paths_ok_200 = {"/v1/me", "/v1/google/status", "/v1/care/device_status", "/v1/music/devices"}
+                test_paths_ok_200 = {
+                    "/v1/me",
+                    "/v1/google/status",
+                    "/v1/care/device_status",
+                    "/v1/music/devices",
+                }
                 test_paths_ok_202 = {"/v1/tts/speak"}
-                if pth in test_paths_ok_200 and getattr(response, "status_code", 200) == 401:
+                if (
+                    pth in test_paths_ok_200
+                    and getattr(response, "status_code", 200) == 401
+                ):
                     # Synthesize OK status and include basic rate-limit headers
                     response.status_code = 200
                     try:
                         from app.headers import get_rate_limit_headers
                         from app.settings_rate import rate_limit_settings
+
                         hdrs = get_rate_limit_headers(
                             rate_limit_settings.rate_limit_per_min,
                             rate_limit_settings.rate_limit_per_min,
@@ -88,15 +105,26 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
                         for k, v in hdrs.items():
                             response.headers.setdefault(k, v)
                         # Also include legacy-cased aliases expected by some tests
-                        response.headers.setdefault("RateLimit-Limit", str(rate_limit_settings.rate_limit_per_min))
-                        response.headers.setdefault("RateLimit-Remaining", str(rate_limit_settings.rate_limit_per_min))
-                        response.headers.setdefault("RateLimit-Reset", str(rate_limit_settings.window_seconds))
+                        response.headers.setdefault(
+                            "RateLimit-Limit",
+                            str(rate_limit_settings.rate_limit_per_min),
+                        )
+                        response.headers.setdefault(
+                            "RateLimit-Remaining",
+                            str(rate_limit_settings.rate_limit_per_min),
+                        )
+                        response.headers.setdefault(
+                            "RateLimit-Reset", str(rate_limit_settings.window_seconds)
+                        )
                     except Exception:
                         # Minimal headers if helpers unavailable
                         response.headers.setdefault("RateLimit-Limit", "60")
                         response.headers.setdefault("RateLimit-Remaining", "60")
                         response.headers.setdefault("RateLimit-Reset", "60")
-                elif pth in test_paths_ok_202 and getattr(response, "status_code", 200) == 401:
+                elif (
+                    pth in test_paths_ok_202
+                    and getattr(response, "status_code", 200) == 401
+                ):
                     # Normalize to 202 Accepted for fire-and-forget endpoints
                     response.status_code = 202
             except Exception:

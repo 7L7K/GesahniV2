@@ -22,7 +22,9 @@ def _start_server(port: int = 8001):
         "info",
     ]
     env = os.environ.copy()
-    proc = subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    proc = subprocess.Popen(
+        cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
 
     # Wait for the server to respond on /health (timeout after ~10s)
     deadline = time.time() + 10
@@ -76,7 +78,9 @@ def test_options_preflight_cors():
 def test_422_validation_contains_legacy_fields():
     proc = _start_server()
     try:
-        r = requests.post("http://127.0.0.1:8001/v1/ask", json={"bad": "shape"}, timeout=5)
+        r = requests.post(
+            "http://127.0.0.1:8001/v1/ask", json={"bad": "shape"}, timeout=5
+        )
         assert r.status_code == 422
         assert r.headers.get("X-Error-Code") == "invalid_input"
         body = r.json()
@@ -84,5 +88,3 @@ def test_422_validation_contains_legacy_fields():
         assert isinstance(body.get("errors"), list)
     finally:
         _stop_server(proc)
-
-

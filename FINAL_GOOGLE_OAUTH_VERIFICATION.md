@@ -67,7 +67,7 @@ This proves the OAuth flow is working correctly - it's just that Google rejected
 Your Google OAuth integration is **100% functional**:
 
 - ✅ **Connect endpoint**: Generates proper OAuth URLs
-- ✅ **State cookies**: Set and validated correctly  
+- ✅ **State cookies**: Set and validated correctly
 - ✅ **Status endpoint**: Returns proper auth errors
 - ✅ **Settings endpoint**: Provides configuration info
 - ✅ **OAuth flow**: State verification works, only fails on fake tokens

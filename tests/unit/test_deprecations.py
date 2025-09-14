@@ -1,6 +1,7 @@
 """
 Tests for deprecated API endpoints and deprecation handling.
 """
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -29,7 +30,7 @@ class TestDeprecations:
             "/whoami",
             "/spotify/status",
             "/google/status",
-            "/google/oauth/callback"
+            "/google/oauth/callback",
         ]
 
         for path in deprecated_paths:
@@ -37,8 +38,9 @@ class TestDeprecations:
                 # Should have deprecated: true in the spec
                 for method_spec in paths[path].values():
                     if isinstance(method_spec, dict):
-                        assert method_spec.get("deprecated") is True, \
-                            f"Path {path} should be marked as deprecated"
+                        assert (
+                            method_spec.get("deprecated") is True
+                        ), f"Path {path} should be marked as deprecated"
 
     def test_deprecated_route_functionality(self, client):
         """Test that deprecated routes still function correctly."""
@@ -91,13 +93,18 @@ class TestDeprecations:
         for endpoint in test_endpoints:
             response = client.get(endpoint)
             # Should not return 501 Not Implemented or similar
-            assert response.status_code != 501, f"Deprecated endpoint {endpoint} should still work"
+            assert (
+                response.status_code != 501
+            ), f"Deprecated endpoint {endpoint} should still work"
             # Should return some valid HTTP status
-            assert 100 <= response.status_code < 600, f"Endpoint {endpoint} returned invalid status"
+            assert (
+                100 <= response.status_code < 600
+            ), f"Endpoint {endpoint} returned invalid status"
 
     def test_deprecation_documentation_exists(self):
         """Test that deprecation documentation file exists."""
         import os
+
         assert os.path.exists("DEPRECATIONS.md"), "DEPRECATIONS.md file should exist"
 
         with open("DEPRECATIONS.md") as f:

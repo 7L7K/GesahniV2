@@ -30,6 +30,7 @@ def _app_with_security(monkeypatch, extra_env: dict | None = None):
         if not callable(verify_token):
             raise Exception
     except Exception:
+
         async def verify_token(*args, **kwargs):
             return None
 
@@ -40,7 +41,9 @@ def _app_with_security(monkeypatch, extra_env: dict | None = None):
             return None
 
     @app.get("/protected")
-    async def protected(dep1: None = Depends(verify_token), dep2: None = Depends(rate_limit)):
+    async def protected(
+        dep1: None = Depends(verify_token), dep2: None = Depends(rate_limit)
+    ):
         return {"ok": True}
 
     @app.post("/state")

@@ -55,9 +55,10 @@ class TestShortPromptFailures:
         payload["prompt"] = short_prompt
 
         # Mock authentication and scope checking since the endpoint requires it
-        with patch(
-            "app.deps.user.get_current_user_id", return_value="test_user"
-        ), patch("app.auth_core.require_scope") as mock_scope:
+        with (
+            patch("app.deps.user.get_current_user_id", return_value="test_user"),
+            patch("app.auth_core.require_scope") as mock_scope,
+        ):
             # Make the scope check just return without doing anything
             mock_scope.return_value = None
             response = self.client.post("/v1/ask", json=payload)
@@ -70,9 +71,10 @@ class TestShortPromptFailures:
         payload["prompt"] = "   \n\t   "  # Various whitespace characters
 
         # Mock authentication and scope checking since the endpoint requires it
-        with patch(
-            "app.deps.user.get_current_user_id", return_value="test_user"
-        ), patch("app.auth_core.require_scope") as mock_scope:
+        with (
+            patch("app.deps.user.get_current_user_id", return_value="test_user"),
+            patch("app.auth_core.require_scope") as mock_scope,
+        ):
             # Make the scope check just return without doing anything
             mock_scope.return_value = None
             response = self.client.post("/v1/ask", json=payload)
@@ -86,9 +88,10 @@ class TestShortPromptFailures:
             payload["prompt"] = char
 
             # Mock authentication and scope checking since the endpoint requires it
-            with patch(
-                "app.deps.user.get_current_user_id", return_value="test_user"
-            ), patch("app.auth_core.require_scope") as mock_scope:
+            with (
+                patch("app.deps.user.get_current_user_id", return_value="test_user"),
+                patch("app.auth_core.require_scope") as mock_scope,
+            ):
                 # Make the scope check just return without doing anything
                 mock_scope.return_value = None
                 response = self.client.post("/v1/ask", json=payload)
@@ -120,9 +123,10 @@ class TestShortPromptFailures:
             payload["prompt"] = word
 
             # Mock authentication and scope checking since the endpoint requires it
-            with patch(
-                "app.deps.user.get_current_user_id", return_value="test_user"
-            ), patch("app.auth_core.require_scope") as mock_scope:
+            with (
+                patch("app.deps.user.get_current_user_id", return_value="test_user"),
+                patch("app.auth_core.require_scope") as mock_scope,
+            ):
                 # Make the scope check just return without doing anything
                 mock_scope.return_value = None
                 response = self.client.post("/v1/ask", json=payload)
@@ -157,9 +161,10 @@ class TestShortPromptFailures:
             payload["prompt"] = prompt
 
             # Mock authentication and scope checking since the endpoint requires it
-            with patch(
-                "app.deps.user.get_current_user_id", return_value="test_user"
-            ), patch("app.auth_core.require_scope") as mock_scope:
+            with (
+                patch("app.deps.user.get_current_user_id", return_value="test_user"),
+                patch("app.auth_core.require_scope") as mock_scope,
+            ):
                 # Make the scope check just return without doing anything
                 mock_scope.return_value = None
                 response = self.client.post("/v1/ask", json=payload)
@@ -173,9 +178,10 @@ class TestShortPromptFailures:
         payload["prompt"] = "x"  # Very short prompt that will be rejected
 
         # Mock authentication and scope checking since the endpoint requires it
-        with patch(
-            "app.deps.user.get_current_user_id", return_value="test_user"
-        ), patch("app.auth_core.require_scope") as mock_scope:
+        with (
+            patch("app.deps.user.get_current_user_id", return_value="test_user"),
+            patch("app.auth_core.require_scope") as mock_scope,
+        ):
             # Make the scope check just return without doing anything
             mock_scope.return_value = None
             response = self.client.post("/v1/ask", json=payload)

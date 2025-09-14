@@ -39,9 +39,9 @@ def test_legacy_refresh_logs_deprecation():
     client = TestClient(app)
 
     # Reset the deprecation flag to ensure we can test it
-    import app.auth
+    import app.auth_legacy
 
-    app.auth._DEPRECATE_REFRESH_LOGGED = False
+    app.auth_legacy._DEPRECATE_REFRESH_LOGGED = False
 
     # Mock print to capture deprecation message
     with patch("builtins.print") as mock_print:

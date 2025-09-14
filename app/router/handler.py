@@ -18,7 +18,9 @@ def _shape_usage(raw: dict[str, Any]) -> dict[str, int]:
 
 
 def _shape_vendor(raw: dict[str, Any]) -> str:
-    return raw.get("vendor") or raw.get("backend") or raw.get("chosen_vendor") or "dryrun"
+    return (
+        raw.get("vendor") or raw.get("backend") or raw.get("chosen_vendor") or "dryrun"
+    )
 
 
 def _shape_model(raw: dict[str, Any], fallback: str | None) -> str:
@@ -74,14 +76,20 @@ async def handle_ask(
             hooks_summary = {"results": [], "ok": True}
         obs["hooks"] = hooks_summary
         # Augment observability with route decision summary
-        rd = obs.get("route_decision") if isinstance(obs.get("route_decision"), dict) else {}
-        rd.update({
-            "skill_won": (rd.get("skill_won") if isinstance(rd, dict) else None),
-            "intent": request.intent_hint or "",
-            "model": _shape_model(raw, request.model_override),
-            "vendor": _shape_vendor(raw),
-            "cache_hit": _shape_cache_hit(raw),
-        })
+        rd = (
+            obs.get("route_decision")
+            if isinstance(obs.get("route_decision"), dict)
+            else {}
+        )
+        rd.update(
+            {
+                "skill_won": (rd.get("skill_won") if isinstance(rd, dict) else None),
+                "intent": request.intent_hint or "",
+                "model": _shape_model(raw, request.model_override),
+                "vendor": _shape_vendor(raw),
+                "cache_hit": _shape_cache_hit(raw),
+            }
+        )
         obs["route_decision"] = rd
 
         # Default timings present for observability
@@ -98,7 +106,9 @@ async def handle_ask(
         return resp
 
     async def _stream() -> AsyncIterator[AskStreamEvent]:
-        done: asyncio.Future[dict[str, Any]] = asyncio.get_running_loop().create_future()
+        done: asyncio.Future[dict[str, Any]] = (
+            asyncio.get_running_loop().create_future()
+        )
 
         async def _worker():
             try:
@@ -112,7 +122,9 @@ async def handle_ask(
 
         try:
             while not done.done():
-                yield AskStreamEvent(type="ping", data={"ts": datetime.now(UTC).isoformat()})
+                yield AskStreamEvent(
+                    type="ping", data={"ts": datetime.now(UTC).isoformat()}
+                )
                 await asyncio.sleep(1.0)
 
             raw = await done
@@ -122,14 +134,22 @@ async def handle_ask(
             except Exception:
                 hooks_summary = {"results": [], "ok": True}
             obs["hooks"] = hooks_summary
-            rd = obs.get("route_decision") if isinstance(obs.get("route_decision"), dict) else {}
-            rd.update({
-                "skill_won": (rd.get("skill_won") if isinstance(rd, dict) else None),
-                "intent": request.intent_hint or "",
-                "model": _shape_model(raw, request.model_override),
-                "vendor": _shape_vendor(raw),
-                "cache_hit": _shape_cache_hit(raw),
-            })
+            rd = (
+                obs.get("route_decision")
+                if isinstance(obs.get("route_decision"), dict)
+                else {}
+            )
+            rd.update(
+                {
+                    "skill_won": (
+                        rd.get("skill_won") if isinstance(rd, dict) else None
+                    ),
+                    "intent": request.intent_hint or "",
+                    "model": _shape_model(raw, request.model_override),
+                    "vendor": _shape_vendor(raw),
+                    "cache_hit": _shape_cache_hit(raw),
+                }
+            )
             obs["route_decision"] = rd
             obs.setdefault("timings", {"route_ms": 0, "vendor_ms": 0, "total_ms": 0})
 

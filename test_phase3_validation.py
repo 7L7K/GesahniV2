@@ -38,18 +38,18 @@ class Phase3Validator:
         test_name = "Leaf Module Isolation"
 
         # Clear any existing router modules
-        modules_to_clear = [m for m in sys.modules.keys() if m.startswith('app.router')]
+        modules_to_clear = [m for m in sys.modules.keys() if m.startswith("app.router")]
         for module in modules_to_clear:
             del sys.modules[module]
 
         leaf_modules = [
-            ('app.router.entrypoint', 'route_prompt'),
-            ('app.router.policy', 'ALLOWED_GPT_MODELS'),
-            ('app.router.budget', 'get_remaining_budget'),
-            ('app.router.ask_api', 'router'),
-            ('app.router.auth_api', 'router'),
-            ('app.router.google_api', 'router'),
-            ('app.router.admin_api', 'router'),
+            ("app.router.entrypoint", "route_prompt"),
+            ("app.router.policy", "ALLOWED_GPT_MODELS"),
+            ("app.router.budget", "get_remaining_budget"),
+            ("app.router.ask_api", "router"),
+            ("app.router.auth_api", "router"),
+            ("app.router.google_api", "router"),
+            ("app.router.admin_api", "router"),
         ]
 
         all_passed = True
@@ -69,7 +69,7 @@ class Phase3Validator:
         test_name = "No Circular Imports"
 
         # Clear modules
-        modules_to_clear = [m for m in sys.modules.keys() if m.startswith('app.router')]
+        modules_to_clear = [m for m in sys.modules.keys() if m.startswith("app.router")]
         for module in modules_to_clear:
             del sys.modules[module]
 
@@ -79,7 +79,9 @@ class Phase3Validator:
             # It's OK if heavy modules are imported - that's normal Python behavior
             self.log_success(test_name)
         except RecursionError:
-            self.log_failure(test_name, "RecursionError detected - circular import not resolved")
+            self.log_failure(
+                test_name, "RecursionError detected - circular import not resolved"
+            )
         except Exception as e:
             # Other exceptions are OK - we just don't want infinite recursion
             self.log_success(f"{test_name} (no recursion, got {type(e).__name__})")
@@ -90,7 +92,11 @@ class Phase3Validator:
 
         try:
             # Clear modules
-            modules_to_clear = [m for m in sys.modules.keys() if m.startswith(('app.router', 'app.bootstrap'))]
+            modules_to_clear = [
+                m
+                for m in sys.modules.keys()
+                if m.startswith(("app.router", "app.bootstrap"))
+            ]
             for module in modules_to_clear:
                 del sys.modules[module]
 
@@ -107,7 +113,7 @@ class Phase3Validator:
             assert callable(configure_default_router)
 
             # Test that no heavy modules were imported
-            heavy_imported = any(m in sys.modules for m in ['router', 'app.router'])
+            heavy_imported = any(m in sys.modules for m in ["router", "app.router"])
             if not heavy_imported:
                 self.log_success(test_name)
             else:
@@ -193,7 +199,9 @@ class Phase3Validator:
                 if isinstance(res, dict):
                     self.log_success(test_name)
                 else:
-                    self.log_failure(test_name, "Expected dict result from compat bridge")
+                    self.log_failure(
+                        test_name, "Expected dict result from compat bridge"
+                    )
             except Exception as e:
                 self.log_failure(test_name, f"Unexpected error: {e}")
 
@@ -211,7 +219,7 @@ class Phase3Validator:
             adapter = create_model_router_adapter()
 
             # Verify it has route_prompt method
-            assert hasattr(adapter, 'route_prompt')
+            assert hasattr(adapter, "route_prompt")
             assert callable(adapter.route_prompt)
 
             self.log_success(test_name)
@@ -230,10 +238,10 @@ class Phase3Validator:
             from app.router.google_api import router as google_router
 
             # Verify they are APIRouter instances
-            assert hasattr(ask_router, 'routes')
-            assert hasattr(auth_router, 'routes')
-            assert hasattr(google_router, 'routes')
-            assert hasattr(admin_router, 'routes')
+            assert hasattr(ask_router, "routes")
+            assert hasattr(auth_router, "routes")
+            assert hasattr(google_router, "routes")
+            assert hasattr(admin_router, "routes")
 
             # Verify they have routes defined
             assert len(ask_router.routes) > 0
@@ -256,13 +264,13 @@ class Phase3Validator:
             import re
 
             leaf_files = [
-                'app/router/entrypoint.py',
-                'app/router/policy.py',
-                'app/router/budget.py',
-                'app/router/ask_api.py',
-                'app/router/auth_api.py',
-                'app/router/google_api.py',
-                'app/router/admin_api.py',
+                "app/router/entrypoint.py",
+                "app/router/policy.py",
+                "app/router/budget.py",
+                "app/router/ask_api.py",
+                "app/router/auth_api.py",
+                "app/router/google_api.py",
+                "app/router/admin_api.py",
             ]
 
             violations = []
@@ -272,13 +280,17 @@ class Phase3Validator:
                         content = f.read()
 
                     # Check for explicit imports from app.router
-                    if re.search(r'from app\.router import|import app\.router', content):
+                    if re.search(
+                        r"from app\.router import|import app\.router", content
+                    ):
                         violations.append(file_path)
 
             if not violations:
                 self.log_success(test_name)
             else:
-                self.log_failure(test_name, f"Explicit cross-imports found in: {violations}")
+                self.log_failure(
+                    test_name, f"Explicit cross-imports found in: {violations}"
+                )
 
         except Exception as e:
             self.log_failure(test_name, str(e))
@@ -297,7 +309,9 @@ class Phase3Validator:
         self.test_api_routers_exist()
         self.test_no_explicit_cross_imports()
 
-        print(f"\n📊 Results: {sum(self.results.values())}/{len(self.results)} tests passed")
+        print(
+            f"\n📊 Results: {sum(self.results.values())}/{len(self.results)} tests passed"
+        )
 
         if self.errors:
             print("\n❌ Errors:")

@@ -2,6 +2,7 @@
 Backfill script for migrating from SQLite to PostgreSQL
 Preserves IDs and maintains referential integrity
 """
+
 import os
 import pandas as pd
 from sqlalchemy import create_engine, text
@@ -15,17 +16,31 @@ def get_engines():
     src_engine = create_engine(f"sqlite:///{sqlite_path}")
 
     # Destination: PostgreSQL
-    dst_url = os.getenv("DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni")
-    dst_engine = create_engine(dst_url.replace("postgresql://", "postgresql+psycopg2://"))
+    dst_url = os.getenv(
+        "DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni"
+    )
+    dst_engine = create_engine(
+        dst_url.replace("postgresql://", "postgresql+psycopg2://")
+    )
 
     return src_engine, dst_engine
 
 
-def migrate_table(src_engine, dst_engine, table_name: str, schema: str = None,
-                  id_column: str = "id", chunk_size: int = 1000):
+def migrate_table(
+    src_engine,
+    dst_engine,
+    table_name: str,
+    schema: str = None,
+    id_column: str = "id",
+    chunk_size: int = 1000,
+):
     """Migrate a single table preserving IDs"""
 
-    print(f"Migrating {schema}.{table_name}..." if schema else f"Migrating {table_name}...")
+    print(
+        f"Migrating {schema}.{table_name}..."
+        if schema
+        else f"Migrating {table_name}..."
+    )
 
     # Read from SQLite
     df = pd.read_sql(f"SELECT * FROM {table_name}", src_engine)
@@ -37,7 +52,7 @@ def migrate_table(src_engine, dst_engine, table_name: str, schema: str = None,
     print(f"  Found {len(df)} rows")
 
     # Handle UUID columns (SQLite stores as TEXT, PostgreSQL expects UUID)
-    if id_column in df.columns and df[id_column].dtype == 'object':
+    if id_column in df.columns and df[id_column].dtype == "object":
         # Convert string UUIDs back to UUID format if needed
         pass  # PostgreSQL will handle string UUIDs fine
 
@@ -49,7 +64,7 @@ def migrate_table(src_engine, dst_engine, table_name: str, schema: str = None,
         **table_args,
         if_exists="append",
         index=False,
-        chunksize=chunk_size
+        chunksize=chunk_size,
     )
 
     print(f"  ✓ Migrated {len(df)} rows")
@@ -139,10 +154,14 @@ def validate_migration(src_engine, dst_engine):
     for pg_table, sqlite_table in tables_to_check:
         try:
             # Check PostgreSQL count
-            pg_count = pd.read_sql(f"SELECT COUNT(*) as cnt FROM {pg_table}", dst_engine)["cnt"].iloc[0]
+            pg_count = pd.read_sql(
+                f"SELECT COUNT(*) as cnt FROM {pg_table}", dst_engine
+            )["cnt"].iloc[0]
 
             # Check SQLite count
-            sqlite_count = pd.read_sql(f"SELECT COUNT(*) as cnt FROM {sqlite_table}", src_engine)["cnt"].iloc[0]
+            sqlite_count = pd.read_sql(
+                f"SELECT COUNT(*) as cnt FROM {sqlite_table}", src_engine
+            )["cnt"].iloc[0]
 
             status = "✓" if pg_count == sqlite_count else "⚠️"
             print(f"{status} {pg_table}: {pg_count} rows (expected {sqlite_count})")

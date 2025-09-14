@@ -15,8 +15,7 @@ class Hook(Protocol):
     def name(self) -> str:  # pragma: no cover - simple property
         ...
 
-    async def run(self, result: dict[str, Any], request: AskRequest) -> None:
-        ...
+    async def run(self, result: dict[str, Any], request: AskRequest) -> None: ...
 
 
 _HOOKS: list[Hook] = []
@@ -53,12 +52,14 @@ async def run_post_hooks(result: dict[str, Any], request: AskRequest) -> dict[st
             err = str(e)
         finally:
             dur_ms = int((time.monotonic() - start) * 1000)
-            outcomes.append({
-                "name": getattr(h, "name", "hook"),
-                "ok": ok,
-                "error": err,
-                "ms": dur_ms,
-            })
+            outcomes.append(
+                {
+                    "name": getattr(h, "name", "hook"),
+                    "ok": ok,
+                    "error": err,
+                    "ms": dur_ms,
+                }
+            )
 
     # Prefer TaskGroup when available (py3.11+); otherwise gather
     try:
@@ -71,4 +72,3 @@ async def run_post_hooks(result: dict[str, Any], request: AskRequest) -> dict[st
         await asyncio.gather(*[_run_one(h) for h in hooks], return_exceptions=True)
 
     return {"results": outcomes, "ok": all(x.get("ok", False) for x in outcomes)}
-

@@ -43,7 +43,7 @@ class TTSAck(BaseModel):
                 "status": "ok",
                 "message": "TTS request accepted",
             }
-        }
+        },
     )
 
 
@@ -61,12 +61,8 @@ class TTSAck(BaseModel):
                         "description": "PCM WAV audio stream",
                     }
                 },
-                "application/json": {
-                    "schema": {
-                        "$ref": "#/components/schemas/TTSAck"
-                    }
-                }
-            }
+                "application/json": {"schema": {"$ref": "#/components/schemas/TTSAck"}},
+            },
         }
     },
 )

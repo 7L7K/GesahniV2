@@ -4,7 +4,7 @@ from app.main import create_app
 def test_critical_endpoints_exist():
     """Test that critical endpoints are properly registered."""
     app = create_app()
-    routes = [r.path for r in app.routes if hasattr(r, 'path')]
+    routes = [r.path for r in app.routes if hasattr(r, "path")]
 
     # These are the critical endpoints we care about
     critical_endpoints = ["/v1/whoami", "/v1/me", "/health"]
@@ -16,23 +16,33 @@ def test_critical_endpoints_exist():
 def test_no_duplicate_critical_endpoints():
     """Test that critical endpoints don't have problematic duplicates."""
     app = create_app()
-    routes = [(r.path, tuple(r.methods or [])) for r in app.routes if hasattr(r, 'path') and hasattr(r, 'methods')]
+    routes = [
+        (r.path, tuple(r.methods or []))
+        for r in app.routes
+        if hasattr(r, "path") and hasattr(r, "methods")
+    ]
 
     critical_endpoints = ["/v1/whoami", "/v1/me", "/health"]
 
     for endpoint in critical_endpoints:
         # Find routes for this path
-        endpoint_routes = [(path, methods) for path, methods in routes if path == endpoint]
+        endpoint_routes = [
+            (path, methods) for path, methods in routes if path == endpoint
+        ]
         # Group by HTTP method (excluding OPTIONS which FastAPI adds automatically)
         method_counts = {}
         for path, methods in endpoint_routes:
             for method in methods:
-                if method != "OPTIONS":  # OPTIONS are auto-generated and expected to be duplicated
+                if (
+                    method != "OPTIONS"
+                ):  # OPTIONS are auto-generated and expected to be duplicated
                     method_counts[method] = method_counts.get(method, 0) + 1
 
         # Check that no method has duplicates
         for method, count in method_counts.items():
-            assert count == 1, f"Critical endpoint {endpoint} method {method} appears {count} times (should be 1)"
+            assert (
+                count == 1
+            ), f"Critical endpoint {endpoint} method {method} appears {count} times (should be 1)"
 
 
 # Soft check for prefix includes - can be expanded when router tracing is available

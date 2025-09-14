@@ -101,7 +101,9 @@ def _test_set_config(
     if window_s is not None:
         config_updates["RATE_LIMIT_WINDOW_S"] = window_s
     if bypass_scopes is not None:
-        config_updates["RATE_LIMIT_BYPASS_SCOPES"] = set(s.strip() for s in bypass_scopes.split(",") if s.strip())
+        config_updates["RATE_LIMIT_BYPASS_SCOPES"] = set(
+            s.strip() for s in bypass_scopes.split(",") if s.strip()
+        )
 
     if config_updates:
         rate_limit_settings.set_test_config(**config_updates)
@@ -145,6 +147,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Prefer centralized test switch `env_utils.IS_TEST` when available.
         try:
             from app.env_utils import IS_TEST
+
             test_mode_disabled = IS_TEST
         except Exception:
             test_mode_disabled = False
@@ -153,10 +156,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # heuristic indicators of test mode so tests running under pytest in
         # various CI/local environments are not rate limited unexpectedly.
         heuristic_test_mode = (
-            "pytest" in sys.modules or
-            "PYTEST_CURRENT_TEST" in os.environ or
-            "PYTEST_RUNNING" in os.environ or
-            any("pytest" in str(m) for m in sys.modules.values() if hasattr(m, "__file__"))
+            "pytest" in sys.modules
+            or "PYTEST_CURRENT_TEST" in os.environ
+            or "PYTEST_RUNNING" in os.environ
+            or any(
+                "pytest" in str(m)
+                for m in sys.modules.values()
+                if hasattr(m, "__file__")
+            )
         )
 
         test_mode_disabled = test_mode_disabled or heuristic_test_mode
@@ -165,7 +172,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         rate_limit_mode_off = os.getenv("RATE_LIMIT_MODE", "").lower() == "off"
 
         # Allow explicit enabling of rate limiting in tests (overrides IS_TEST)
-        enable_rate_limiting_in_tests = os.getenv("ENABLE_RATE_LIMIT_IN_TESTS", "0").lower() in ("1", "true", "yes")
+        enable_rate_limiting_in_tests = os.getenv(
+            "ENABLE_RATE_LIMIT_IN_TESTS", "0"
+        ).lower() in (
+            "1",
+            "true",
+            "yes",
+        )
 
         # Debug logging for troubleshooting
         if test_mode_disabled:
@@ -174,7 +187,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         # Disable rate limiting if:
         # 1) RATE_LIMIT_MODE=off is set, OR
         # 2) In test mode AND ENABLE_RATE_LIMIT_IN_TESTS is not explicitly set to enable it
-        should_disable = rate_limit_mode_off or (test_mode_disabled and not enable_rate_limiting_in_tests)
+        should_disable = rate_limit_mode_off or (
+            test_mode_disabled and not enable_rate_limiting_in_tests
+        )
 
         if should_disable:
             return await call_next(request)
@@ -225,9 +240,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             retry_after_headers = get_retry_after_header(window_s)
             headers = {**rate_limit_headers, **retry_after_headers}
 
-            return PlainTextResponse(
-                "rate_limited", status_code=429, headers=headers
-            )
+            return PlainTextResponse("rate_limited", status_code=429, headers=headers)
 
         # For successful requests, add rate limit headers to the response
         response = await call_next(request)

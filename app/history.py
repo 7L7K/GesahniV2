@@ -43,9 +43,7 @@ async def append_history(
         record = record_or_prompt
         if "timestamp" not in record:
             record["timestamp"] = (
-                datetime.now(UTC)
-                .isoformat(timespec="seconds")
-                .replace("+00:00", "Z")
+                datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
             )
     else:
         if isinstance(record_or_prompt, LogRecord):
@@ -64,9 +62,7 @@ async def append_history(
             )
         if rec.timestamp is None:
             rec.timestamp = (
-                datetime.now(UTC)
-                .isoformat(timespec="seconds")
-                .replace("+00:00", "Z")
+                datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
             )
         record = rec.model_dump(exclude_none=True)
 

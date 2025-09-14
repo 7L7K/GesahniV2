@@ -18,7 +18,10 @@ sys.path.insert(0, str(project_root))
 # Import environment loading and JWT config
 from app.env_utils import load_env
 
-_PLACEHOLDER_PAT = re.compile(r"your[-_ ]secure[-_ ]jwt[-_ ]secret|placeholder|changeme", re.I)
+_PLACEHOLDER_PAT = re.compile(
+    r"your[-_ ]secure[-_ ]jwt[-_ ]secret|placeholder|changeme", re.I
+)
+
 
 def analyze_jwt_config() -> dict:
     """Analyze JWT configuration for security issues."""
@@ -37,7 +40,9 @@ def analyze_jwt_config() -> dict:
                 issues.append("Secret too short (<32 chars)")
             if _PLACEHOLDER_PAT.search(cfg.secret):
                 issues.append("Contains placeholder text - change for production")
-            if re.fullmatch(r"(dev|staging|prod|test|secret|token)[-_]?\d*", cfg.secret, re.I):
+            if re.fullmatch(
+                r"(dev|staging|prod|test|secret|token)[-_]?\d*", cfg.secret, re.I
+            ):
                 issues.append("Looks like a low-entropy label - use a random value")
 
         # Check RSA/EC keys
@@ -49,24 +54,17 @@ def analyze_jwt_config() -> dict:
 
         status = "SECURE" if not issues else "INSECURE"
 
-        return {
-            "status": status,
-            "issues": issues,
-            "config": cfg
-        }
+        return {"status": status, "issues": issues, "config": cfg}
 
     except RuntimeError as e:
-        return {
-            "status": "ERROR",
-            "issues": [str(e)],
-            "config": None
-        }
+        return {"status": "ERROR", "issues": [str(e)], "config": None}
     except Exception as e:
         return {
             "status": "UNKNOWN",
             "issues": [f"Failed to load config: {e}"],
-            "config": None
+            "config": None,
         }
+
 
 def main():
     """Main function to inspect JWT configuration."""
@@ -103,9 +101,9 @@ def main():
 
     print(f"Security:  {analysis['status']}")
 
-    if analysis['issues']:
+    if analysis["issues"]:
         print("Issues:")
-        for issue in analysis['issues']:
+        for issue in analysis["issues"]:
             print(f"  ❌ {issue}")
     else:
         print("✅ No security issues detected")
@@ -133,18 +131,19 @@ def main():
     print(f"ENV:        {env}")
     print(f"DEV_MODE:   {'Enabled' if dev_mode else 'Disabled'}")
 
-    if dev_mode and analysis.get('status') == 'INSECURE':
+    if dev_mode and analysis.get("status") == "INSECURE":
         print("⚠️  DEV_MODE allows insecure secrets - not recommended for production")
 
     # Test mode detection
     test_mode = (
-        os.getenv("PYTEST_RUNNING") or
-        os.getenv("PYTEST_CURRENT_TEST") or
-        os.getenv("ENV", "").strip().lower() == "test"
+        os.getenv("PYTEST_RUNNING")
+        or os.getenv("PYTEST_CURRENT_TEST")
+        or os.getenv("ENV", "").strip().lower() == "test"
     )
 
     if test_mode:
         print("🧪 Test mode detected")
+
 
 if __name__ == "__main__":
     main()

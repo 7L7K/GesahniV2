@@ -61,7 +61,7 @@ def _normalize(text: str) -> str:
         "—": "-",
         "–": "-",
         "…": "...",
-        "\u00A0": " ",
+        "\u00a0": " ",
     }
     for bad, good in replacements.items():
         text = text.replace(bad, good)
@@ -90,7 +90,9 @@ async def check_builtin_skills(prompt: str) -> str | None:
             continue
         # pattern_score = proportion of named groups that were matched
         groups = m.groupdict()
-        total_named = len([p for p in m.re.pattern.split("(?P") if p]) if m.re.pattern else 0
+        total_named = (
+            len([p for p in m.re.pattern.split("(?P") if p]) if m.re.pattern else 0
+        )
         matched_named = len([k for k, v in groups.items() if v])
         pattern_score = (matched_named / max(1, len(groups))) if groups else 0.5
         # context bonus: alias hits or recent usage (simple heuristic)
@@ -102,8 +104,13 @@ async def check_builtin_skills(prompt: str) -> str | None:
         except Exception:
             pass
         score = min(1.0, pattern_score + context_bonus)
-        reasons = {"pattern_score": f"{pattern_score:.2f}", "context_bonus": f"{context_bonus:.2f}"}
-        candidates.append(Candidate(skill=skill, pattern=m, score=score, reasons=reasons))
+        reasons = {
+            "pattern_score": f"{pattern_score:.2f}",
+            "context_bonus": f"{context_bonus:.2f}",
+        }
+        candidates.append(
+            Candidate(skill=skill, pattern=m, score=score, reasons=reasons)
+        )
 
     # Sort descending
     candidates.sort(key=lambda c: c.score, reverse=True)
@@ -112,7 +119,9 @@ async def check_builtin_skills(prompt: str) -> str | None:
     top3 = candidates[:3]
     rec = log_record_var.get()
     if rec is not None:
-        rec.candidates = [(c.skill.__class__.__name__, c.score, c.reasons) for c in top3]
+        rec.candidates = [
+            (c.skill.__class__.__name__, c.score, c.reasons) for c in top3
+        ]
 
     if not candidates:
         return None

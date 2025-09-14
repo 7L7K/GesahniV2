@@ -8,7 +8,8 @@ import sys
 from unittest.mock import Mock
 
 # Add the app directory to the path
-sys.path.insert(0, '/Users/kingal/2025/GesahniV2')
+sys.path.insert(0, "/Users/kingal/2025/GesahniV2")
+
 
 def test_csrf_cross_site_validation():
     """Test CSRF cross-site validation logic."""
@@ -28,6 +29,7 @@ def test_csrf_cross_site_validation():
     print("✓ CSRF middleware imported successfully")
     print("✓ Cross-site validation logic should accept valid tokens")
     return True
+
 
 def test_cors_middleware():
     """Test CORS middleware functionality."""
@@ -50,13 +52,12 @@ def test_cors_middleware():
 
     # Create CORS middleware
     middleware = CorsMiddleware(
-        mock_app,
-        allow_origins=origins,
-        allow_credentials=allow_credentials
+        mock_app, allow_origins=origins, allow_credentials=allow_credentials
     )
 
     print("✓ CORS middleware created successfully")
     return True
+
 
 def test_csrf_enforcement():
     """Test CSRF enforcement logic."""
@@ -79,7 +80,9 @@ def test_csrf_enforcement():
     print("✓ CSRF header extraction works correctly")
 
     # Test with X-CSRF header (legacy)
-    request.headers.get.side_effect = lambda key: "legacy_token" if key == "X-CSRF" else None
+    request.headers.get.side_effect = lambda key: (
+        "legacy_token" if key == "X-CSRF" else None
+    )
     token, used_legacy, legacy_allowed = _extract_csrf_header(request)
 
     assert token == "legacy_token"
@@ -87,6 +90,7 @@ def test_csrf_enforcement():
     print("✓ CSRF legacy header extraction works correctly")
 
     return True
+
 
 def main():
     """Run all tests."""
@@ -114,8 +118,10 @@ def main():
     except Exception as e:
         print(f"❌ Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

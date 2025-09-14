@@ -19,7 +19,7 @@ def check_recent_logs():
         # Try to read recent logs
         log_files = [
             "/Users/kingal/2025/GesahniV2/logs/backend.log",
-            "/Users/kingal/2025/GesahniV2/logs/backend.log.backup"
+            "/Users/kingal/2025/GesahniV2/logs/backend.log.backup",
         ]
 
         oauth_logs = []
@@ -29,7 +29,15 @@ def check_recent_logs():
                     with open(log_file) as f:
                         lines = f.readlines()[-50:]  # Last 50 lines
                         for line in lines:
-                            if any(keyword in line.lower() for keyword in ['google', 'oauth', 'id_token', 'provider_iss']):
+                            if any(
+                                keyword in line.lower()
+                                for keyword in [
+                                    "google",
+                                    "oauth",
+                                    "id_token",
+                                    "provider_iss",
+                                ]
+                            ):
                                 oauth_logs.append(line.strip())
                 except Exception:
                     pass
@@ -63,7 +71,9 @@ def verify_server_running():
             return False
     except Exception as e:
         print(f"❌ Server not responding: {e}")
-        print("   Start with: uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload")
+        print(
+            "   Start with: uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+        )
         return False
 
 
@@ -72,12 +82,14 @@ def test_oauth_url_generation():
     print("🔗 Testing OAuth URL generation...")
 
     try:
-        response = requests.get("http://127.0.0.1:8000/v1/auth/google/login_url", timeout=5)
+        response = requests.get(
+            "http://127.0.0.1:8000/v1/auth/google/login_url", timeout=5
+        )
         if response.status_code == 200:
             data = response.json()
-            auth_url = data.get('auth_url', '')
+            auth_url = data.get("auth_url", "")
 
-            if 'openid' in auth_url and 'state=' in auth_url:
+            if "openid" in auth_url and "state=" in auth_url:
                 print("✅ OAuth URL generated correctly with openid scope")
                 return True
             else:

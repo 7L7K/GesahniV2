@@ -9,13 +9,19 @@ import os
 import time
 from typing import Any
 
-from cryptography.fernet import Fernet, InvalidToken
-from sqlalchemy import select, update, text
 import sqlalchemy as sa
+from cryptography.fernet import Fernet, InvalidToken
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.core import get_async_db
-from app.db.models import MusicDevice, MusicPreferences, MusicToken, MusicState, MusicSession
+from app.db.models import (
+    MusicDevice,
+    MusicPreferences,
+    MusicSession,
+    MusicState,
+    MusicToken,
+)
 
 MASTER_KEY = os.getenv("MUSIC_MASTER_KEY")
 
@@ -259,13 +265,19 @@ async def set_music_preferences(
 # MUSIC STATE PERSISTENCE
 # =====================================================================
 
+
 async def get_music_session(user_id: str) -> str | None:
     """Get the current music session ID for a user."""
     async for session in get_async_db():
-        stmt = select(MusicSession.session_id).where(
-            MusicSession.user_id == user_id,
-            MusicSession.ended_at.is_(None)  # Active session
-        ).order_by(MusicSession.started_at.desc()).limit(1)
+        stmt = (
+            select(MusicSession.session_id)
+            .where(
+                MusicSession.user_id == user_id,
+                MusicSession.ended_at.is_(None),  # Active session
+            )
+            .order_by(MusicSession.started_at.desc())
+            .limit(1)
+        )
 
         result = await session.execute(stmt)
         session_id = result.scalar_one_or_none()
@@ -281,17 +293,22 @@ async def save_music_state(user_id: str, session_id: str, state_data: dict) -> N
     async for session in get_async_db():
         # Use UPSERT to ensure trigger fires
         # Even if state_data is identical, we still want to update updated_at
-        stmt = sa.text("""
+        stmt = sa.text(
+            """
             INSERT INTO music.music_states (session_id, state)
             VALUES (:session_id, :state)
             ON CONFLICT (session_id) DO UPDATE SET
                 state = EXCLUDED.state
-        """)
+        """
+        )
 
-        await session.execute(stmt, {
-            "session_id": session_id,
-            "state": json.dumps(state_data)  # Serialize dict to JSON string
-        })
+        await session.execute(
+            stmt,
+            {
+                "session_id": session_id,
+                "state": json.dumps(state_data),  # Serialize dict to JSON string
+            },
+        )
 
         await session.commit()
         break
@@ -301,10 +318,12 @@ async def load_music_state(user_id: str) -> dict | None:
     """Load music state from database."""
     async for session in get_async_db():
         # Get the user's current active session
-        session_stmt = select(MusicSession.session_id).where(
-            MusicSession.user_id == user_id,
-            MusicSession.ended_at.is_(None)
-        ).order_by(MusicSession.started_at.desc()).limit(1)
+        session_stmt = (
+            select(MusicSession.session_id)
+            .where(MusicSession.user_id == user_id, MusicSession.ended_at.is_(None))
+            .order_by(MusicSession.started_at.desc())
+            .limit(1)
+        )
 
         result = await session.execute(session_stmt)
         session_id = result.scalar_one_or_none()
@@ -313,9 +332,7 @@ async def load_music_state(user_id: str) -> dict | None:
             return None
 
         # Get the state for this session
-        state_stmt = select(MusicState.state).where(
-            MusicState.session_id == session_id
-        )
+        state_stmt = select(MusicState.state).where(MusicState.session_id == session_id)
 
         result = await session.execute(state_stmt)
         state_data = result.scalar_one_or_none()

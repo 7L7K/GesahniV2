@@ -3,6 +3,7 @@ Documentation configuration for GesahniV2 API.
 
 This module provides visibility flags and configuration for API documentation.
 """
+
 import os
 from typing import Any
 

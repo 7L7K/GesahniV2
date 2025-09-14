@@ -1,4 +1,3 @@
-
 import jwt
 
 from app.auth_core import decode_any, extract_token, has_scope, resolve_auth

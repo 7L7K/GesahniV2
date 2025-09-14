@@ -112,7 +112,9 @@ def resolve_identity(request: Request) -> Identity | None:
     return None
 
 
-def require_auth(request: Request, required_scopes: list[str] | None = None) -> Identity:
+def require_auth(
+    request: Request, required_scopes: list[str] | None = None
+) -> Identity:
     """Require an authenticated identity for the request.
 
     Args:
@@ -137,7 +139,7 @@ def require_auth(request: Request, required_scopes: list[str] | None = None) -> 
         if missing_scopes:
             raise HTTPException(
                 status_code=403,
-                detail=f"insufficient_scope: {', '.join(missing_scopes)}"
+                detail=f"insufficient_scope: {', '.join(missing_scopes)}",
             )
 
     return ident
@@ -219,19 +221,13 @@ def require_csrf(request: Request) -> None:
     requested_with = request.headers.get("X-Requested-With")
 
     if not csrf_token and not requested_with:
-        raise HTTPException(
-            status_code=400,
-            detail="csrf.missing"
-        )
+        raise HTTPException(status_code=400, detail="csrf.missing")
 
     # If X-CSRF-Token is provided, validate it against cookie
     if csrf_token:
         csrf_cookie = request.cookies.get("csrf_token")
         if not csrf_cookie or csrf_token != csrf_cookie:
-            raise HTTPException(
-                status_code=400,
-                detail="csrf.invalid"
-            )
+            raise HTTPException(status_code=400, detail="csrf.invalid")
 
 
 def _get_csrf_allowlist() -> list[str]:

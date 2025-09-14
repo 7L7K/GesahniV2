@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RoutingDecision:
     """Data class to encapsulate routing decision information."""
+
     vendor: str
     model: str
     reason: str
@@ -87,6 +88,7 @@ class ModelRouter:
         """Check if OpenAI is healthy."""
         try:
             from ..gpt_client import OPENAI_HEALTHY, openai_circuit_open
+
             return OPENAI_HEALTHY and not openai_circuit_open
         except Exception:
             return False
@@ -95,6 +97,7 @@ class ModelRouter:
         """Check if Ollama is healthy."""
         try:
             from ..llama_integration import LLAMA_HEALTHY, llama_circuit_open
+
             return LLAMA_HEALTHY and not llama_circuit_open
         except Exception:
             return False
@@ -117,7 +120,9 @@ class ModelRouter:
         logger.info(msg)
         return msg
 
-    def _determine_vendor_and_model_from_override(self, model_override: str) -> tuple[str, str, str]:
+    def _determine_vendor_and_model_from_override(
+        self, model_override: str
+    ) -> tuple[str, str, str]:
         """Determine vendor and model from override string."""
         mv = model_override.strip()
         if mv.startswith("gpt"):
@@ -128,17 +133,24 @@ class ModelRouter:
             # Should not happen due to validation in main router
             raise ValueError(f"Invalid model override pattern: {mv}")
 
-    def _determine_vendor_and_model_from_picker(self, prompt: str, intent: str, tokens: int) -> tuple[str, str, str, str | None]:
+    def _determine_vendor_and_model_from_picker(
+        self, prompt: str, intent: str, tokens: int
+    ) -> tuple[str, str, str, str | None]:
         """Determine vendor and model using the model picker."""
-        engine, model_name, picker_reason, keyword_hit = pick_model(prompt, intent, tokens)
+        engine, model_name, picker_reason, keyword_hit = pick_model(
+            prompt, intent, tokens
+        )
         vendor = "openai" if engine == "gpt" else "ollama"
         return vendor, model_name, picker_reason, keyword_hit
 
-    def _handle_vendor_health_check(self, vendor: str, model: str, reason: str) -> tuple[str, str, str]:
+    def _handle_vendor_health_check(
+        self, vendor: str, model: str, reason: str
+    ) -> tuple[str, str, str]:
         """Handle vendor health checks and apply fallback logic."""
         if not self._check_vendor_health(vendor):
             if not self._check_vendor_health(self._get_fallback_vendor(vendor)):
                 from fastapi import HTTPException
+
                 raise HTTPException(
                     status_code=503,
                     detail={
@@ -186,13 +198,19 @@ class ModelRouter:
 
         # Handle model override path
         if model_override:
-            vendor, model, reason = self._determine_vendor_and_model_from_override(model_override)
+            vendor, model, reason = self._determine_vendor_and_model_from_override(
+                model_override
+            )
 
             # If Ollama is unhealthy, never dead-end: auto-fallback to OpenAI
             if vendor == "ollama" and not self._check_vendor_health("ollama"):
                 fallback_vendor = "openai"
                 fallback_model = self._get_fallback_model(fallback_vendor)
-                vendor, model, reason = fallback_vendor, fallback_model, "fallback_openai_health"
+                vendor, model, reason = (
+                    fallback_vendor,
+                    fallback_model,
+                    "fallback_openai_health",
+                )
 
                 logger.info(
                     "router.fallback vendor=ollama->openai reason=health_check_failed",
@@ -209,17 +227,25 @@ class ModelRouter:
             self._validate_model_allowlist(model, vendor)
 
             # Check vendor health and handle fallback
-            vendor, model, reason = self._handle_vendor_health_check(vendor, model, reason)
+            vendor, model, reason = self._handle_vendor_health_check(
+                vendor, model, reason
+            )
 
         else:
             # Default picker path
-            vendor, model, reason, keyword_hit = self._determine_vendor_and_model_from_picker(prompt, intent, tokens)
+            vendor, model, reason, keyword_hit = (
+                self._determine_vendor_and_model_from_picker(prompt, intent, tokens)
+            )
 
             # If Ollama is unhealthy, auto-fallback to OpenAI to avoid dead-ends
             if vendor == "ollama" and not self._check_vendor_health("ollama"):
                 fallback_vendor = "openai"
                 fallback_model = self._get_fallback_model(fallback_vendor)
-                vendor, model, reason = fallback_vendor, fallback_model, "fallback_openai_health"
+                vendor, model, reason = (
+                    fallback_vendor,
+                    fallback_model,
+                    "fallback_openai_health",
+                )
 
                 logger.info(
                     "router.fallback vendor=ollama->openai reason=health_check_failed",
@@ -236,7 +262,9 @@ class ModelRouter:
             self._validate_model_allowlist(model, vendor)
 
             # Check vendor health and handle fallback
-            vendor, model, reason = self._handle_vendor_health_check(vendor, model, reason)
+            vendor, model, reason = self._handle_vendor_health_check(
+                vendor, model, reason
+            )
 
             keyword_hit = keyword_hit
 
@@ -245,7 +273,7 @@ class ModelRouter:
             vendor=vendor,
             model=model,
             reason=reason,
-            keyword_hit=getattr(locals(), 'keyword_hit', None),
+            keyword_hit=getattr(locals(), "keyword_hit", None),
             stream=stream,
             allow_fallback=allow_fallback,
             request_id=request_id,

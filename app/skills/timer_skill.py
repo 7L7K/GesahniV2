@@ -43,13 +43,19 @@ class TimerSkill(Skill):
             re.I,
         ),
         # pat3: "pause/resume/cancel <name?> timer" (singular/plural handling)
-        re.compile(r"\b(?:pause|resume|cancel|stop) (?:(?P<cname>[\w\-]+) )?timers?\b", re.I),
+        re.compile(
+            r"\b(?:pause|resume|cancel|stop) (?:(?P<cname>[\w\-]+) )?timers?\b", re.I
+        ),
         # how long left on <name?> timer
-        re.compile(r"\bhow (?:much |long )?left (?:on|for) (?:(?P<qname>[\w\-]+) )?timers?\b", re.I),
+        re.compile(
+            r"\bhow (?:much |long )?left (?:on|for) (?:(?P<qname>[\w\-]+) )?timers?\b",
+            re.I,
+        ),
     ]
 
     async def run(self, prompt: str, match: re.Match) -> str:
         groups = match.groupdict()
+
         # Normalize cleaned names (drop stopwords like 'the', 'my', trailing 's')
         def _clean_name(n: str | None) -> str:
             if not n:
@@ -71,17 +77,23 @@ class TimerSkill(Skill):
             if action == "pause":
                 await ha.call_service("timer", "pause", {"entity_id": f"timer.{name}"})
                 # record ledger entry
-                await record_action("timer.pause", idempotency_key=f"timer:{name}:pause")
+                await record_action(
+                    "timer.pause", idempotency_key=f"timer:{name}:pause"
+                )
                 return f"{name} timer paused."
             if action == "resume":
                 await ha.call_service("timer", "start", {"entity_id": f"timer.{name}"})
-                await record_action("timer.resume", idempotency_key=f"timer:{name}:resume")
+                await record_action(
+                    "timer.resume", idempotency_key=f"timer:{name}:resume"
+                )
                 return f"{name} timer resumed."
             if action == "stop":
                 await ha.call_service("timer", "cancel", {"entity_id": f"timer.{name}"})
                 TIMERS.pop(name, None)
                 _persist_timers()
-                await record_action("timer.cancel", idempotency_key=f"timer:{name}:cancel")
+                await record_action(
+                    "timer.cancel", idempotency_key=f"timer:{name}:cancel"
+                )
                 return f"{name} timer cancelled."
             await ha.call_service("timer", "cancel", {"entity_id": f"timer.{name}"})
             TIMERS.pop(name, None)
@@ -114,7 +126,14 @@ class TimerSkill(Skill):
                 key = f"confirm:timer:{int(time.time())}"
                 from .tools.confirmation import enqueue
 
-                enqueue(key, {"tool": "timer.start", "slots": {"label": name, "duration_s": total_seconds}}, ttl=30)
+                enqueue(
+                    key,
+                    {
+                        "tool": "timer.start",
+                        "slots": {"label": name, "duration_s": total_seconds},
+                    },
+                    ttl=30,
+                )
                 return f"Do you want to start the timer for {total_seconds} seconds? Reply 'confirm {key} yes' to proceed."
             return expl
 

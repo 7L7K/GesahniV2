@@ -38,6 +38,7 @@ def _get_endpoint_info(route) -> str:
         source_line = "<unknown>"
         try:
             import inspect
+
             source_info = inspect.getsourcelines(endpoint)
             if source_info and len(source_info) > 1:
                 source_file = inspect.getfile(endpoint)
@@ -104,7 +105,9 @@ def check_route_collisions(app, fail_on_collision: bool = True) -> None:
             key = (method, normalized_path)
             collision_map[key].append(endpoint_info)
 
-    logger.info(f"📊 Analyzed {total_routes} routes, skipped {skipped_head_routes} automatic HEAD routes")
+    logger.info(
+        f"📊 Analyzed {total_routes} routes, skipped {skipped_head_routes} automatic HEAD routes"
+    )
 
     # Find actual collisions (multiple handlers for same method+path)
     collisions_found = 0
@@ -143,7 +146,7 @@ def check_route_collisions(app, fail_on_collision: bool = True) -> None:
                     "path": path,
                     "handlers": handlers,
                     "unallowed_handlers": list(unallowed_handlers),
-                    "allowed_handlers": list(allowed_handlers)
+                    "allowed_handlers": list(allowed_handlers),
                 }
                 unallowlisted_collisions.append(collision_info)
             else:
@@ -152,7 +155,7 @@ def check_route_collisions(app, fail_on_collision: bool = True) -> None:
                     "method": method,
                     "path": path,
                     "handlers": handlers,
-                    "reason": "Allowlisted intentional overlap"
+                    "reason": "Allowlisted intentional overlap",
                 }
                 allowlisted_collisions.append(collision_info)
         else:
@@ -161,38 +164,44 @@ def check_route_collisions(app, fail_on_collision: bool = True) -> None:
                 "method": method,
                 "path": path,
                 "handlers": handlers,
-                "reason": "Unallowlisted collision"
+                "reason": "Unallowlisted collision",
             }
             unallowlisted_collisions.append(collision_info)
 
     # Report allowlisted collisions (info level)
     if allowlisted_collisions:
-        logger.info(f"ℹ️ Found {len(allowlisted_collisions)} allowlisted route overlaps:")
+        logger.info(
+            f"ℹ️ Found {len(allowlisted_collisions)} allowlisted route overlaps:"
+        )
         for collision in allowlisted_collisions:
             logger.info(f"  Allowlisted: {collision['method']} {collision['path']}")
-            for handler in collision['handlers']:
+            for handler in collision["handlers"]:
                 logger.info(f"    → {handler}")
             logger.info("")
 
     # Report unallowlisted collisions (error level)
     if unallowlisted_collisions:
-        logger.error(f"🚨 CRITICAL: Found {len(unallowlisted_collisions)} unallowlisted route collisions!")
+        logger.error(
+            f"🚨 CRITICAL: Found {len(unallowlisted_collisions)} unallowlisted route collisions!"
+        )
         logger.error("These collisions will prevent the application from starting.")
 
         for i, collision in enumerate(unallowlisted_collisions, 1):
-            logger.error(f"[{i}/{len(unallowlisted_collisions)}] COLLISION: {collision['method']} {collision['path']}")
+            logger.error(
+                f"[{i}/{len(unallowlisted_collisions)}] COLLISION: {collision['method']} {collision['path']}"
+            )
             logger.error(f"  Reason: {collision['reason']}")
 
-            if 'unallowed_handlers' in collision:
+            if "unallowed_handlers" in collision:
                 logger.error("  Unallowed handlers:")
-                for handler in collision['unallowed_handlers']:
+                for handler in collision["unallowed_handlers"]:
                     logger.error(f"    ❌ {handler}")
                 logger.error("  Allowed handlers:")
-                for handler in collision['allowed_handlers']:
+                for handler in collision["allowed_handlers"]:
                     logger.error(f"    ✅ {handler}")
 
             logger.error("  All conflicting handlers:")
-            for handler in collision['handlers']:
+            for handler in collision["handlers"]:
                 logger.error(f"    → {handler}")
             logger.error("")
 
@@ -201,13 +210,17 @@ def check_route_collisions(app, fail_on_collision: bool = True) -> None:
             logger.error(f"💥 {error_msg}")
             raise RuntimeError(error_msg)
         else:
-            logger.warning("⚠️ Route collisions detected but not failing due to fail_on_collision=False")
+            logger.warning(
+                "⚠️ Route collisions detected but not failing due to fail_on_collision=False"
+            )
 
     # Summary
     if collisions_found == 0:
         logger.info("✅ No route collisions detected - all routes are unique")
     else:
-        logger.info(f"📈 Collision analysis complete: {collisions_found} total collisions ({len(allowlisted_collisions)} allowlisted, {len(unallowlisted_collisions)} unallowlisted)")
+        logger.info(
+            f"📈 Collision analysis complete: {collisions_found} total collisions ({len(allowlisted_collisions)} allowlisted, {len(unallowlisted_collisions)} unallowlisted)"
+        )
 
 
 async def init_route_collision_guard():
@@ -238,7 +251,9 @@ def add_to_allowlist(method: str, path: str, handler_patterns: set[str]) -> None
     normalized_path = _normalize_path(path)
     key = (method, normalized_path)
     ROUTE_COLLISION_ALLOWLIST[key] = handler_patterns
-    logger.debug(f"Added to route collision allowlist: {method} {normalized_path} -> {handler_patterns}")
+    logger.debug(
+        f"Added to route collision allowlist: {method} {normalized_path} -> {handler_patterns}"
+    )
 
 
 def remove_from_allowlist(method: str, path: str) -> bool:
@@ -255,7 +270,9 @@ def remove_from_allowlist(method: str, path: str) -> bool:
     key = (method, normalized_path)
     if key in ROUTE_COLLISION_ALLOWLIST:
         del ROUTE_COLLISION_ALLOWLIST[key]
-        logger.debug(f"Removed from route collision allowlist: {method} {normalized_path}")
+        logger.debug(
+            f"Removed from route collision allowlist: {method} {normalized_path}"
+        )
         return True
     return False
 

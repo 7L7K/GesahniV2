@@ -34,4 +34,3 @@ describe('apiFetch /v1/ask', () => {
     expect(j.hasCSRF).toBe(true)
   })
 })
-

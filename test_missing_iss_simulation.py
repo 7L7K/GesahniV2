@@ -12,7 +12,7 @@ import sys
 import jwt
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 
 def create_mock_id_token(with_iss=True, issuer_value="https://accounts.google.com"):
@@ -52,7 +52,9 @@ def simulate_id_token_processing(id_token):
             provider_sub = claims.get("sub") or None
             provider_iss = claims.get("iss") or None
 
-            print(f"✓ Decoded claims: sub={provider_sub}, iss={provider_iss}, email={email}")
+            print(
+                f"✓ Decoded claims: sub={provider_sub}, iss={provider_iss}, email={email}"
+            )
 
             # Fallback for Google OAuth: if iss is missing, use standard Google issuer
             if not provider_iss and provider_sub:
@@ -97,7 +99,9 @@ def test_scenarios():
 
     # Scenario 3: Token with different issuer format
     print("3. Google ID token with different issuer format:")
-    token3, payload3 = create_mock_id_token(with_iss=True, issuer_value="accounts.google.com")
+    token3, payload3 = create_mock_id_token(
+        with_iss=True, issuer_value="accounts.google.com"
+    )
     result3 = simulate_id_token_processing(token3)
     print()
 
@@ -108,9 +112,13 @@ def test_scenarios():
     print(f"✓ Token with different issuer: {'PASS' if result3 else 'FAIL'}")
 
     if result2:
-        print("\n🎉 The fallback logic works! Missing 'iss' claims are handled correctly.")
+        print(
+            "\n🎉 The fallback logic works! Missing 'iss' claims are handled correctly."
+        )
     else:
-        print("\n❌ The fallback logic failed. This would cause the missing_provider_iss error.")
+        print(
+            "\n❌ The fallback logic failed. This would cause the missing_provider_iss error."
+        )
 
     return result1, result2, result3
 

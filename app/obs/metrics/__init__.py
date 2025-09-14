@@ -11,7 +11,6 @@ def inc_error(name: str) -> None:
     _ = name
 
 
-
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager

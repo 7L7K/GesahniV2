@@ -53,10 +53,5 @@ async def openai_router(payload: dict[str, Any]) -> dict[str, Any]:
         "backend": "openai",
         "model": model,
         "answer": "(dry-run OpenAI response)",
-        "usage": {
-            "input_tokens": 0,
-            "output_tokens": 0
-        }
+        "usage": {"input_tokens": 0, "output_tokens": 0},
     }
-
-

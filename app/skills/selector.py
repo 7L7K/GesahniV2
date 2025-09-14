@@ -61,9 +61,21 @@ async def select(prompt: str, top_n: int = 3) -> tuple[dict | None, list[dict]]:
         return None, []
     chosen = candidates[0]
     SKILL_HITS_TOTAL.labels(skill=chosen["skill"].__class__.__name__).inc()
-    return {"skill_name": chosen["skill"].__class__.__name__, "text": await chosen["skill"].run(prompt, chosen["match"].group(0) if chosen["match"] else None), "why": chosen["reasons"]}, [
-        {"skill_name": c["skill"].__class__.__name__, "score": c["score"], "reasons": c["reasons"]} for c in top
+    return {
+        "skill_name": chosen["skill"].__class__.__name__,
+        "text": await chosen["skill"].run(
+            prompt, chosen["match"].group(0) if chosen["match"] else None
+        ),
+        "why": chosen["reasons"],
+    }, [
+        {
+            "skill_name": c["skill"].__class__.__name__,
+            "score": c["score"],
+            "reasons": c["reasons"],
+        }
+        for c in top
     ]
+
 
 """
 Selector flow (design doc)
@@ -161,13 +173,20 @@ async def select(prompt: str, top_n: int = 3) -> tuple[dict | None, list[dict]]:
     # Safety-net: if no candidates but the prompt contains a timer heuristic,
     # inject a TimerSkill candidate at 0.8 confidence so timers aren't missed.
     if not candidates:
-        norm_text = norm if isinstance(norm, str) else (norm[1] if isinstance(norm, tuple) else str(prompt))
+        norm_text = (
+            norm
+            if isinstance(norm, str)
+            else (norm[1] if isinstance(norm, tuple) else str(prompt))
+        )
         if isinstance(norm_text, tuple):
             norm_text = norm_text[1]
         norm_text = (norm_text or "").lower()
         if "timer" in norm_text or "set a timer" in norm_text:
             # try to find amount/unit via regex to build a minimal match
-            amount_re = re.search(r"(?P<amount>\d+)\s*(?P<unit>seconds?|second|minutes?|minute|mins?|hrs?|hours?)", norm_text)
+            amount_re = re.search(
+                r"(?P<amount>\d+)\s*(?P<unit>seconds?|second|minutes?|minute|mins?|hrs?|hours?)",
+                norm_text,
+            )
             timer_skill = None
             for s in SKILLS:
                 if s.__class__.__name__ == "TimerSkill":
@@ -182,7 +201,9 @@ async def select(prompt: str, top_n: int = 3) -> tuple[dict | None, list[dict]]:
                     "handled": True,
                     "text": None,
                     "confidence": 0.8,
-                    "slots": (chosen_match.groupdict() if chosen_match is not None else {}),
+                    "slots": (
+                        chosen_match.groupdict() if chosen_match is not None else {}
+                    ),
                     "why": "injected_timer_heuristic",
                     "idempotency_key": None,
                     "events": None,
@@ -213,4 +234,3 @@ async def select(prompt: str, top_n: int = 3) -> tuple[dict | None, list[dict]]:
     chosen_cand["text"] = text
 
     return chosen_cand, candidates[:top_n]
-

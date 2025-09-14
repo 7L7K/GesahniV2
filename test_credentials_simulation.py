@@ -13,7 +13,7 @@ from unittest.mock import Mock
 import jwt
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 
 def create_mock_credentials(has_id_token=True, id_token_content=None):
@@ -43,7 +43,7 @@ def create_mock_credentials(has_id_token=True, id_token_content=None):
 
 def simulate_oauth_callback_processing(creds):
     """Simulate the OAuth callback ID token processing."""
-    id_token = getattr(creds, 'id_token', None)
+    id_token = getattr(creds, "id_token", None)
     if id_token:
         id_token_str = str(id_token)
         preview = id_token_str[:50] if len(id_token_str) > 50 else id_token_str
@@ -62,12 +62,15 @@ def simulate_oauth_callback_processing(creds):
 
         if id_token:
             from app.security import jwt_decode
+
             claims = jwt_decode(id_token, options={"verify_signature": False})
             email = claims.get("email") or claims.get("email_address")
             provider_sub = claims.get("sub") or None
             provider_iss = claims.get("iss") or None
 
-            print(f"Decoded claims: sub={provider_sub}, iss={provider_iss}, email={email}")
+            print(
+                f"Decoded claims: sub={provider_sub}, iss={provider_iss}, email={email}"
+            )
 
             # Fallback for Google OAuth: if iss is missing, use standard Google issuer
             if not provider_iss and provider_sub:
@@ -108,16 +111,34 @@ def test_scenarios():
     print("=== Testing Google OAuth Credentials Scenarios ===\n")
 
     scenarios = [
-        ("Normal credentials with ID token", create_mock_credentials(has_id_token=True)),
-        ("Credentials with ID token missing iss", create_mock_credentials(has_id_token=True, id_token_content=jwt.encode({
-            "sub": "123456789012345678901",
-            "aud": "test_client_id.apps.googleusercontent.com",
-            "exp": 2000000000,
-            "iat": 1000000000,
-            "email": "test@example.com"
-        }, "dummy_key", algorithm="HS256"))),
+        (
+            "Normal credentials with ID token",
+            create_mock_credentials(has_id_token=True),
+        ),
+        (
+            "Credentials with ID token missing iss",
+            create_mock_credentials(
+                has_id_token=True,
+                id_token_content=jwt.encode(
+                    {
+                        "sub": "123456789012345678901",
+                        "aud": "test_client_id.apps.googleusercontent.com",
+                        "exp": 2000000000,
+                        "iat": 1000000000,
+                        "email": "test@example.com",
+                    },
+                    "dummy_key",
+                    algorithm="HS256",
+                ),
+            ),
+        ),
         ("Credentials without ID token", create_mock_credentials(has_id_token=False)),
-        ("Credentials with malformed ID token", create_mock_credentials(has_id_token=True, id_token_content="malformed.jwt.token")),
+        (
+            "Credentials with malformed ID token",
+            create_mock_credentials(
+                has_id_token=True, id_token_content="malformed.jwt.token"
+            ),
+        ),
     ]
 
     results = []
@@ -141,7 +162,9 @@ def test_scenarios():
         for scenario in failing_scenarios:
             print(f"   • {scenario}")
     else:
-        print("\n🎉 All scenarios passed! The missing_provider_iss error should not occur.")
+        print(
+            "\n🎉 All scenarios passed! The missing_provider_iss error should not occur."
+        )
 
     return results
 

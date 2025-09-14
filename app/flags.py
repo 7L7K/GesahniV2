@@ -18,9 +18,11 @@ def get_lazy_refresh_window_s() -> int:
         except Exception:
             return 60
     # Default: 60 in dev, 90 in prod-ish (COOKIE_SECURE or ENV=prod)
-    is_prod = bool_env("COOKIE_SECURE") or os.getenv("ENV", "").lower() in {"prod", "production"}
+    is_prod = bool_env("COOKIE_SECURE") or os.getenv("ENV", "").lower() in {
+        "prod",
+        "production",
+    }
     return 90 if is_prod else 60
 
 
 __all__ = ["get_lazy_refresh_window_s", "bool_env"]
-

@@ -909,7 +909,7 @@ E    +  where 404 = &lt;Response [404 Not Found]&gt;.status_code</failure></test
     assert len(errs) == 50 and errs[-1]["msg"] == "59"
 E   AssertionError: assert (50 == 50 and '49' == '59'
 E    +  where 50 = len([{'component': 'x', 'level': 'ERROR', 'msg': '0', 'timestamp': 't'}, {'component': 'x', 'level': 'ERROR', 'msg': '1', ...evel': 'ERROR', 'msg': '4', 'timestamp': 't'}, {'component': 'x', 'level': 'ERROR', 'msg': '5', 'timestamp': 't'}, ...])
-E     
+E
 E     - 59
 E     + 49)</failure></testcase><testcase classname="tests.test_admin_suite_extended" name="test_self_review_unavailable_shape" time="0.040" /><testcase classname="tests.test_admin_suite_extended" name="test_flags_endpoint_sets_env_and_guard" time="0.040"><failure message="AssertionError: assert 405 == 403&#10; +  where 405 = &lt;Response [405 Method Not Allowed]&gt;.status_code&#10; +    where &lt;Response [405 Method Not Allowed]&gt; = post('/v1/admin/flags?key=FOO&amp;value=BAR&amp;token=x')&#10; +      where post = &lt;starlette.testclient.TestClient object at 0x11f5958b0&gt;.post">tests/test_admin_suite_extended.py:140: in test_flags_endpoint_sets_env_and_guard
     assert client.post("/v1/admin/flags?key=FOO&amp;value=BAR&amp;token=x").status_code == 403
@@ -1797,12 +1797,12 @@ E   assert 404 == 200
 E    +  where 404 = &lt;Response [404 Not Found]&gt;.status_code</failure></testcase><testcase classname="tests.test_auth_core_unit" name="test_extract_token_precedence_header_over_cookie" time="0.002" /><testcase classname="tests.test_auth_core_unit" name="test_extract_token_access_cookie_when_no_header" time="0.003"><failure message="AssertionError: assert 'none' == 'access_cookie'&#10;  &#10;  - access_cookie&#10;  + none">tests/test_auth_core_unit.py:29: in test_extract_token_access_cookie_when_no_header
     assert src == "access_cookie"
 E   AssertionError: assert 'none' == 'access_cookie'
-E     
+E
 E     - access_cookie
 E     + none</failure></testcase><testcase classname="tests.test_auth_core_unit" name="test_extract_token_session_when_no_header_or_access" time="0.002"><failure message="AssertionError: assert 'none' == 'session'&#10;  &#10;  - session&#10;  + none">tests/test_auth_core_unit.py:36: in test_extract_token_session_when_no_header_or_access
     assert src == "session"
 E   AssertionError: assert 'none' == 'session'
-E     
+E
 E     - session
 E     + none</failure></testcase><testcase classname="tests.test_auth_core_unit" name="test_decode_any_hs256_roundtrip" time="0.002"><failure message="jwt.exceptions.InvalidTokenError: invalid_token">tests/test_auth_core_unit.py:43: in test_decode_any_hs256_roundtrip
     payload = decode_any(token)
@@ -3418,7 +3418,7 @@ tests/test_math_skill.py:8: in run_handle
 E   RuntimeError: There is no current event loop in thread 'MainThread'.</failure></testcase><testcase classname="tests.test_memgpt_policy_budget" name="test_policy_blocks_low_confidence" time="0.001" /><testcase classname="tests.test_memory_api_selection_extra" name="test_default_to_memory_under_pytest" time="0.004"><failure message="AssertionError: assert 'NoneType' == 'MemoryVectorStore'&#10;  &#10;  - MemoryVectorStore&#10;  + NoneType">tests/test_memory_api_selection_extra.py:13: in test_default_to_memory_under_pytest
     assert type(mem_api._store).__name__ == "MemoryVectorStore"
 E   AssertionError: assert 'NoneType' == 'MemoryVectorStore'
-E     
+E
 E     - MemoryVectorStore
 E     + NoneType</failure></testcase><testcase classname="tests.test_memory_api_selection_extra" name="test_unknown_kind_records_fallback" time="0.004"><failure message="AssertionError: assert 'NoneType' in {'ChromaVectorStore', 'MemoryVectorStore'}&#10; +  where 'NoneType' = &lt;class 'NoneType'&gt;.__name__&#10; +    where &lt;class 'NoneType'&gt; = type(None)&#10; +      where None = &lt;module 'app.memory.api' from '/Users/kingal/2025/GesahniV2/app/memory/api.py'&gt;._store">tests/test_memory_api_selection_extra.py:22: in test_unknown_kind_records_fallback
     assert type(mem_api._store).__name__ in {"ChromaVectorStore", "MemoryVectorStore"}
@@ -3428,7 +3428,7 @@ E    +    where &lt;class 'NoneType'&gt; = type(None)
 E    +      where None = &lt;module 'app.memory.api' from '/Users/kingal/2025/GesahniV2/app/memory/api.py'&gt;._store</failure></testcase><testcase classname="tests.test_memory_api_selection_extra" name="test_dual_unavailable_falls_back" time="0.004"><failure message="AssertionError: assert 'NoneType' == 'MemoryVectorStore'&#10;  &#10;  - MemoryVectorStore&#10;  + NoneType">tests/test_memory_api_selection_extra.py:35: in test_dual_unavailable_falls_back
     assert type(mem_api._store).__name__ == "MemoryVectorStore"
 E   AssertionError: assert 'NoneType' == 'MemoryVectorStore'
-E     
+E
 E     - MemoryVectorStore
 E     + NoneType</failure></testcase><testcase classname="tests.test_metrics" name="test_metrics_exposes_prometheus_and_increments_counter" time="0.004"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404 Not Found]&gt;.status_code">tests/test_metrics.py:11: in test_metrics_exposes_prometheus_and_increments_counter
     assert r0.status_code == 200
@@ -3476,7 +3476,7 @@ E    +  where Headers({'x-error-code': 'not_found', 'content-length': '239', 'co
 E   IndexError: list index out of range</failure></testcase><testcase classname="tests.test_middleware_order_contract" name="test_middleware_order_contract" time="0.155"><failure message="AssertionError: assert [] == ['CORSMiddlew...dleware', ...]&#10;  &#10;  Right contains 14 more items, first extra item: 'CORSMiddleware'&#10;  Use -v to get more diff">tests/test_middleware_order_contract.py:18: in test_middleware_order_contract
     assert names == [
 E   AssertionError: assert [] == ['CORSMiddlew...dleware', ...]
-E     
+E
 E     Right contains 14 more items, first extra item: 'CORSMiddleware'
 E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_middleware_stack_valid" name="test_user_middleware_are_classes" time="0.002"><failure message="AssertionError: No middleware found in app.user_middleware&#10;assert []&#10; +  where [] = &lt;fastapi.applications.FastAPI object at 0x11fd11790&gt;.user_middleware">tests/test_middleware_stack_valid.py:22: in test_user_middleware_are_classes
     assert app.user_middleware, "No middleware found in app.user_middleware"
@@ -3501,7 +3501,7 @@ E   ValueError: too many values to unpack (expected 2)</failure></testcase><test
 E   ValueError: too many values to unpack (expected 2)</failure></testcase><testcase classname="tests.test_model_router" name="test_compose_cache_id_stable" time="0.002" /><testcase classname="tests.test_model_router" name="test_route_text_defaults_to_nano" time="0.002" /><testcase classname="tests.test_model_router" name="test_route_text_long_prompt_escalates" time="0.001" /><testcase classname="tests.test_model_router" name="test_run_with_self_check_escalates_then_passes" time="0.003" /><testcase classname="tests.test_model_router" name="test_vision_triage" time="0.002" /><testcase classname="tests.test_model_router" name="test_route_text_attachments_branch" time="0.001" /><testcase classname="tests.test_model_router" name="test_route_text_ops_branches" time="0.003" /><testcase classname="tests.test_model_router" name="test_route_text_keyword_escalates" time="0.002"><failure message="AssertionError: assert 'gpt-5-nano' == 'gpt-4.1-nano'&#10;  &#10;  - gpt-4.1-nano&#10;  ?     ^^^&#10;  + gpt-5-nano&#10;  ?     ^">tests/test_model_router.py:96: in test_route_text_keyword_escalates
     assert d.model == "gpt-4.1-nano"
 E   AssertionError: assert 'gpt-5-nano' == 'gpt-4.1-nano'
-E     
+E
 E     - gpt-4.1-nano
 E     ?     ^^^
 E     + gpt-5-nano
@@ -3620,7 +3620,7 @@ E   KeyError: 'device_id'</failure></testcase><testcase classname="tests.test_no
     assert (
 E   AssertionError: Found logging.basicConfig in app/integrations/logging_config.py
 E   assert 'logging.basicConfig(' not in 'import os\n...ut,\n    )\n'
-E     
+E
 E     'logging.basicConfig(' is contained here:
 E       gging
 E           logging.basicConfig(
@@ -4213,7 +4213,7 @@ E   KeyError: 'service'</failure></testcase><testcase classname="tests.test_skil
 E   AssertionError: assert 'Couldn’t find any light' in 'Which light did you mean? I found multiple matches.'</failure></testcase><testcase classname="tests.test_skills.test_math_skill" name="test_math_basic" time="0.003"><failure message="AssertionError: assert '5 — Evaluated numeric: 5' == '5'&#10;  &#10;  - 5&#10;  + 5 — Evaluated numeric: 5">tests/test_skills/test_math_skill.py:14: in test_math_basic
     assert out == "5"
 E   AssertionError: assert '5 — Evaluated numeric: 5' == '5'
-E     
+E
 E     - 5
 E     + 5 — Evaluated numeric: 5</failure></testcase><testcase classname="tests.test_skills.test_math_skill" name="test_percentage" time="0.003" /><testcase classname="tests.test_skills.test_math_skill" name="test_divide_by_zero" time="0.002"><failure message="ZeroDivisionError: division by zero">tests/test_skills/test_math_skill.py:27: in test_divide_by_zero
     out = asyncio.run(skill.run("5 / 0", m))
@@ -4783,17 +4783,17 @@ E    +  where 200 = &lt;Response [200 OK]&gt;.status_code</failure></testcase><t
 E   AssertionError: assert 'token' in {'detail': {'code': 'invalid_credentials', 'detail': 'invalid credentials', 'details': {'env': 'dev', 'error_id': '01K46J93GQGX42SPPYTV4FWKAV', 'req_id': '-', 'status_code': 401, ...}, 'hint': 'check username and password', ...}}</failure></testcase><testcase classname="tests.test_vad" name="test_vad_none_backend" time="0.002" /><testcase classname="tests.test_vad" name="test_vad_webrtc_backend_no_crash" time="0.003" /><testcase classname="tests.test_vector_store_dual_fallback_behavior" name="test_dual_read_fallbacks_to_chroma_when_primary_empty" time="0.005"><failure message="AssertionError: assert [] == ['hello world']&#10;  &#10;  Right contains one more item: 'hello world'&#10;  Use -v to get more diff">tests/test_vector_store_dual_fallback_behavior.py:51: in test_dual_read_fallbacks_to_chroma_when_primary_empty
     assert res == ["hello world"]
 E   AssertionError: assert [] == ['hello world']
-E     
+E
 E     Right contains one more item: 'hello world'
 E     Use -v to get more diff</failure></testcase><testcase classname="tests.test_vector_store_fallback" name="test_get_store_falls_back_to_memory" time="0.004" /><testcase classname="tests.test_vector_store_invalidate" name="test_invalidate_cache_clears_entry" time="0.004" /><testcase classname="tests.test_vector_store_logging" name="test_memory_store_logs" time="0.003" /><testcase classname="tests.test_vector_store_logging" name="test_chroma_store_logs" time="0.005" /><testcase classname="tests.test_vector_store_persistence" name="test_vector_store_ttl_eviction" time="0.013" /><testcase classname="tests.test_vector_store_persistence" name="test_vector_store_user_namespace" time="0.003" /><testcase classname="tests.test_vector_store_relevance" name="test_unrelated_query_returns_empty[MemoryVectorStore]" time="0.006" /><testcase classname="tests.test_vector_store_relevance" name="test_unrelated_query_returns_empty[ChromaVectorStore]" time="0.004" /><testcase classname="tests.test_vector_store_selection_and_strict_mode" name="test_unknown_vector_store_defaults_to_chroma_and_records_fallback" time="0.005"><failure message="AssertionError: assert 'NoneType' == 'ChromaVectorStore'&#10;  &#10;  - ChromaVectorStore&#10;  + NoneType">tests/test_vector_store_selection_and_strict_mode.py:26: in test_unknown_vector_store_defaults_to_chroma_and_records_fallback
     assert type(mem_api._store).__name__ == "ChromaVectorStore"
 E   AssertionError: assert 'NoneType' == 'ChromaVectorStore'
-E     
+E
 E     - ChromaVectorStore
 E     + NoneType</failure></testcase><testcase classname="tests.test_vector_store_selection_and_strict_mode" name="test_qdrant_missing_dep_falls_back_nonprod" time="0.003"><failure message="AssertionError: assert 'NoneType' == 'MemoryVectorStore'&#10;  &#10;  - MemoryVectorStore&#10;  + NoneType">tests/test_vector_store_selection_and_strict_mode.py:39: in test_qdrant_missing_dep_falls_back_nonprod
     assert type(mem_api._store).__name__ == "MemoryVectorStore"
 E   AssertionError: assert 'NoneType' == 'MemoryVectorStore'
-E     
+E
 E     - MemoryVectorStore
 E     + NoneType</failure></testcase><testcase classname="tests.test_vector_store_selection_and_strict_mode" name="test_strict_mode_raises_on_init_error" time="0.004"><failure message="Failed: DID NOT RAISE &lt;class 'Exception'&gt;">tests/test_vector_store_selection_and_strict_mode.py:50: in test_strict_mode_raises_on_init_error
     with pytest.raises(Exception):
@@ -4801,7 +4801,7 @@ E     + NoneType</failure></testcase><testcase classname="tests.test_vector_stor
 E   Failed: DID NOT RAISE &lt;class 'Exception'&gt;</failure></testcase><testcase classname="tests.test_vector_store_selection_and_strict_mode" name="test_reload_store_applies_env_changes" time="0.003"><failure message="AssertionError: assert 'NoneType' == 'MemoryVectorStore'&#10;  &#10;  - MemoryVectorStore&#10;  + NoneType">tests/test_vector_store_selection_and_strict_mode.py:59: in test_reload_store_applies_env_changes
     assert type(mem_api._store).__name__ == "MemoryVectorStore"
 E   AssertionError: assert 'NoneType' == 'MemoryVectorStore'
-E     
+E
 E     - MemoryVectorStore
 E     + NoneType</failure></testcase><testcase classname="tests.test_vector_store_selection_and_strict_mode" name="test_preflight_accepts_dual_and_cloud" time="0.003" /><testcase classname="tests.test_vector_store_strict_mode" name="test_strict_vector_store_enforced" time="0.008" /><testcase classname="tests.test_vector_store_threshold" name="test_cache_miss_high_threshold" time="0.004" /><testcase classname="tests.test_vector_store_threshold" name="test_cache_hit_low_threshold" time="0.002" /><testcase classname="tests.test_vector_store_threshold" name="test_threshold_out_of_range" time="0.002" /><testcase classname="tests.test_vision_quota_concurrency" name="test_vision_quota_concurrency" time="0.003" /><testcase classname="tests.test_voice_ws_gating" name="test_voice_disabled" time="0.002" /><testcase classname="tests.test_voice_ws_gating" name="test_ptt_gating" time="0.002" /><testcase classname="tests.test_voice_ws_gating" name="test_wake_gating" time="0.002" /><testcase classname="tests.test_voice_ws_gating" name="test_llm_token_and_final_punctuation" time="0.002" /><testcase classname="tests.test_worker_dedup" name="test_worker_dedup" time="0.211" /><testcase classname="tests.test_ws_auth" name="test_websocket_auth" time="0.040" /><testcase classname="tests.test_ws_stack_is_clean" name="test_ws_health_ok" time="0.096"><failure message="starlette.websockets.WebSocketDisconnect">tests/test_ws_stack_is_clean.py:52: in test_ws_health_ok
     with c.websocket_connect(f"/v1/ws/health?token={_tok()}") as ws:
@@ -5301,7 +5301,7 @@ E   assert 404 == 200
 E    +  where 404 = &lt;Response [404 Not Found]&gt;.status_code</failure></testcase><testcase classname="tests.unit.test_clerk_whoami" name="test_get_current_user_id_with_clerk" time="0.005"><failure message="AssertionError: assert 'anon' == 'user_clerk_123'&#10;  &#10;  - user_clerk_123&#10;  + anon">tests/unit/test_clerk_whoami.py:136: in test_get_current_user_id_with_clerk
     assert user_id == "user_clerk_123"
 E   AssertionError: assert 'anon' == 'user_clerk_123'
-E     
+E
 E     - user_clerk_123
 E     + anon</failure></testcase><testcase classname="tests.unit.test_client_crypto_policy" name="test_crypto_policy_advertised" time="0.004"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404 Not Found]&gt;.status_code">tests/unit/test_client_crypto_policy.py:9: in test_crypto_policy_advertised
     assert r.status_code == 200
@@ -5315,11 +5315,11 @@ E   assert True == False</failure></testcase><testcase classname="tests.unit.tes
     pytest.fail(
 E   Failed: Found 2 raw .set_cookie( calls outside allowed files:
 E   Allowed files: app/cookie_config.py, tests/unit/test_cookie_guard.py, app/cookies.py
-E   
+E
 E   Violations:
 E   app/csrf.py:74: response.set_cookie(
 E   app/integrations/google/routes.py:158: http_response.set_cookie(
-E   
+E
 E   All Set-Cookie operations must go through app/cookies.py facade.</failure></testcase><testcase classname="tests.unit.test_cookie_guard" name="test_no_raw_set_cookie_in_test_files" time="0.040" /><testcase classname="tests.unit.test_cookie_guard" name="test_cookies_module_exists" time="0.002" /><testcase classname="tests.unit.test_cookie_guard" name="test_test_helpers_exist" time="0.001" /><testcase classname="tests.unit.test_cookie_jwt_compliance_unit.TestCookieJWTCompliance" name="test_no_unauthorized_set_cookie_calls" time="0.039"><failure message="AssertionError: Found unauthorized set_cookie() calls:&#10;  Direct set_cookie() call in app/csrf.py:74:                response.set_cookie(&#10;  Direct set_cookie() call in app/integrations/google/routes.py:158:    http_response.set_cookie(&#10;assert 2 == 0&#10; +  where 2 = len(['Direct set_cookie() call in app/csrf.py:74:                response.set_cookie(', 'Direct set_cookie() call in app/integrations/google/routes.py:158:    http_response.set_cookie('])">tests/unit/test_cookie_jwt_compliance_unit.py:90: in test_no_unauthorized_set_cookie_calls
     assert (
 E   AssertionError: Found unauthorized set_cookie() calls:
@@ -10455,262 +10455,262 @@ E   assert 400 == 200
 E    +  where 400 = &lt;Response [400 Bad Request]&gt;.status_code</failure></testcase><testcase classname="tests.unit.test_docs_visibility_unit" name="test_docs_hidden_in_prod" time="0.101" /><testcase classname="tests.unit.test_docs_visibility_unit" name="test_docs_visible_in_dev_and_persist_auth_and_filter" time="0.100"><failure message="AssertionError: assert 'GesahniV2 API' == 'Granny Mode API'&#10;  &#10;  - Granny Mode API&#10;  + GesahniV2 API">tests/unit/test_docs_visibility_unit.py:63: in test_docs_visible_in_dev_and_persist_auth_and_filter
     assert data.get("info", {}).get("title") == "Granny Mode API"
 E   AssertionError: assert 'GesahniV2 API' == 'Granny Mode API'
-E     
+E
 E     - Granny Mode API
 E     + GesahniV2 API</failure></testcase><testcase classname="tests.unit.test_docs_visibility_unit" name="test_openapi_title_and_version_from_app_version_env" time="0.039"><failure message="AssertionError: assert 'GesahniV2 API' == 'Granny Mode API'&#10;  &#10;  - Granny Mode API&#10;  + GesahniV2 API">tests/unit/test_docs_visibility_unit.py:75: in test_openapi_title_and_version_from_app_version_env
     assert data.get("info", {}).get("title") == "Granny Mode API"
 E   AssertionError: assert 'GesahniV2 API' == 'Granny Mode API'
-E     
+E
 E     - Granny Mode API
 E     + GesahniV2 API</failure></testcase><testcase classname="tests.unit.test_docs_visibility_unit" name="test_openapi_servers_override_env" time="0.100"><failure message="AssertionError: assert [] == ['http://a.lo...b.local:9001']&#10;  &#10;  Right contains 2 more items, first extra item: 'http://a.local:9000'&#10;  Use -v to get more diff">tests/unit/test_docs_visibility_unit.py:87: in test_openapi_servers_override_env
     assert urls == ["http://a.local:9000", "http://b.local:9001"]
 E   AssertionError: assert [] == ['http://a.lo...b.local:9001']
-E     
+E
 E     Right contains 2 more items, first extra item: 'http://a.local:9000'
 E     Use -v to get more diff</failure></testcase><testcase classname="tests.unit.test_docs_visibility_unit" name="test_oauth2_security_scheme_present_with_scopes" time="0.100"><failure message="AssertionError: assert 'OAuth2' in {}">tests/unit/test_docs_visibility_unit.py:97: in test_oauth2_security_scheme_present_with_scopes
     assert "OAuth2" in comps
 E   AssertionError: assert 'OAuth2' in {}</failure></testcase><testcase classname="tests.unit.test_docs_visibility_unit" name="test_docs_hidden_in_staging_env" time="0.104" /><testcase classname="tests.unit.test_docs_visibility_unit" name="test_docs_visible_with_env_case_and_whitespace" time="0.106" /><testcase classname="tests.unit.test_docs_visibility_unit" name="test_openapi_tags_present" time="0.101" /><testcase classname="tests.unit.test_embeddings_async_stub_unit" name="test_embed_async_stub_when_pytest_flag" time="0.002" /><testcase classname="tests.unit.test_embeddings_stub_unit" name="test_embed_sync_stub_for_memory_store" time="0.001" /><testcase classname="tests.unit.test_embeddings_stub_unit" name="test_benchmark_stub" time="0.002" /><testcase classname="tests.unit.test_env_configuration.TestEnvironmentConfiguration" name="test_env_dev_loading" time="0.032"><failure message="AssertionError: assert 'http://localhost:8000' == 'http://localhost:3000'&#10;  &#10;  - http://localhost:3000&#10;  ?                  ^&#10;  + http://localhost:8000&#10;  ?                  ^">/Users/kingal/2025/GesahniV2/tests/unit/test_env_configuration.py:92: in test_env_dev_loading
     assert os.environ["APP_URL"] == "http://localhost:3000"
 E   AssertionError: assert 'http://localhost:8000' == 'http://localhost:3000'
-E     
+E
 E     - http://localhost:3000
 E     ?                  ^
 E     + http://localhost:8000
 E     ?                  ^</failure></testcase><testcase classname="tests.unit.test_env_configuration.TestEnvironmentConfiguration" name="test_env_staging_loading" time="0.030"><failure message="AssertionError: assert 'http://localhost:8000' == 'https://staging.gesahni.com'&#10;  &#10;  - https://staging.gesahni.com&#10;  + http://localhost:8000">/Users/kingal/2025/GesahniV2/tests/unit/test_env_configuration.py:110: in test_env_staging_loading
     assert os.environ["APP_URL"] == "https://staging.gesahni.com"
 E   AssertionError: assert 'http://localhost:8000' == 'https://staging.gesahni.com'
-E     
+E
 E     - https://staging.gesahni.com
 E     + http://localhost:8000</failure></testcase><testcase classname="tests.unit.test_env_configuration.TestEnvironmentConfiguration" name="test_env_prod_loading" time="0.031"><failure message="AssertionError: assert 'http://localhost:8000' == 'https://app.gesahni.com'&#10;  &#10;  - https://app.gesahni.com&#10;  + http://localhost:8000">/Users/kingal/2025/GesahniV2/tests/unit/test_env_configuration.py:128: in test_env_prod_loading
     assert os.environ["APP_URL"] == "https://app.gesahni.com"
 E   AssertionError: assert 'http://localhost:8000' == 'https://app.gesahni.com'
-E     
+E
 E     - https://app.gesahni.com
 E     + http://localhost:8000</failure></testcase><testcase classname="tests.unit.test_env_configuration.TestEnvironmentConfiguration" name="test_env_precedence" time="0.029"><failure message="AssertionError: assert 'http://localhost:8000' == 'http://custom.localhost:3000'&#10;  &#10;  - http://custom.localhost:3000&#10;  ?        -------          ^&#10;  + http://localhost:8000&#10;  ?                  ^">/Users/kingal/2025/GesahniV2/tests/unit/test_env_configuration.py:153: in test_env_precedence
     assert os.environ["APP_URL"] == "http://custom.localhost:3000"
 E   AssertionError: assert 'http://localhost:8000' == 'http://custom.localhost:3000'
-E     
+E
 E     - http://custom.localhost:3000
 E     ?        -------          ^
 E     + http://localhost:8000
 E     ?                  ^</failure></testcase><testcase classname="tests.unit.test_env_configuration.TestEnvironmentConfiguration" name="test_missing_env_files" time="0.029"><failure message="AssertionError: assert 'http://localhost:8000' == 'http://localhost:3000'&#10;  &#10;  - http://localhost:3000&#10;  ?                  ^&#10;  + http://localhost:8000&#10;  ?                  ^">/Users/kingal/2025/GesahniV2/tests/unit/test_env_configuration.py:176: in test_missing_env_files
     assert os.environ["APP_URL"] == "http://localhost:3000"
 E   AssertionError: assert 'http://localhost:8000' == 'http://localhost:3000'
-E     
+E
 E     - http://localhost:3000
 E     ?                  ^
 E     + http://localhost:8000
 E     ?                  ^</failure></testcase><testcase classname="tests.unit.test_env_configuration.TestEnvironmentConfiguration" name="test_environment_specific_security_settings" time="0.051"><failure message="AssertionError: assert '0' == '1'&#10;  &#10;  - 1&#10;  + 0">/Users/kingal/2025/GesahniV2/tests/unit/test_env_configuration.py:190: in test_environment_specific_security_settings
     assert os.environ["COOKIE_SECURE"] == "1"
 E   AssertionError: assert '0' == '1'
-E     
+E
 E     - 1
 E     + 0</failure></testcase><testcase classname="tests.unit.test_env_configuration.TestEnvironmentConfiguration" name="test_url_configuration_per_environment" time="0.030"><failure message="AssertionError: assert 'http://localhost:8000' == 'http://localhost:3000'&#10;  &#10;  - http://localhost:3000&#10;  ?                  ^&#10;  + http://localhost:8000&#10;  ?                  ^">/Users/kingal/2025/GesahniV2/tests/unit/test_env_configuration.py:206: in test_url_configuration_per_environment
     assert os.environ["APP_URL"] == "http://localhost:3000"
 E   AssertionError: assert 'http://localhost:8000' == 'http://localhost:3000'
-E     
+E
 E     - http://localhost:3000
 E     ?                  ^
 E     + http://localhost:8000
 E     ?                  ^</failure></testcase><testcase classname="tests.unit.test_env_utils_alt_example_unit" name="test_load_env_alt_example" time="0.005" /><testcase classname="tests.unit.test_env_utils_no_reload_when_unchanged_unit" name="test_load_env_no_reload_when_unchanged" time="0.006" /><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_basic_functionality" time="0.005" /><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_with_example_file" time="0.007" /><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_precedence" time="0.006"><failure message="AssertionError: assert 'test_value' == 'env_value'&#10;  &#10;  - env_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_simple_unit.py:106: in test_load_env_precedence
     assert os.getenv("TEST_VAR") == "env_value"
 E   AssertionError: assert 'test_value' == 'env_value'
-E     
+E
 E     - env_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_force_reload" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_simple_unit.py:136: in test_load_env_force_reload
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_test_mode" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_simple_unit.py:172: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_caching" time="0.004"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_simple_unit.py:209: in test_load_env_caching
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_missing_files" time="0.003" /><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_with_comments" time="0.004" /><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_with_quoted_values" time="0.006"><failure message="AssertionError: assert 'test_value' == 'quoted value'&#10;  &#10;  - quoted value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_simple_unit.py:313: in test_load_env_with_quoted_values
     assert os.getenv("TEST_VAR") == "quoted value"
 E   AssertionError: assert 'test_value' == 'quoted value'
-E     
+E
 E     - quoted value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_environment_specific" time="0.005" /><testcase classname="tests.unit.test_env_utils_simple_unit.TestLoadEnvBasic" name="test_load_env_logging" time="0.006" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvPrecedence" name="test_load_env_precedence[env_files0-existing_env0-expected_values0]" time="0.006"><failure message="AssertionError: Expected FOO=env_value, got existing_value&#10;assert 'existing_value' == 'env_value'&#10;  &#10;  - env_value&#10;  + existing_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:129: in test_load_env_precedence
     assert (
 E   AssertionError: Expected FOO=env_value, got existing_value
 E   assert 'existing_value' == 'env_value'
-E     
+E
 E     - env_value
 E     + existing_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvPrecedence" name="test_load_env_precedence[env_files1-existing_env1-expected_values1]" time="0.006"><failure message="AssertionError: Expected BAR=example_value, got env_value&#10;assert 'env_value' == 'example_value'&#10;  &#10;  - example_value&#10;  + env_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:129: in test_load_env_precedence
     assert (
 E   AssertionError: Expected BAR=example_value, got env_value
 E   assert 'env_value' == 'example_value'
-E     
+E
 E     - example_value
 E     + env_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvPrecedence" name="test_load_env_precedence[env_files2-existing_env2-expected_values2]" time="0.006"><failure message="AssertionError: Expected BAR=example_value, got env_value&#10;assert 'env_value' == 'example_value'&#10;  &#10;  - example_value&#10;  + env_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:129: in test_load_env_precedence
     assert (
 E   AssertionError: Expected BAR=example_value, got env_value
 E   assert 'env_value' == 'example_value'
-E     
+E
 E     - example_value
 E     + env_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvPrecedence" name="test_load_env_precedence[env_files3-existing_env3-expected_values3]" time="0.009" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvPrecedence" name="test_load_env_precedence[env_files4-existing_env4-expected_values4]" time="0.008"><failure message="AssertionError: Expected FOO=env_value, got existing_value&#10;assert 'existing_value' == 'env_value'&#10;  &#10;  - env_value&#10;  + existing_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:129: in test_load_env_precedence
     assert (
 E   AssertionError: Expected FOO=env_value, got existing_value
 E   assert 'existing_value' == 'env_value'
-E     
+E
 E     - env_value
 E     + existing_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvPrecedence" name="test_load_env_precedence[env_files5-existing_env5-expected_values5]" time="0.006"><failure message="AssertionError: Expected FOO=, got 1&#10;assert '1' == ''&#10;  &#10;  + 1">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:129: in test_load_env_precedence
     assert (
 E   AssertionError: Expected FOO=, got 1
 E   assert '1' == ''
-E     
+E
 E     + 1</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvPrecedence" name="test_load_env_precedence[env_files6-existing_env6-expected_values6]" time="0.006"><failure message="AssertionError: Expected FOO=value, got 1&#10;assert '1' == 'value'&#10;  &#10;  - value&#10;  + 1">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:129: in test_load_env_precedence
     assert (
 E   AssertionError: Expected FOO=value, got 1
 E   assert '1' == 'value'
-E     
+E
 E     - value
 E     + 1</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[True-True]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[False-False]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[1-True]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[0-False]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[true-True]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[false-False]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[yes-True]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[no-False]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[on-True]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[off-False]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[TRUE-True]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvForceReload" name="test_load_env_force_values[FALSE-False]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:175: in test_load_env_force_values
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars0-True]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars1-True]" time="0.006"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars2-True]" time="0.007"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars3-False]" time="0.006"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars4-False]" time="0.006"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars5-True]" time="0.006"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars6-True]" time="0.006"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars7-True]" time="0.006"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars8-False]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars9-False]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars10-True]" time="0.006"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvTestMode" name="test_load_env_test_mode[test_env_vars11-True]" time="0.005"><failure message="AssertionError: assert 'test_value' == 'initial_value'&#10;  &#10;  - initial_value&#10;  + test_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:241: in test_load_env_test_mode
     assert os.getenv("TEST_VAR") == "initial_value"
 E   AssertionError: assert 'test_value' == 'initial_value'
-E     
+E
 E     - initial_value
 E     + test_value</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios0-no_files]" time="0.003" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios1-example_only]" time="0.005"><failure message="AssertionError: assert '1' == 'value'&#10;  &#10;  - value&#10;  + 1">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:314: in test_load_env_file_scenarios
     assert os.getenv("FOO") == "value"
 E   AssertionError: assert '1' == 'value'
-E     
+E
 E     - value
 E     + 1</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios2-env_only]" time="0.004"><failure message="AssertionError: assert '1' == 'value'&#10;  &#10;  - value&#10;  + 1">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:316: in test_load_env_file_scenarios
     assert os.getenv("FOO") == "value"
 E   AssertionError: assert '1' == 'value'
-E     
+E
 E     - value
 E     + 1</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios3-empty_file]" time="0.004" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios4-empty_example]" time="0.004" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios5-comments_only]" time="0.005" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios6-example_comments_only]" time="0.004" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios7-mixed_content]" time="0.005"><failure message="AssertionError: assert '1' == 'value'&#10;  &#10;  - value&#10;  + 1">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:324: in test_load_env_file_scenarios
     assert os.getenv("FOO") == "value"
 E   AssertionError: assert '1' == 'value'
-E     
+E
 E     - value
 E     + 1</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios8-invalid_lines]" time="0.005" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios9-quoted_values]" time="0.006"><failure message="AssertionError: assert '1' == 'quoted value'&#10;  &#10;  - quoted value&#10;  + 1">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:327: in test_load_env_file_scenarios
     assert os.getenv("FOO") == "quoted value"
 E   AssertionError: assert '1' == 'quoted value'
-E     
+E
 E     - quoted value
 E     + 1</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvFileHandling" name="test_load_env_file_scenarios[file_scenarios10-escaped_chars]" time="0.006" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvCaching" name="test_load_env_caching[file_changes0-False]" time="0.006" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvCaching" name="test_load_env_caching[file_changes1-True]" time="0.008"><failure message="AssertionError: assert '1' != '1'&#10; +  where '1' = &lt;function getenv at 0x10f25df80&gt;('FOO')&#10; +    where &lt;function getenv at 0x10f25df80&gt; = os.getenv">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_table_driven_unit.py:398: in test_load_env_caching
     assert os.getenv("FOO") != initial_foo
@@ -10753,12 +10753,12 @@ E    +  where 4 = &lt;MagicMock name='mock.info' id='4839542272'&gt;.call_count
 E    +    where &lt;MagicMock name='mock.info' id='4839542272'&gt; = &lt;MagicMock id='4839351472'&gt;.info</failure></testcase><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvBackCompat" name="test_load_env_back_compat[None-invalidate_new_cache0]" time="0.005" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvBackCompat" name="test_load_env_back_compat[123.456-preserve_new_cache]" time="0.006" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvBackCompat" name="test_load_env_back_compat[None-invalidate_new_cache1]" time="0.005" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvEnvironmentSpecific" name="test_load_env_environment_specific[env_files0-expected_vars0]" time="0.006" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvEnvironmentSpecific" name="test_load_env_environment_specific[env_files1-expected_vars1]" time="0.007" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvEnvironmentSpecific" name="test_load_env_environment_specific[env_files2-expected_vars2]" time="0.006" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvEnvironmentSpecific" name="test_load_env_environment_specific[env_files3-expected_vars3]" time="0.007" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvEnvironmentSpecific" name="test_load_env_environment_specific[env_files4-expected_vars4]" time="0.008" /><testcase classname="tests.unit.test_env_utils_table_driven_unit.TestLoadEnvEnvironmentSpecific" name="test_load_env_environment_specific[env_files5-expected_vars5]" time="0.007" /><testcase classname="tests.unit.test_env_utils_unit" name="test_load_env_prefers_real_env" time="0.006"><failure message="AssertionError: assert '1' == 'real'&#10;  &#10;  - real&#10;  + 1">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_unit.py:24: in test_load_env_prefers_real_env
     assert env_utils.os.getenv("FOO") == "real"
 E   AssertionError: assert '1' == 'real'
-E     
+E
 E     - real
 E     + 1</failure></testcase><testcase classname="tests.unit.test_env_utils_unit" name="test_load_env_uses_example_when_missing" time="0.006"><failure message="AssertionError: assert 'alt_value' == 'example'&#10;  &#10;  - example&#10;  + alt_value">/Users/kingal/2025/GesahniV2/tests/unit/test_env_utils_unit.py:41: in test_load_env_uses_example_when_missing
     assert env_utils.os.getenv("BAZ") == "example"
 E   AssertionError: assert 'alt_value' == 'example'
-E     
+E
 E     - example
 E     + alt_value</failure></testcase><testcase classname="tests.unit.test_extracted_modules.TestRouterPolicy" name="test_routing_decision_creation" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestRouterPolicy" name="test_pick_model_with_policy_override" time="0.002" /><testcase classname="tests.unit.test_extracted_modules.TestRouterPolicy" name="test_pick_model_with_policy_automatic" time="0.002" /><testcase classname="tests.unit.test_extracted_modules.TestRouterPolicy" name="test_validate_model_allowlist" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestRouterPolicy" name="test_should_fallback" time="0.002" /><testcase classname="tests.unit.test_extracted_modules.TestRouterPolicy" name="test_get_fallback_decision" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestAdapters" name="test_llm_request_creation" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestAdapters" name="test_llm_response_creation" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestAdapters" name="test_llm_error_creation" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestAdapters" name="test_call_llm_openai" time="0.003" /><testcase classname="tests.unit.test_extracted_modules.TestAdapters" name="test_call_llm_ollama" time="0.004" /><testcase classname="tests.unit.test_extracted_modules.TestPostCall" name="test_postcall_data_creation" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestPostCall" name="test_postcall_result_creation" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestPostCall" name="test_process_postcall" time="0.004" /><testcase classname="tests.unit.test_extracted_modules.TestPostCall" name="test_process_openai_response" time="0.003" /><testcase classname="tests.unit.test_extracted_modules.TestHealth" name="test_health_check_result_creation" time="0.001" /><testcase classname="tests.unit.test_extracted_modules.TestHealth" name="test_health_check_cache" time="0.003" /><testcase classname="tests.unit.test_extracted_modules.TestHealth" name="test_check_system_health" time="0.003" /><testcase classname="tests.unit.test_feature_flags.TestFlag" name="test_flag_creation" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestFlag" name="test_flag_creation_with_type" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestFlag" name="test_flag_env_key_property" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestRegister" name="test_register_flag" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestRegister" name="test_register_flag_default_type" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestRegister" name="test_register_overwrites_existing" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestCoerce" name="test_coerce_bool_true_values" time="0.002" /><testcase classname="tests.unit.test_feature_flags.TestCoerce" name="test_coerce_bool_false_values" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestCoerce" name="test_coerce_int" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestCoerce" name="test_coerce_float" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestCoerce" name="test_coerce_str" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestCoerce" name="test_coerce_unknown_type" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestGetValue" name="test_get_value_with_override" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestGetValue" name="test_get_value_registered_flag_with_env" time="0.004" /><testcase classname="tests.unit.test_feature_flags.TestGetValue" name="test_get_value_registered_flag_without_env" time="0.003" /><testcase classname="tests.unit.test_feature_flags.TestGetValue" name="test_get_value_unregistered_flag" time="0.003" /><testcase classname="tests.unit.test_feature_flags.TestGetValue" name="test_get_value_unregistered_flag_no_env" time="0.003" /><testcase classname="tests.unit.test_feature_flags.TestGet" name="test_get_registered_flag_bool" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestGet" name="test_get_registered_flag_int" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestGet" name="test_get_registered_flag_float" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestGet" name="test_get_registered_flag_str" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestGet" name="test_get_unregistered_flag" time="0.003" /><testcase classname="tests.unit.test_feature_flags.TestGet" name="test_get_unregistered_flag_no_env" time="0.003" /><testcase classname="tests.unit.test_feature_flags.TestSetValue" name="test_set_value" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestSetValue" name="test_set_value_overwrites_existing" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestClearValue" name="test_clear_value_existing" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestClearValue" name="test_clear_value_nonexistent" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestListFlags" name="test_list_flags_empty" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestListFlags" name="test_list_flags_with_registered_flags" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestListFlags" name="test_list_flags_with_overrides" time="0.001" /><testcase classname="tests.unit.test_feature_flags.TestListFlags" name="test_list_flags_with_env_values" time="0.003" /><testcase classname="tests.unit.test_feature_flags.TestListFlags" name="test_list_flags_sorted_keys" time="0.002" /><testcase classname="tests.unit.test_feature_flags.TestIntegration" name="test_flag_lifecycle" time="0.003" /><testcase classname="tests.unit.test_feature_flags.TestIntegration" name="test_multiple_flags" time="0.002" /><testcase classname="tests.unit.test_feature_flags.TestIntegration" name="test_flag_gates_combination" time="0.001" /><testcase classname="tests.unit.test_google_oauth_login_url.TestGoogleOAuthLoginURL" name="test_google_login_url_success" time="0.005"><failure message="assert 404 == 200&#10; +  where 404 = &lt;Response [404 Not Found]&gt;.status_code">tests/unit/test_google_oauth_login_url.py:26: in test_google_login_url_success
     assert response.status_code == 200
@@ -10913,7 +10913,7 @@ E    +  where 404 = &lt;Response [404 Not Found]&gt;.status_code</failure></test
 E   AssertionError: assert 'localhost' in 'https://app.example.com/login'</failure></testcase><testcase classname="tests.unit.test_middleware_redirects.TestSecurityFeatures" name="test_open_redirect_prevention" time="0.001" /><testcase classname="tests.unit.test_middleware_redirects.TestSecurityFeatures" name="test_relative_path_acceptance" time="0.001" /><testcase classname="tests.unit.test_middleware_redirects.TestEnvironmentConfiguration" name="test_app_url_fallback" time="0.005" /><testcase classname="tests.unit.test_middleware_redirects.TestEnvironmentConfiguration" name="test_environment_variable_priority" time="0.006" /><testcase classname="tests.unit.test_middleware_redirects.TestEnvironmentConfiguration" name="test_origin_header_priority_over_env" time="0.003" /><testcase classname="tests.unit.test_model_params_env_list_unit" name="test_env_list_parsing" time="0.001" /><testcase classname="tests.unit.test_model_params_stop_normalization_unit" name="test_stop_normalization_iterables" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars0-expected0]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars1-expected1]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars2-expected2]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars3-expected3]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars4-expected4]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars5-expected5]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars6-expected6]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars7-expected7]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars8-expected8]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars9-expected9]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars10-expected10]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars11-expected11]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars12-expected12]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars13-expected13]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars14-expected14]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars15-expected15]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars16-expected16]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars17-expected17]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars18-expected18]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_env_variations[env_vars19-expected19]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_invalid_values[GEN_TEMPERATURE-not_a_number-0.1]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_invalid_values[GEN_TEMPERATURE--0.1]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_invalid_values[GEN_TOP_P-invalid-0.9]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_invalid_values[GEN_MAX_TOKENS-abc-None]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestBaseDefaults" name="test_base_defaults_invalid_values[GEN_MAX_COMPLETION_TOKENS-xyz-None]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[None-expected_changes0]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides1-expected_changes1]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides2-expected_changes2]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides3-expected_changes3]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides4-expected_changes4]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides5-expected_changes5]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides6-expected_changes6]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides7-expected_changes7]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides8-expected_changes8]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides9-expected_changes9]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides10-expected_changes10]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides11-expected_changes11]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides12-expected_changes12]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides13-expected_changes13]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides14-expected_changes14]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides15-expected_changes15]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_variations[overrides16-expected_changes16]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[END-expected_output0]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[a,b,c-expected_output1]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[a, b , c-expected_output2]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[-expected_output3]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[   -expected_output4]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[stop_input5-expected_output5]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[stop_input6-expected_output6]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[stop_input7-expected_output7]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[stop_input8-expected_output8]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[stop_input9-expected_output9]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[stop_input10-expected_output10]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[stop_input11-expected_output11]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[123-None]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[None-None]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestMergeParams" name="test_merge_params_stop_normalization[True-None]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[None-expected_openai_args0]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides1-expected_openai_args1]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides2-expected_openai_args2]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides3-expected_openai_args3]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides4-expected_openai_args4]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides5-expected_openai_args5]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides6-expected_openai_args6]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides7-expected_openai_args7]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides8-expected_openai_args8]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides9-expected_openai_args9]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides10-expected_openai_args10]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides11-expected_openai_args11]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides12-expected_openai_args12]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides13-expected_openai_args13]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_mapping[overrides14-expected_openai_args14]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOpenAI" name="test_for_openai_never_includes_max_tokens" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[None-expected_ollama_args0]" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides1-expected_ollama_args1]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides2-expected_ollama_args2]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides3-expected_ollama_args3]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides4-expected_ollama_args4]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides5-expected_ollama_args5]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides6-expected_ollama_args6]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides7-expected_ollama_args7]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides8-expected_ollama_args8]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides9-expected_ollama_args9]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides10-expected_ollama_args10]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides11-expected_ollama_args11]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides12-expected_ollama_args12]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides13-expected_ollama_args13]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides14-expected_ollama_args14]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_mapping[overrides15-expected_ollama_args15]" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestForOllama" name="test_for_ollama_preserves_additional_options" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestEdgeCases" name="test_env_float_edge_cases" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestEdgeCases" name="test_env_int_edge_cases" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestEdgeCases" name="test_env_list_edge_cases" time="0.002" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestEdgeCases" name="test_merge_params_with_empty_iterables" time="0.001" /><testcase classname="tests.unit.test_model_params_table_driven_unit.TestEdgeCases" name="test_provider_mapping_with_none_values" time="0.001" /><testcase classname="tests.unit.test_model_params_unit" name="test_merge_and_maps" time="0.001" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_gpt_paths[do heavy research on climate change words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words-analysis-50-gpt]" time="0.005" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_gpt_paths[please explain-chat-2000-gpt]" time="0.005" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_gpt_paths[write code sample-chat-10-gpt]" time="0.004" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_llama_path" time="0.003" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_gpt_reasons[do heavy research on climate change words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words words-analysis-50-heavy_length]" time="0.004" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_gpt_reasons[please explain-chat-2000-heavy_tokens]" time="0.006" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_gpt_reasons[write code sample-chat-10-keyword]" time="0.004" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_gpt_reasons[analyze this data-analysis-10-keyword]" time="0.004" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_llama_unhealthy_fallback" time="0.006" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_circuit_breaker_fallback" time="0.003" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_no_llama_model_configured" time="0.004" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_empty_llama_model_configured" time="0.006" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_environment_ollama_model" time="0.004" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_keyword_detection_case_insensitive" time="0.006" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_heavy_intents" time="0.007" /><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_light_task_default_path" time="0.004"><failure message="AssertionError: assert 'llama3' == 'llama3:latest'&#10;  &#10;  - llama3:latest&#10;  + llama3">tests/unit/test_model_picker_unit.py:192: in test_pick_model_light_task_default_path
     assert model == "llama3:latest"
 E   AssertionError: assert 'llama3' == 'llama3:latest'
-E     
+E
 E     - llama3:latest
 E     + llama3</failure></testcase><testcase classname="tests.unit.test_model_picker_unit" name="test_pick_model_environment_variables_override" time="0.009" /><testcase classname="tests.unit.test_music_cache_unit" name="test_recommendations_cache_respects_limit" time="0.006"><failure message="KeyError: 'recommendations'">tests/unit/test_music_cache_unit.py:47: in test_recommendations_cache_respects_limit
     assert len(out1["recommendations"]) == 10

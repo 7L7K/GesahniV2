@@ -16,6 +16,7 @@ from app.main import create_app
 # Create the app with all routers properly mounted
 app = create_app()
 
+
 def dump_routes():
     """Dump all routes from the FastAPI app to JSON and text formats."""
 
@@ -23,38 +24,41 @@ def dump_routes():
 
     for route in app.routes:
         # Skip mounted apps (StaticFiles, etc.)
-        if hasattr(route, 'methods'):
+        if hasattr(route, "methods"):
             methods = list(route.methods)
             path = route.path
-            name = getattr(route, 'name', None) or ''
+            name = getattr(route, "name", None) or ""
 
             # Get the endpoint function name
-            endpoint = getattr(route, 'endpoint', None)
-            endpoint_name = getattr(endpoint, '__name__', '') if endpoint else ''
+            endpoint = getattr(route, "endpoint", None)
+            endpoint_name = getattr(endpoint, "__name__", "") if endpoint else ""
 
-            routes_data.append({
-                'path': path,
-                'methods': methods,
-                'name': name,
-                'endpoint': endpoint_name
-            })
+            routes_data.append(
+                {
+                    "path": path,
+                    "methods": methods,
+                    "name": name,
+                    "endpoint": endpoint_name,
+                }
+            )
 
     # Sort by path
-    routes_data.sort(key=lambda x: x['path'])
+    routes_data.sort(key=lambda x: x["path"])
 
     # Write JSON
-    with open('artifacts/test_baseline/routes.json', 'w') as f:
+    with open("artifacts/test_baseline/routes.json", "w") as f:
         json.dump(routes_data, f, indent=2)
 
     # Write text format
-    with open('artifacts/test_baseline/routes.txt', 'w') as f:
+    with open("artifacts/test_baseline/routes.txt", "w") as f:
         for route in routes_data:
-            methods_str = ','.join(route['methods'])
+            methods_str = ",".join(route["methods"])
             f.write(f"{methods_str},{route['path']} -> {route['endpoint']}\n")
 
         f.write(f"\nTotal routes: {len(routes_data)}\n")
 
     print(f"Dumped {len(routes_data)} routes to artifacts/test_baseline/")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     dump_routes()

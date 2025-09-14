@@ -392,10 +392,16 @@ class ChromaVectorStore(VectorStore):
             # Fallback: when query fails (older client quirks), approximate by scanning
             # the user's docs and computing distances locally using the selected metric.
             try:
-                all_docs = self._user_memories.get(where={"user_id": user_id}, include=["documents", "metadatas"])  # type: ignore[arg-type]
+                all_docs = self._user_memories.get(
+                    where={"user_id": user_id}, include=["documents", "metadatas"]
+                )  # type: ignore[arg-type]
             except Exception:
                 all_docs = {"documents": [[]], "metadatas": [[{}]]}
-            res = {"documents": all_docs.get("documents") or [[]], "metadatas": all_docs.get("metadatas") or [[{}]], "distances": [[None] * len((all_docs.get("documents") or [[]])[0])]}  # type: ignore[dict-item]
+            res = {
+                "documents": all_docs.get("documents") or [[]],
+                "metadatas": all_docs.get("metadatas") or [[{}]],
+                "distances": [[None] * len((all_docs.get("documents") or [[]])[0])],
+            }  # type: ignore[dict-item]
         docs = (res.get("documents") or [[" "]])[0]
         metas = (res.get("metadatas") or [[{}]])[0]
         dvals = (res.get("distances") or [[None]])[0]

@@ -25,7 +25,11 @@ class HeaderUtils:
             if isinstance(value, str):
                 standardized_value = value
             elif isinstance(value, int | float):
-                standardized_value = str(int(value) if isinstance(value, float) and value.is_integer() else value)
+                standardized_value = str(
+                    int(value)
+                    if isinstance(value, float) and value.is_integer()
+                    else value
+                )
             elif value is None:
                 standardized_value = ""
             else:
@@ -37,10 +41,7 @@ class HeaderUtils:
 
     @staticmethod
     def create_rate_limit_headers(
-        limit: int,
-        remaining: int,
-        reset_time: int,
-        retry_after: int | None = None
+        limit: int, remaining: int, reset_time: int, retry_after: int | None = None
     ) -> dict[str, str]:
         """Create standardized rate limit headers per RFC 6585."""
         headers = {
@@ -56,9 +57,7 @@ class HeaderUtils:
 
     @staticmethod
     def create_rate_limit_response_headers(
-        limit: int,
-        remaining: int,
-        window_seconds: int
+        limit: int, remaining: int, window_seconds: int
     ) -> dict[str, str]:
         """Create rate limit headers for successful responses."""
         reset_time = int(time.time()) + window_seconds
@@ -66,9 +65,13 @@ class HeaderUtils:
 
 
 # Convenience functions for common use cases
-def get_rate_limit_headers(limit: int, remaining: int, window_seconds: int) -> dict[str, str]:
+def get_rate_limit_headers(
+    limit: int, remaining: int, window_seconds: int
+) -> dict[str, str]:
     """Get standardized rate limit headers for a response."""
-    return HeaderUtils.create_rate_limit_response_headers(limit, remaining, window_seconds)
+    return HeaderUtils.create_rate_limit_response_headers(
+        limit, remaining, window_seconds
+    )
 
 
 def get_retry_after_header(seconds: int) -> dict[str, str]:

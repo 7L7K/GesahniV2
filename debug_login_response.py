@@ -20,7 +20,7 @@ try:
     print(f"Keys in data: {list(data.keys())}")
 
     # Check different possible key names
-    for key in ['auth_url', 'authorize_url', 'url']:
+    for key in ["auth_url", "authorize_url", "url"]:
         value = data.get(key)
         print(f"data.get('{key}') = {value}")
 

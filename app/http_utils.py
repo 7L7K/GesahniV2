@@ -77,10 +77,14 @@ async def json_request(
                     "http.client", {"http.method": method, "http.url": url}
                 ):
                     if hasattr(client, "request"):
-                        resp = await asyncio.wait_for(client.request(method, url, **kwargs), timeout=timeout)
+                        resp = await asyncio.wait_for(
+                            client.request(method, url, **kwargs), timeout=timeout
+                        )
                     else:  # pragma: no cover - testing hooks
                         func = getattr(client, method.lower())
-                        resp = await asyncio.wait_for(func(url, **kwargs), timeout=timeout)
+                        resp = await asyncio.wait_for(
+                            func(url, **kwargs), timeout=timeout
+                        )
             resp.raise_for_status()
             try:
                 return resp.json(), None

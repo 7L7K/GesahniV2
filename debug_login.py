@@ -2,12 +2,14 @@
 """
 Debug script to test login functionality step by step
 """
+
 import asyncio
 import json
 import sys
 
 # Add current directory to path
-sys.path.append('.')
+sys.path.append(".")
+
 
 async def debug_login():
     print("=== Login Debug Script ===")
@@ -110,7 +112,9 @@ async def debug_login():
     except Exception as e:
         print(f"\n❌ Error at step: {e}")
         import traceback
+
         traceback.print_exc()
+
 
 if __name__ == "__main__":
     asyncio.run(debug_login())

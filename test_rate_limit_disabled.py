@@ -2,14 +2,15 @@
 """
 Test script to verify rate limiting is disabled in test environment
 """
+
 import os
 import sys
 
 # Set test environment
-os.environ['PYTEST_RUNNING'] = '1'
-os.environ['TEST_MODE'] = '1'
+os.environ["PYTEST_RUNNING"] = "1"
+os.environ["TEST_MODE"] = "1"
 
-sys.path.insert(0, '.')
+sys.path.insert(0, ".")
 
 # Import conftest to set up test environment
 import app.env_utils as env_utils
@@ -36,6 +37,7 @@ def test_rate_limit_disabled():
 
     print("SUCCESS: Rate limiting is disabled!")
     return True
+
 
 if __name__ == "__main__":
     success = test_rate_limit_disabled()

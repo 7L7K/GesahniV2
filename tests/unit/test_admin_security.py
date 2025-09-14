@@ -5,6 +5,7 @@ Tests the router-level admin guard implementation that ensures:
 - 403 with token but non-admin scopes
 - 200 for admin users
 """
+
 from __future__ import annotations
 
 import importlib
@@ -37,6 +38,7 @@ def client():
     try:
         # Add the SessionAttachMiddleware to handle JWT decoding
         from app.middleware.session_attach import SessionAttachMiddleware
+
         app.add_middleware(SessionAttachMiddleware)
 
         # Import and include routers in the correct order to match production
@@ -59,7 +61,9 @@ def _create_jwt_token(scopes: list[str] = None) -> str:
     now = int(time.time())
     payload = {"sub": "test_user", "iat": now, "exp": now + 3600}  # 1 hour expiry
     if scopes:
-        payload["scope"] = " ".join(scopes)  # Use space-separated string as per JWT spec
+        payload["scope"] = " ".join(
+            scopes
+        )  # Use space-separated string as per JWT spec
         payload["scopes"] = scopes  # Also include as list for compatibility
     return jwt.encode(payload, key, algorithm="HS256")
 
@@ -85,23 +89,28 @@ class TestAdminSecurity:
         # The router-level dependency ensures admin scope validation
         pass
 
-    @pytest.mark.parametrize("endpoint,method", [
-        ("/v1/admin/ping", "get"),
-        ("/v1/admin/rbac/info", "get"),
-        ("/v1/admin/system/status", "get"),
-        ("/v1/admin/tokens/google", "get"),
-        ("/v1/admin/metrics", "get"),
-        ("/v1/admin/router/decisions", "get"),
-        ("/v1/admin/config", "get"),
-        ("/v1/admin/config-check", "get"),
-        ("/v1/admin/errors", "get"),
-        ("/v1/admin/flags", "get"),
-        ("/v1/admin/flags/test", "post"),
-        ("/v1/admin/users/me", "get"),
-        ("/v1/admin/retrieval/last", "get"),
-        ("/v1/admin/backup", "post"),
-    ])
-    def test_admin_endpoints_require_authentication(self, client: TestClient, endpoint: str, method: str):
+    @pytest.mark.parametrize(
+        "endpoint,method",
+        [
+            ("/v1/admin/ping", "get"),
+            ("/v1/admin/rbac/info", "get"),
+            ("/v1/admin/system/status", "get"),
+            ("/v1/admin/tokens/google", "get"),
+            ("/v1/admin/metrics", "get"),
+            ("/v1/admin/router/decisions", "get"),
+            ("/v1/admin/config", "get"),
+            ("/v1/admin/config-check", "get"),
+            ("/v1/admin/errors", "get"),
+            ("/v1/admin/flags", "get"),
+            ("/v1/admin/flags/test", "post"),
+            ("/v1/admin/users/me", "get"),
+            ("/v1/admin/retrieval/last", "get"),
+            ("/v1/admin/backup", "post"),
+        ],
+    )
+    def test_admin_endpoints_require_authentication(
+        self, client: TestClient, endpoint: str, method: str
+    ):
         """Test that all admin endpoints return 401 without authentication."""
         if method == "get":
             response = client.get(endpoint)
@@ -109,23 +118,28 @@ class TestAdminSecurity:
             response = client.post(endpoint)
         assert response.status_code == 401
 
-    @pytest.mark.parametrize("endpoint,method", [
-        ("/v1/admin/ping", "get"),
-        ("/v1/admin/rbac/info", "get"),
-        ("/v1/admin/system/status", "get"),
-        ("/v1/admin/tokens/google", "get"),
-        ("/v1/admin/metrics", "get"),
-        ("/v1/admin/router/decisions", "get"),
-        ("/v1/admin/config", "get"),
-        ("/v1/admin/config-check", "get"),
-        ("/v1/admin/errors", "get"),
-        ("/v1/admin/flags", "get"),
-        ("/v1/admin/flags/test", "post"),
-        ("/v1/admin/users/me", "get"),
-        ("/v1/admin/retrieval/last", "get"),
-        ("/v1/admin/backup", "post"),
-    ])
-    def test_admin_endpoints_reject_non_admin_scopes(self, client: TestClient, endpoint: str, method: str):
+    @pytest.mark.parametrize(
+        "endpoint,method",
+        [
+            ("/v1/admin/ping", "get"),
+            ("/v1/admin/rbac/info", "get"),
+            ("/v1/admin/system/status", "get"),
+            ("/v1/admin/tokens/google", "get"),
+            ("/v1/admin/metrics", "get"),
+            ("/v1/admin/router/decisions", "get"),
+            ("/v1/admin/config", "get"),
+            ("/v1/admin/config-check", "get"),
+            ("/v1/admin/errors", "get"),
+            ("/v1/admin/flags", "get"),
+            ("/v1/admin/flags/test", "post"),
+            ("/v1/admin/users/me", "get"),
+            ("/v1/admin/retrieval/last", "get"),
+            ("/v1/admin/backup", "post"),
+        ],
+    )
+    def test_admin_endpoints_reject_non_admin_scopes(
+        self, client: TestClient, endpoint: str, method: str
+    ):
         """Test that admin endpoints return 403 for users with non-admin scopes."""
         # Use a token with non-admin scopes (e.g., music:control)
         token = _create_jwt_token(["music:control"])
@@ -137,23 +151,28 @@ class TestAdminSecurity:
             response = client.post(endpoint, headers=headers)
         assert response.status_code == 403
 
-    @pytest.mark.parametrize("endpoint,method", [
-        ("/v1/admin/ping", "get"),
-        ("/v1/admin/rbac/info", "get"),
-        ("/v1/admin/system/status", "get"),
-        ("/v1/admin/tokens/google", "get"),
-        ("/v1/admin/metrics", "get"),
-        ("/v1/admin/router/decisions", "get"),
-        ("/v1/admin/config", "get"),
-        ("/v1/admin/config-check", "get"),
-        ("/v1/admin/errors", "get"),
-        ("/v1/admin/flags", "get"),
-        ("/v1/admin/flags/test", "post"),
-        ("/v1/admin/users/me", "get"),
-        ("/v1/admin/retrieval/last", "get"),
-        ("/v1/admin/backup", "post"),
-    ])
-    def test_admin_endpoints_allow_admin_scopes(self, client: TestClient, endpoint: str, method: str):
+    @pytest.mark.parametrize(
+        "endpoint,method",
+        [
+            ("/v1/admin/ping", "get"),
+            ("/v1/admin/rbac/info", "get"),
+            ("/v1/admin/system/status", "get"),
+            ("/v1/admin/tokens/google", "get"),
+            ("/v1/admin/metrics", "get"),
+            ("/v1/admin/router/decisions", "get"),
+            ("/v1/admin/config", "get"),
+            ("/v1/admin/config-check", "get"),
+            ("/v1/admin/errors", "get"),
+            ("/v1/admin/flags", "get"),
+            ("/v1/admin/flags/test", "post"),
+            ("/v1/admin/users/me", "get"),
+            ("/v1/admin/retrieval/last", "get"),
+            ("/v1/admin/backup", "post"),
+        ],
+    )
+    def test_admin_endpoints_allow_admin_scopes(
+        self, client: TestClient, endpoint: str, method: str
+    ):
         """Test that admin endpoints return 200 for users with admin scopes."""
         # Use a token with admin scopes
         token = _create_jwt_token(["admin"])
@@ -224,8 +243,7 @@ class TestAdminSecurity:
 
         # Test setting a flag
         response = client.post(
-            "/v1/admin/flags?key=TEST_FLAG&value=test_value",
-            headers=headers
+            "/v1/admin/flags?key=TEST_FLAG&value=test_value", headers=headers
         )
         assert response.status_code == 200
 
@@ -402,7 +420,7 @@ class TestAdminSecurityIntegration:
             ("/v1/admin/flags", "get"),
             ("/v1/admin/flags/test", "post"),
             ("/v1/admin/system/status", "get"),
-            ("/v1/admin/backup", "post")
+            ("/v1/admin/backup", "post"),
         ]
 
         for endpoint, method in endpoints:
@@ -411,7 +429,9 @@ class TestAdminSecurityIntegration:
                 response = client.get(endpoint)
             elif method == "post":
                 response = client.post(endpoint)
-            assert response.status_code == 401, f"Endpoint {endpoint} should require auth"
+            assert (
+                response.status_code == 401
+            ), f"Endpoint {endpoint} should require auth"
 
             # Should fail with non-admin scopes
             token = _create_jwt_token(["music:control"])
@@ -420,4 +440,6 @@ class TestAdminSecurityIntegration:
                 response = client.get(endpoint, headers=headers)
             elif method == "post":
                 response = client.post(endpoint, headers=headers)
-            assert response.status_code == 403, f"Endpoint {endpoint} should reject non-admin scopes"
+            assert (
+                response.status_code == 403
+            ), f"Endpoint {endpoint} should reject non-admin scopes"

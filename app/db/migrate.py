@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class MigrationError(Exception):
     """Raised when a migration fails."""
+
     pass
 
 
@@ -27,7 +28,10 @@ async def run_all_migrations(db_dir: Path | None = None) -> None:
     Raises:
         MigrationError: If any migration fails
     """
-    logger.info("Starting database migrations", extra={"db_dir": str(db_dir) if db_dir else None})
+    logger.info(
+        "Starting database migrations",
+        extra={"db_dir": str(db_dir) if db_dir else None},
+    )
 
     migration_tasks: list[Callable[[], Awaitable[None]]] = []
 
@@ -35,6 +39,7 @@ async def run_all_migrations(db_dir: Path | None = None) -> None:
     async def migrate_token_store():
         try:
             from app.auth_store_tokens import TokenDAO
+
             dao = TokenDAO(str(db_dir / "third_party_tokens.db") if db_dir else None)
             await dao.ensure_schema_migrated()
             logger.info("Token store migration completed")
@@ -47,6 +52,7 @@ async def run_all_migrations(db_dir: Path | None = None) -> None:
         try:
             if db_dir:
                 from app.user_store import UserDAO
+
                 user_dao = UserDAO(db_dir / "users.db")
             else:
                 from app.user_store import user_dao
@@ -57,10 +63,12 @@ async def run_all_migrations(db_dir: Path | None = None) -> None:
             raise MigrationError(f"User store migration failed: {e}")
 
     # Add all migration tasks
-    migration_tasks.extend([
-        migrate_token_store,
-        migrate_user_store,
-    ])
+    migration_tasks.extend(
+        [
+            migrate_token_store,
+            migrate_user_store,
+        ]
+    )
 
     # Run all migrations concurrently but safely
     for task in migration_tasks:
@@ -103,7 +111,7 @@ if __name__ == "__main__":
     # Set up basic logging
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
     # Run migrations

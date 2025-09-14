@@ -28,6 +28,7 @@ class TestChaosMode:
             import importlib
 
             import app.chaos
+
             importlib.reload(app.chaos)
             assert app.chaos.is_chaos_enabled()
 
@@ -37,8 +38,10 @@ class TestChaosMode:
         assert not should_inject_chaos("any_event")
 
         # With chaos enabled but 0% probability, should not inject
-        with patch("app.chaos.is_chaos_enabled", return_value=True), \
-             patch("app.chaos.CHAOS_PROBABILITIES", {"test_event": 0.0}):
+        with (
+            patch("app.chaos.is_chaos_enabled", return_value=True),
+            patch("app.chaos.CHAOS_PROBABILITIES", {"test_event": 0.0}),
+        ):
             assert not should_inject_chaos("test_event")
 
     def test_chaos_latency_ranges(self):
@@ -56,15 +59,19 @@ class TestChaosMode:
     @pytest.mark.asyncio
     async def test_chaos_wrap_async_no_injection(self):
         """Test chaos wrap when no injection occurs."""
+
         async def test_func():
             return "success"
 
         # With chaos disabled, should just return the result
-        result = await chaos_wrap_async("test", "operation", test_func, inject_exceptions=False)
+        result = await chaos_wrap_async(
+            "test", "operation", test_func, inject_exceptions=False
+        )
         assert result == "success"
 
     def test_chaos_vector_sync_no_injection(self):
         """Test chaos vector sync when no injection occurs."""
+
         def test_func():
             return "success"
 
@@ -75,11 +82,13 @@ class TestChaosMode:
     @pytest.mark.asyncio
     async def test_chaos_configuration_logging(self):
         """Test that chaos configuration is logged."""
-        with patch("app.chaos.is_chaos_enabled", return_value=True), \
-             patch("app.chaos.logger") as mock_logger:
-
+        with (
+            patch("app.chaos.is_chaos_enabled", return_value=True),
+            patch("app.chaos.logger") as mock_logger,
+        ):
             # Import to trigger logging
             import app.chaos
+
             importlib.reload(app.chaos)
 
             # Should have called log_chaos_status

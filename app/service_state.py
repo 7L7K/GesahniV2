@@ -35,7 +35,9 @@ def _ensure_entry(st: dict[str, dict], service: ServiceName) -> dict:
     return entry
 
 
-def set_service_enabled(service_state: str | None, service: ServiceName, enabled: bool) -> str:
+def set_service_enabled(
+    service_state: str | None, service: ServiceName, enabled: bool
+) -> str:
     st = parse(service_state)
     entry = _ensure_entry(st, service)
     entry["status"] = "enabled" if enabled else "disabled"
@@ -46,7 +48,9 @@ def set_service_enabled(service_state: str | None, service: ServiceName, enabled
     return serialize(st)
 
 
-def set_service_error(service_state: str | None, service: ServiceName, code: str) -> str:
+def set_service_error(
+    service_state: str | None, service: ServiceName, code: str
+) -> str:
     st = parse(service_state)
     entry = _ensure_entry(st, service)
     entry["status"] = "error"
@@ -57,7 +61,13 @@ def set_service_error(service_state: str | None, service: ServiceName, code: str
 
 
 # Backwards-compatible alias used elsewhere in the codebase
-def set_status(service_state: str | None, service: ServiceName, status: ServiceStatus, *, last_error_code: str | None = None) -> str:
+def set_status(
+    service_state: str | None,
+    service: ServiceName,
+    status: ServiceStatus,
+    *,
+    last_error_code: str | None = None,
+) -> str:
     if status == "enabled":
         return set_service_enabled(service_state, service, True)
     if status == "disabled":
@@ -71,4 +81,3 @@ def get_status(service_state: str | None, service: ServiceName) -> ServiceStatus
     st = parse(service_state)
     entry = st.get(service)
     return entry.get("status") if isinstance(entry, dict) else None
-

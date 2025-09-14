@@ -196,7 +196,6 @@ class TestTokenRefreshService:
             "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
             side_effect=slow_refresh,
         ):
-
             # Start multiple concurrent refresh attempts
             tasks = []
             for i in range(5):

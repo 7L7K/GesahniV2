@@ -16,6 +16,7 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+
 def get_middleware_order():
     """Extract middleware order from the middleware stack configuration."""
     try:
@@ -32,11 +33,11 @@ def get_middleware_order():
 
         # Common middleware patterns to look for
         patterns = [
-            r'(\w+Middleware)',
-            r'(\w+Auth)',
-            r'(\w+CORS)',
-            r'(\w+Session)',
-            r'(\w+CSRF)'
+            r"(\w+Middleware)",
+            r"(\w+Auth)",
+            r"(\w+CORS)",
+            r"(\w+Session)",
+            r"(\w+CSRF)",
         ]
 
         for pattern in patterns:
@@ -46,15 +47,20 @@ def get_middleware_order():
                     middleware_classes.append(match)
 
         # Also look for specific middleware imports
-        import_matches = re.findall(r'from.*middleware.*import.*(\w+)', content)
+        import_matches = re.findall(r"from.*middleware.*import.*(\w+)", content)
         for match in import_matches:
-            if match not in middleware_classes and 'Middleware' in match:
+            if match not in middleware_classes and "Middleware" in match:
                 middleware_classes.append(match)
 
-        return middleware_classes if middleware_classes else ["No middleware classes found in stack"]
+        return (
+            middleware_classes
+            if middleware_classes
+            else ["No middleware classes found in stack"]
+        )
 
     except Exception as e:
         return [f"Error reading middleware: {e}"]
+
 
 def main():
     """Main function to print middleware configuration."""
@@ -72,12 +78,21 @@ def main():
         "CORSMiddleware",
         "SessionMiddleware",
         "CSRFMiddleware",
-        "AuthMiddleware"
+        "AuthMiddleware",
     ]
 
     for middleware in canonical_order:
-        status = "✅" if any(m in middleware_order for m in middleware_order if middleware.replace('Middleware', '') in m) else "❌"
+        status = (
+            "✅"
+            if any(
+                m in middleware_order
+                for m in middleware_order
+                if middleware.replace("Middleware", "") in m
+            )
+            else "❌"
+        )
         print(f" - {status} {middleware}")
+
 
 if __name__ == "__main__":
     main()

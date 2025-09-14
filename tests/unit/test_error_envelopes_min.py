@@ -5,6 +5,7 @@ from app.main import create_app
 app = create_app()
 client = TestClient(app)
 
+
 def test_404_envelope():
     r = client.get("/nope")
     assert r.status_code == 404
@@ -15,6 +16,7 @@ def test_404_envelope():
     assert "trace_id" in body["details"]
     assert body["details"]["path"] == "/nope"
     assert body["details"]["method"] == "GET"
+
 
 def test_422_envelope_and_legacy():
     # Send invalid payload to /v1/ask to trigger 422
@@ -29,13 +31,17 @@ def test_422_envelope_and_legacy():
     assert body["detail"] == "Validation error"
     assert isinstance(body["errors"], list)
 
+
 def test_500_envelope_retry_after(monkeypatch):
     # Create a route that raises
     from fastapi import APIRouter
+
     rt = APIRouter()
+
     @rt.get("/boom")
     def boom():
         raise RuntimeError("kaboom")
+
     app.include_router(rt)
     r = client.get("/boom")
     assert r.status_code == 500

@@ -33,7 +33,9 @@ class UndoSkill(Skill):
                 # if brightness present, use pct; brightness stored as pct
                 b = prev.get("brightness")
                 if b is not None:
-                    await ha.call_service("light", "turn_on", {"entity_id": ent, "brightness_pct": b})
+                    await ha.call_service(
+                        "light", "turn_on", {"entity_id": ent, "brightness_pct": b}
+                    )
                 else:
                     await ha.call_service("light", "turn_on", {"entity_id": ent})
             # record reverse action in ledger and link via reverse_id
@@ -88,5 +90,3 @@ class UndoSkill(Skill):
 
         # fallback
         return "Cannot undo that action automatically."
-
-

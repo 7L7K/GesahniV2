@@ -10,20 +10,25 @@ def test_canonical_auth_routes_exist():
 
     # Test that canonical routes exist (may return 401 for unauthenticated requests)
     canonical_routes = [
-        "/v1/auth/login",      # POST only - should return 405 for GET
-        "/v1/auth/logout",     # POST only - should return 405 for GET
-        "/v1/auth/register",   # POST only - should return 405 for GET
-        "/v1/auth/refresh",    # POST only - should return 405 for GET
-        "/v1/auth/whoami",     # GET only - should return 401 for unauthenticated
-        "/v1/auth/token",      # POST only - should return 405 for GET
+        "/v1/auth/login",  # POST only - should return 405 for GET
+        "/v1/auth/logout",  # POST only - should return 405 for GET
+        "/v1/auth/register",  # POST only - should return 405 for GET
+        "/v1/auth/refresh",  # POST only - should return 405 for GET
+        "/v1/auth/whoami",  # GET only - should return 401 for unauthenticated
+        "/v1/auth/token",  # POST only - should return 405 for GET
     ]
 
     for route in canonical_routes:
         resp = client.get(route, allow_redirects=False)
         # Routes should either work (401 for unauthenticated) or return method not allowed (405)
         # but should NOT return 404 (not found)
-        assert resp.status_code != 404, f"Canonical route {route} not found: got {resp.status_code}"
-        assert resp.status_code in (401, 405), f"Canonical route {route} returned unexpected status: {resp.status_code}"
+        assert (
+            resp.status_code != 404
+        ), f"Canonical route {route} not found: got {resp.status_code}"
+        assert resp.status_code in (
+            401,
+            405,
+        ), f"Canonical route {route} returned unexpected status: {resp.status_code}"
 
 
 def test_legacy_endpoints_exist():
@@ -40,11 +45,15 @@ def test_legacy_endpoints_exist():
     for route in legacy_routes:
         # GET requests should return 405 (Method Not Allowed)
         resp = client.get(route, allow_redirects=False)
-        assert resp.status_code == 405, f"GET {route} should return 405: got {resp.status_code}"
+        assert (
+            resp.status_code == 405
+        ), f"GET {route} should return 405: got {resp.status_code}"
 
         # POST requests should work (may return 401 for auth, but not 404)
         resp = client.post(route, allow_redirects=False)
-        assert resp.status_code != 404, f"POST {route} should exist: got {resp.status_code}"
+        assert (
+            resp.status_code != 404
+        ), f"POST {route} should exist: got {resp.status_code}"
 
 
 def test_canonical_finish_endpoint():
@@ -57,10 +66,19 @@ def test_canonical_finish_endpoint():
     for method in ["GET", "POST"]:
         resp = client.request(method, "/v1/auth/finish", allow_redirects=False)
         # Should not return 404 (endpoint exists) and should not return 308 (not a redirect)
-        assert resp.status_code != 404, f"{method} /v1/auth/finish should exist: got {resp.status_code}"
-        assert resp.status_code != 308, f"{method} /v1/auth/finish should not be a redirect: got {resp.status_code}"
+        assert (
+            resp.status_code != 404
+        ), f"{method} /v1/auth/finish should exist: got {resp.status_code}"
+        assert (
+            resp.status_code != 308
+        ), f"{method} /v1/auth/finish should not be a redirect: got {resp.status_code}"
         # Should return auth-related status codes
-        assert resp.status_code in (401, 403, 422, 405), f"{method} /v1/auth/finish returned unexpected status: {resp.status_code}"
+        assert resp.status_code in (
+            401,
+            403,
+            422,
+            405,
+        ), f"{method} /v1/auth/finish returned unexpected status: {resp.status_code}"
 
 
 def test_legacy_redirects_behavior():
@@ -83,11 +101,15 @@ def test_legacy_redirects_behavior():
             resp = client.request(method, legacy_path, allow_redirects=False)
 
             # Assert 308 Permanent Redirect status
-            assert resp.status_code == 308, f"{method} {legacy_path} should return 308, got {resp.status_code}"
+            assert (
+                resp.status_code == 308
+            ), f"{method} {legacy_path} should return 308, got {resp.status_code}"
 
             # Assert Location header points to canonical route
             location = resp.headers.get("location") or resp.headers.get("Location")
-            assert location == canonical_path, f"{method} {legacy_path} should redirect to {canonical_path}, got {location}"
+            assert (
+                location == canonical_path
+            ), f"{method} {legacy_path} should redirect to {canonical_path}, got {location}"
 
             # Assert method is preserved (308 preserves method and body)
             # This is implicit in HTTP 308 behavior, but we can verify the redirect works
@@ -137,9 +159,13 @@ def test_legacy_redirect_methods_supported():
         resp = client.request(method, "/v1/login", allow_redirects=False)
 
         # All methods should redirect with 308
-        assert resp.status_code == 308, f"{method} /v1/login should return 308, got {resp.status_code}"
+        assert (
+            resp.status_code == 308
+        ), f"{method} /v1/login should return 308, got {resp.status_code}"
         location = resp.headers.get("location") or resp.headers.get("Location")
-        assert location == "/v1/auth/login", f"{method} /v1/login should redirect to /v1/auth/login, got {location}"
+        assert (
+            location == "/v1/auth/login"
+        ), f"{method} /v1/login should redirect to /v1/auth/login, got {location}"
 
 
 def test_no_redirect_loops():
@@ -161,6 +187,6 @@ def test_no_redirect_loops():
         for method in ["GET", "POST"]:
             resp = client.request(method, route, allow_redirects=False)
             # Should not return 308 (no redirect)
-            assert resp.status_code != 308, f"Canonical route {route} should not redirect, got {resp.status_code}"
-
-
+            assert (
+                resp.status_code != 308
+            ), f"Canonical route {route} should not redirect, got {resp.status_code}"

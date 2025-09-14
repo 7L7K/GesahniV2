@@ -11,11 +11,13 @@ app/router/auth_legacy_aliases.py. These tests ensure that:
 These tests are separate from core auth tests to maintain clear separation
 between canonical auth flow testing and legacy compatibility testing.
 """
+
 import pytest
 from fastapi.testclient import TestClient
 
 try:
     from prometheus_client import REGISTRY
+
     PROMETHEUS_AVAILABLE = True
 except ImportError:
     PROMETHEUS_AVAILABLE = False
@@ -25,6 +27,7 @@ except ImportError:
 def client():
     """Test client with the full application."""
     from app.main import create_app
+
     app = create_app()
     return TestClient(app)
 
@@ -34,14 +37,22 @@ class TestLegacyAuthAliases:
 
     def test_legacy_login_redirects_to_canonical(self, client):
         """Test that POST /login redirects to POST /v1/auth/login."""
-        response = client.post("/login", json={"username": "test", "password": "pass"}, allow_redirects=False)
+        response = client.post(
+            "/login",
+            json={"username": "test", "password": "pass"},
+            allow_redirects=False,
+        )
 
         assert response.status_code == 308
         assert response.headers.get("location") == "/v1/auth/login"
 
     def test_legacy_register_redirects_to_canonical(self, client):
         """Test that POST /register redirects to POST /v1/auth/register."""
-        response = client.post("/register", json={"username": "test", "password": "pass"}, allow_redirects=False)
+        response = client.post(
+            "/register",
+            json={"username": "test", "password": "pass"},
+            allow_redirects=False,
+        )
 
         assert response.status_code == 308
         assert response.headers.get("location") == "/v1/auth/register"
@@ -56,45 +67,70 @@ class TestLegacyAuthAliases:
     def test_legacy_routes_include_deprecation_headers(self, client):
         """Test that legacy routes include proper deprecation headers."""
         # Test login
-        response = client.post("/login", json={"username": "test", "password": "pass"}, allow_redirects=False)
+        response = client.post(
+            "/login",
+            json={"username": "test", "password": "pass"},
+            allow_redirects=False,
+        )
         assert response.headers.get("Deprecation") == "true"
         assert response.headers.get("Sunset") == "Wed, 31 Dec 2025 23:59:59 GMT"
-        assert response.headers.get("Link") == '<"/v1/auth/login">; rel="successor-version"'
+        assert (
+            response.headers.get("Link")
+            == '<"/v1/auth/login">; rel="successor-version"'
+        )
 
         # Test register
-        response = client.post("/register", json={"username": "test", "password": "pass"}, allow_redirects=False)
+        response = client.post(
+            "/register",
+            json={"username": "test", "password": "pass"},
+            allow_redirects=False,
+        )
         assert response.headers.get("Deprecation") == "true"
         assert response.headers.get("Sunset") == "Wed, 31 Dec 2025 23:59:59 GMT"
-        assert response.headers.get("Link") == '<"/v1/auth/register">; rel="successor-version"'
+        assert (
+            response.headers.get("Link")
+            == '<"/v1/auth/register">; rel="successor-version"'
+        )
 
         # Test whoami
         response = client.get("/whoami", allow_redirects=False)
         assert response.headers.get("Deprecation") == "true"
         assert response.headers.get("Sunset") == "Wed, 31 Dec 2025 23:59:59 GMT"
-        assert response.headers.get("Link") == '<"/v1/auth/whoami">; rel="successor-version"'
+        assert (
+            response.headers.get("Link")
+            == '<"/v1/auth/whoami">; rel="successor-version"'
+        )
 
     @pytest.mark.skipif(not PROMETHEUS_AVAILABLE, reason="Prometheus not available")
     def test_legacy_routes_increment_prometheus_counter(self, client):
         """Test that legacy route usage increments Prometheus counter."""
         # Get initial counter value
         initial_value = 0
-        if hasattr(REGISTRY, '_names_to_collectors'):
-            for collector in REGISTRY._names_to_collectors.get('auth_legacy_hits_total', []):
+        if hasattr(REGISTRY, "_names_to_collectors"):
+            for collector in REGISTRY._names_to_collectors.get(
+                "auth_legacy_hits_total", []
+            ):
                 for metric in collector._metrics:
                     for sample in metric.samples:
-                        if sample.labels.get('endpoint') == '/v1/login':
+                        if sample.labels.get("endpoint") == "/v1/login":
                             initial_value = sample.value
                             break
 
         # Make a request to legacy login
-        client.post("/login", json={"username": "test", "password": "pass"}, allow_redirects=False)
+        client.post(
+            "/login",
+            json={"username": "test", "password": "pass"},
+            allow_redirects=False,
+        )
 
         # Check that counter incremented
         final_value = 0
-        for collector in REGISTRY._names_to_collectors.get('auth_legacy_hits_total', []):
+        for collector in REGISTRY._names_to_collectors.get(
+            "auth_legacy_hits_total", []
+        ):
             for metric in collector._metrics:
                 for sample in metric.samples:
-                    if sample.labels.get('endpoint') == '/v1/login':
+                    if sample.labels.get("endpoint") == "/v1/login":
                         final_value = sample.value
                         break
 
@@ -103,12 +139,20 @@ class TestLegacyAuthAliases:
     def test_legacy_routes_with_follow_redirects_work(self, client):
         """Test that legacy routes work correctly when following redirects."""
         # Test login with follow redirects
-        response = client.post("/login", json={"username": "testuser", "password": "secret123"}, allow_redirects=True)
+        response = client.post(
+            "/login",
+            json={"username": "testuser", "password": "secret123"},
+            allow_redirects=True,
+        )
         # Should get final response from canonical endpoint
         assert response.status_code in [200, 400, 401]  # Auth endpoint responses
 
         # Test register with follow redirects
-        response = client.post("/register", json={"username": "testuser2", "password": "secret123"}, allow_redirects=True)
+        response = client.post(
+            "/register",
+            json={"username": "testuser2", "password": "secret123"},
+            allow_redirects=True,
+        )
         assert response.status_code in [200, 400]  # Register endpoint responses
 
         # Test whoami with follow redirects
@@ -143,10 +187,12 @@ class TestLegacyAuthAliases:
 
         # Check counter value
         counter_value = 0
-        for collector in REGISTRY._names_to_collectors.get('auth_legacy_hits_total', []):
+        for collector in REGISTRY._names_to_collectors.get(
+            "auth_legacy_hits_total", []
+        ):
             for metric in collector._metrics:
                 for sample in metric.samples:
-                    if sample.labels.get('endpoint') == '/v1/whoami':
+                    if sample.labels.get("endpoint") == "/v1/whoami":
                         counter_value = sample.value
                         break
 
@@ -155,11 +201,15 @@ class TestLegacyAuthAliases:
     def test_canonical_endpoints_still_work_directly(self, client):
         """Test that canonical endpoints still work directly (regression test)."""
         # Test canonical login
-        response = client.post("/v1/auth/login", json={"username": "test", "password": "pass"})
+        response = client.post(
+            "/v1/auth/login", json={"username": "test", "password": "pass"}
+        )
         assert response.status_code in [200, 400, 401]
 
         # Test canonical register
-        response = client.post("/v1/auth/register", json={"username": "test", "password": "pass"})
+        response = client.post(
+            "/v1/auth/register", json={"username": "test", "password": "pass"}
+        )
         assert response.status_code in [200, 400]
 
         # Test canonical whoami
@@ -175,17 +225,17 @@ class TestLegacyAuthAliasesWithAuth:
     def authenticated_client(self, client):
         """Client with a registered and logged-in user."""
         # Register a user
-        register_response = client.post("/v1/auth/register", json={
-            "username": "legacy_test_user",
-            "password": "test_password_123"
-        })
+        register_response = client.post(
+            "/v1/auth/register",
+            json={"username": "legacy_test_user", "password": "test_password_123"},
+        )
         assert register_response.status_code == 200
 
         # Login to get tokens
-        login_response = client.post("/v1/auth/login", json={
-            "username": "legacy_test_user",
-            "password": "test_password_123"
-        })
+        login_response = client.post(
+            "/v1/auth/login",
+            json={"username": "legacy_test_user", "password": "test_password_123"},
+        )
         assert login_response.status_code == 200
 
         # Extract access token
@@ -214,4 +264,7 @@ class TestLegacyAuthAliasesWithAuth:
         assert response.status_code == 308
         assert response.headers.get("Deprecation") == "true"
         assert response.headers.get("Sunset") == "Wed, 31 Dec 2025 23:59:59 GMT"
-        assert response.headers.get("Link") == '<"/v1/auth/whoami">; rel="successor-version"'
+        assert (
+            response.headers.get("Link")
+            == '<"/v1/auth/whoami">; rel="successor-version"'
+        )

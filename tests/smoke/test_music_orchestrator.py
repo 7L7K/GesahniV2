@@ -23,7 +23,7 @@ class _FakeProvider:
         entity_type: str,
         *,
         device_id: str | None = None,
-        position_ms: int | None = None
+        position_ms: int | None = None,
     ):
         self.calls.append(("play", entity_id, entity_type, device_id))
 

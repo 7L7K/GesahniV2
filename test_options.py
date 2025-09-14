@@ -43,15 +43,21 @@ def test_options_preflight():
         assert response.status_code == 204, f"Expected 204, got {response.status_code}"
 
         # Test OPTIONS request to an unknown route
-        response = requests.options("http://127.0.0.1:8001/some-unknown-route", timeout=5)
+        response = requests.options(
+            "http://127.0.0.1:8001/some-unknown-route", timeout=5
+        )
         print(f"OPTIONS /some-unknown-route: {response.status_code}")
         assert response.status_code == 204, f"Expected 204, got {response.status_code}"
 
         # Test OPTIONS request with CORS headers
         headers = {"Origin": "http://localhost:3000"}
-        response = requests.options("http://127.0.0.1:8001/v1/status", headers=headers, timeout=5)
+        response = requests.options(
+            "http://127.0.0.1:8001/v1/status", headers=headers, timeout=5
+        )
         print(f"OPTIONS /v1/status with Origin: {response.status_code}")
-        assert response.status_code == 200, f"Expected 200 for CORS preflight, got {response.status_code}"
+        assert (
+            response.status_code == 200
+        ), f"Expected 200 for CORS preflight, got {response.status_code}"
 
         print("✅ All OPTIONS tests passed!")
         return True
@@ -62,6 +68,7 @@ def test_options_preflight():
     finally:
         # Server will be killed when the process exits
         pass
+
 
 if __name__ == "__main__":
     success = test_options_preflight()

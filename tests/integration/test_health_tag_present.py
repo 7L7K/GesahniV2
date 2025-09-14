@@ -1,4 +1,5 @@
 """Health tag presence test - ensures Health routes have correct tags."""
+
 import importlib
 
 
@@ -21,7 +22,9 @@ def test_health_routes_have_health_tag():
             for method, details in methods.items():
                 if method.upper() in ["GET", "POST", "PUT", "DELETE"]:
                     tags = details.get("tags", [])
-                    assert "Health" in tags, f"Health route {path} missing Health tag: {tags}"
+                    assert (
+                        "Health" in tags
+                    ), f"Health route {path} missing Health tag: {tags}"
                     health_routes_found += 1
 
     # Ensure we found some health routes

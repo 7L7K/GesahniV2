@@ -61,7 +61,7 @@ class MathSkill(Skill):
 
         # If boolean, return boolean with explanation and user-friendly wording
         if isinstance(val, bool):
-            detail = expl.split(':', 1)[-1].strip()
+            detail = expl.split(":", 1)[-1].strip()
             # If the boolean was produced from an approximate rewrite, the detail
             # may be an expression like "abs((1/3)-(0.3333333)) <= 1e-09"; make
             # a short human-friendly explanation.
@@ -81,7 +81,9 @@ class MathSkill(Skill):
                 try:
                     return await self.run(prompt, match)
                 except Exception:
-                    return "I couldn't parse that as math. Try like: 3*3=9, 2^3, sqrt(16)."
+                    return (
+                        "I couldn't parse that as math. Try like: 3*3=9, 2^3, sqrt(16)."
+                    )
 
         # If no pattern matched, attempt safe AST evaluation on the whole prompt
         try:

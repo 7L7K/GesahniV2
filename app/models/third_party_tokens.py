@@ -105,12 +105,20 @@ class ThirdPartyToken:
             access_token_enc = row[6] if len(row) > 6 else None
             refresh_token = row[7] if len(row) > 7 else None
             refresh_token_enc = row[8] if len(row) > 8 else None
-            envelope_key_version = int(row[9]) if len(row) > 9 and row[9] is not None else 1
-            last_refresh_at = int(row[10]) if len(row) > 10 and row[10] is not None else 0
-            refresh_error_count = int(row[11]) if len(row) > 11 and row[11] is not None else 0
+            envelope_key_version = (
+                int(row[9]) if len(row) > 9 and row[9] is not None else 1
+            )
+            last_refresh_at = (
+                int(row[10]) if len(row) > 10 and row[10] is not None else 0
+            )
+            refresh_error_count = (
+                int(row[11]) if len(row) > 11 and row[11] is not None else 0
+            )
             scope = row[12] if len(row) > 12 else None
             service_state = row[13] if len(row) > 13 else None
-            scope_union_since = int(row[14]) if len(row) > 14 and row[14] is not None else 0
+            scope_union_since = (
+                int(row[14]) if len(row) > 14 and row[14] is not None else 0
+            )
             scope_last_added_from = row[15] if len(row) > 15 else None
             replaced_by_id = row[16] if len(row) > 16 else None
             expires_at = row[17] if len(row) > 17 else 0
@@ -182,6 +190,7 @@ class ThirdPartyToken:
 @dataclass
 class TokenQuery:
     """Query parameters for token lookups."""
+
     user_id: str
     provider: str
 
@@ -193,6 +202,7 @@ class TokenQuery:
 @dataclass
 class TokenUpdate:
     """Fields that can be updated on a token."""
+
     access_token: str | None = None
     refresh_token: str | None = None
     scopes: str | None = None
@@ -202,11 +212,12 @@ class TokenUpdate:
     def has_updates(self) -> bool:
         """Check if any fields have been set for update."""
         return any(
-            value is not None for value in [
+            value is not None
+            for value in [
                 self.access_token,
                 self.refresh_token,
                 self.scopes,
                 self.expires_at,
-                self.is_valid
+                self.is_valid,
             ]
         )

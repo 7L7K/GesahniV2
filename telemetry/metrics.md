@@ -22,7 +22,3 @@ Dashboard guidance:
 - Show top skills by `skill_hits_total` and average `selector_latency_ms`.
 - Visualize `skill_conf_bucket` heatmap to find ambiguous ranges.
 - Chart `llm_fallback_total` overlapped with `skill_conf_bucket` & `selector_latency_ms` to spot failures.
-
-
-
-

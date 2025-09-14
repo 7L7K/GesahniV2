@@ -11,7 +11,6 @@ def skill_latency(skill: str, ms: int) -> None:
     _ = (skill, ms)
 
 
-
 from typing import Any, Dict
 
 from app.telemetry import log_record_var

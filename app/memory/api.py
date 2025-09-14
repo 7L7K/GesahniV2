@@ -301,7 +301,10 @@ def lookup_cached_answer(prompt: str, ttl_seconds: int = 86400) -> str | None:
 
 
 def _compose_cache_cid(
-    user_id: str | None, norm_prompt: str, system_prompt: str | None, model_family: str | None
+    user_id: str | None,
+    norm_prompt: str,
+    system_prompt: str | None,
+    model_family: str | None,
 ) -> str:
     """Compose a namespaced cache id to avoid cross-user and cross-system reuse.
 
@@ -314,7 +317,7 @@ def _compose_cache_cid(
         user_hash = "anon"
     p_hash = _normalized_hash(norm_prompt)
     s_hash = _normalized_hash(system_prompt or "")
-    mf = (model_family or "")
+    mf = model_family or ""
     cid = f"v1|{user_hash}|{p_hash}|{s_hash}|{mf}"
     return cid
 

@@ -54,7 +54,7 @@ def auth_request(
     data: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """Make an authenticated request with automatic CSRF handling.
 
@@ -62,7 +62,12 @@ def auth_request(
     If not authenticated, skip CSRF enforcement.
     """
     # Check if client has auth cookies
-    if has_auth_cookies(client) and method.upper() in {"POST", "PUT", "PATCH", "DELETE"}:
+    if has_auth_cookies(client) and method.upper() in {
+        "POST",
+        "PUT",
+        "PATCH",
+        "DELETE",
+    }:
         try:
             csrf_cookies, csrf_token = get_csrf_token(client)
             request_headers = headers or {}
@@ -90,10 +95,12 @@ def auth_get(
     url: str,
     headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """Make an authenticated GET request."""
-    return auth_request(client, "GET", url, headers=headers, allow_redirects=allow_redirects, **kwargs)
+    return auth_request(
+        client, "GET", url, headers=headers, allow_redirects=allow_redirects, **kwargs
+    )
 
 
 def auth_post(
@@ -103,10 +110,19 @@ def auth_post(
     data: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """Make an authenticated POST request with automatic CSRF handling."""
-    return auth_request(client, "POST", url, json=json, data=data, headers=headers, allow_redirects=allow_redirects, **kwargs)
+    return auth_request(
+        client,
+        "POST",
+        url,
+        json=json,
+        data=data,
+        headers=headers,
+        allow_redirects=allow_redirects,
+        **kwargs,
+    )
 
 
 def auth_put(
@@ -116,10 +132,19 @@ def auth_put(
     data: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """Make an authenticated PUT request with automatic CSRF handling."""
-    return auth_request(client, "PUT", url, json=json, data=data, headers=headers, allow_redirects=allow_redirects, **kwargs)
+    return auth_request(
+        client,
+        "PUT",
+        url,
+        json=json,
+        data=data,
+        headers=headers,
+        allow_redirects=allow_redirects,
+        **kwargs,
+    )
 
 
 def auth_patch(
@@ -129,10 +154,19 @@ def auth_patch(
     data: dict[str, Any] | None = None,
     headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """Make an authenticated PATCH request with automatic CSRF handling."""
-    return auth_request(client, "PATCH", url, json=json, data=data, headers=headers, allow_redirects=allow_redirects, **kwargs)
+    return auth_request(
+        client,
+        "PATCH",
+        url,
+        json=json,
+        data=data,
+        headers=headers,
+        allow_redirects=allow_redirects,
+        **kwargs,
+    )
 
 
 def auth_delete(
@@ -140,10 +174,17 @@ def auth_delete(
     url: str,
     headers: dict[str, str] | None = None,
     allow_redirects: bool = True,
-    **kwargs
+    **kwargs,
 ) -> Any:
     """Make an authenticated DELETE request with automatic CSRF handling."""
-    return auth_request(client, "DELETE", url, headers=headers, allow_redirects=allow_redirects, **kwargs)
+    return auth_request(
+        client,
+        "DELETE",
+        url,
+        headers=headers,
+        allow_redirects=allow_redirects,
+        **kwargs,
+    )
 
 
 def setup_auth_cookies(client: TestClient, user_id: str = "test_user") -> None:
@@ -158,6 +199,7 @@ def setup_auth_cookies(client: TestClient, user_id: str = "test_user") -> None:
 
     # Import mint_refresh_token from auth helpers
     from .auth import mint_refresh_token
+
     refresh_token = mint_refresh_token(user_id)
 
     # Use the canonical cookie names that the app actually uses
@@ -169,7 +211,9 @@ def setup_auth_cookies(client: TestClient, user_id: str = "test_user") -> None:
     # Set the refresh cookie
     client.cookies.set(GSNH_RT, refresh_token)
     # Set the session cookie (opaque value)
-    client.cookies.set(GSNH_SESS, access_token)  # Use access token as session for simplicity
+    client.cookies.set(
+        GSNH_SESS, access_token
+    )  # Use access token as session for simplicity
 
 
 def setup_csrf_cookie(client: TestClient) -> str:

@@ -89,7 +89,9 @@ def _export_qa(chroma_client) -> list[tuple[str, str, dict]]:
         res = col.get(include=["ids", "documents", "metadatas"]).copy()
     except Exception:
         # Older Chroma may need query fallback
-        res = col.query(query_texts=["*"], n_results=1000, include=["ids", "documents", "metadatas"])  # type: ignore[arg-type]
+        res = col.query(
+            query_texts=["*"], n_results=1000, include=["ids", "documents", "metadatas"]
+        )  # type: ignore[arg-type]
         res = {
             "ids": res.get("ids", [[]])[0],
             "documents": res.get("documents", [[]])[0],
@@ -112,7 +114,11 @@ def _export_user_memories(chroma_client) -> list[tuple[str, str, dict]]:
     try:
         res = col.get(include=["ids", "documents", "metadatas"]).copy()
     except Exception:
-        res = col.query(query_texts=["*"], n_results=100000, include=["ids", "documents", "metadatas"])  # type: ignore[arg-type]
+        res = col.query(
+            query_texts=["*"],
+            n_results=100000,
+            include=["ids", "documents", "metadatas"],
+        )  # type: ignore[arg-type]
         res = {
             "ids": res.get("ids", [[]])[0],
             "documents": res.get("documents", [[]])[0],

@@ -4,6 +4,7 @@ These call into `app.api.music`/`app.api.spotify_player` to perform real
 device and playback operations when available; otherwise they return the
 normalized fallback shapes expected by the alias router.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -27,7 +28,11 @@ async def music_status(request: Request) -> dict[str, Any]:
     try:
         # Prefer rich music API if available (try to call with request)
         res = await _music_api._get_state_impl(request, None, user_id)  # type: ignore[attr-defined]
-        return res if isinstance(res, dict) else {"playing": False, "device": None, "track": None}
+        return (
+            res
+            if isinstance(res, dict)
+            else {"playing": False, "device": None, "track": None}
+        )
     except Exception:
         try:
             # Fallback to spotify status probe
@@ -77,7 +82,9 @@ async def set_music_device(request) -> dict[str, Any]:
     try:
         # Try to call canonical set_device
         try:
-            res = await _music_api.set_device.__call__({"device_id": device_id})  # fallback; may not match
+            res = await _music_api.set_device.__call__(
+                {"device_id": device_id}
+            )  # fallback; may not match
         except Exception:
             # Best-effort: ask music API to set device by invoking helper
             try:
@@ -89,5 +96,3 @@ async def set_music_device(request) -> dict[str, Any]:
         return {"ok": True, "device_id": device_id}
     except Exception:
         return {"detail": "failed_to_set_device"}
-
-

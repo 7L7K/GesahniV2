@@ -21,10 +21,12 @@ from app.deps.scopes import require_scope
 from app.deps.user import get_current_user_id
 from app.integrations.spotify.client import SpotifyAuthError, SpotifyClient
 from app.models.common import OkResponse as CommonOkResponse
-from app.models.music_state import MusicVibe, load_state as load_state_memory, save_state as save_state_memory
-from app.music.store import get_music_session, save_music_state, load_music_state
+from app.models.music_state import MusicVibe
+from app.models.music_state import load_state as load_state_memory
+from app.models.music_state import save_state as save_state_memory
 from app.music.orchestrator import MusicOrchestrator
 from app.music.providers.spotify_provider import SpotifyProvider
+from app.music.store import get_music_session, load_music_state, save_music_state
 
 router = APIRouter(prefix="/music", tags=["Music"])  # mounted under /v1
 logger = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ logger = logging.getLogger(__name__)
 # MUSIC STATE PERSISTENCE WRAPPERS
 # ============================================================================
 
+
 async def load_state(user_id: str):
     """Load music state, preferring database but falling back to memory."""
     try:
@@ -42,6 +45,7 @@ async def load_state(user_id: str):
         if db_state:
             # Convert dict back to MusicState object
             from app.models.music_state import MusicState
+
             vibe_data = db_state.get("vibe", {})
             state = MusicState(
                 vibe=MusicVibe(

@@ -35,4 +35,3 @@ async def error_envelope_schema():
         "additionalProperties": False,
     }
     return JSONResponse(schema)
-

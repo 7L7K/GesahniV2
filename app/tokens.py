@@ -58,7 +58,9 @@ def _create_access_token_internal(
             "iat": datetime.now(UTC),
             "jti": uuid4().hex,
             "type": "access",
-            "scopes": data.get("scopes", ["care:resident", "music:control", "chat:write"]),
+            "scopes": data.get(
+                "scopes", ["care:resident", "music:control", "chat:write"]
+            ),
         }
     )
 
@@ -115,7 +117,9 @@ def _create_refresh_token_internal(
             "iat": datetime.now(UTC),
             "jti": uuid4().hex,
             "type": "refresh",
-            "scopes": data.get("scopes", ["care:resident", "music:control", "chat:write"]),
+            "scopes": data.get(
+                "scopes", ["care:resident", "music:control", "chat:write"]
+            ),
         }
     )
 
@@ -215,7 +219,7 @@ def make_access(
     ttl_s: int | None = None,
     alg: str | None = None,
     key: str | None = None,
-    kid: str | None = None
+    kid: str | None = None,
 ) -> str:
     """
     Create an access token with normalized claims and centralized TTL handling.
@@ -249,7 +253,7 @@ def make_refresh(
     ttl_s: int | None = None,
     alg: str | None = None,
     key: str | None = None,
-    kid: str | None = None
+    kid: str | None = None,
 ) -> str:
     """
     Create a refresh token with normalized claims and centralized TTL handling.
@@ -338,6 +342,7 @@ def create_refresh_token(data: dict, expires_delta: timedelta | None = None) -> 
 # Key selection
 # -----------------
 
+
 def _select_signing_key() -> tuple[str, str, str | None]:
     """Select signing algorithm, key, and kid based on centralized config.
 
@@ -359,6 +364,7 @@ def _select_signing_key() -> tuple[str, str, str | None]:
 
 # Centralized token creation using get_jwt_config()
 
+
 def _now():
     """Get current UTC datetime."""
     return datetime.now(tz=UTC)
@@ -376,7 +382,7 @@ def sign_access_token(sub: str, *, extra: dict | None = None) -> str:
     claims = {
         "sub": sub,
         "iat": int(_now().timestamp()),
-        "exp": int((_now() + timedelta(minutes=ttl_minutes)).timestamp())
+        "exp": int((_now() + timedelta(minutes=ttl_minutes)).timestamp()),
     }
     if cfg.issuer:
         claims["iss"] = cfg.issuer
@@ -404,7 +410,7 @@ def sign_refresh_token(sub: str) -> str:
         "sub": sub,
         "iat": int(_now().timestamp()),
         "exp": int((_now() + timedelta(minutes=cfg.refresh_ttl_min)).timestamp()),
-        "typ": "refresh"
+        "typ": "refresh",
     }
     if cfg.issuer:
         claims["iss"] = cfg.issuer
@@ -426,6 +432,7 @@ def sign_refresh_token(sub: str) -> str:
 # -----------------
 # JWT Decoding with Key Rotation Support
 # -----------------
+
 
 def decode_jwt_token(token: str) -> dict[str, Any]:
     """Decode JWT token with key rotation support.
@@ -461,7 +468,7 @@ def decode_jwt_token(token: str) -> dict[str, Any]:
                 audience=cfg.audience,
                 issuer=cfg.issuer,
                 options={"verify_exp": True, "verify_iat": True},
-                leeway=cfg.clock_skew_s
+                leeway=cfg.clock_skew_s,
             )
         except jwt.InvalidTokenError:
             pass  # Fall through to try all keys
@@ -494,7 +501,7 @@ def decode_jwt_token(token: str) -> dict[str, Any]:
                 audience=cfg.audience,
                 issuer=cfg.issuer,
                 options={"verify_exp": True, "verify_iat": True},
-                leeway=cfg.clock_skew_s
+                leeway=cfg.clock_skew_s,
             )
         except jwt.InvalidTokenError as e:
             last_error = e
@@ -519,6 +526,7 @@ def verify_jwt_token(token: str) -> dict[str, Any]:
 # JWT Key Rotation Testing
 # -----------------
 
+
 def test_jwt_backward_compatibility():
     """Test JWT backward compatibility during key rotation."""
     import json
@@ -537,14 +545,18 @@ def test_jwt_backward_compatibility():
 
         # Rotate to new key setup (keep old key for verification)
         os.environ.pop("JWT_SECRET", None)  # Remove old secret first
-        os.environ["JWT_PRIVATE_KEYS"] = json.dumps({
-            "key1": "new_secret_for_rotation_test_12345678901234567890",
-            "legacy": "old_secret_for_rotation_test_12345678901234567890"  # Keep old key
-        })
-        os.environ["JWT_PUBLIC_KEYS"] = json.dumps({
-            "key1": "new_secret_for_rotation_test_12345678901234567890",
-            "legacy": "old_secret_for_rotation_test_12345678901234567890"
-        })
+        os.environ["JWT_PRIVATE_KEYS"] = json.dumps(
+            {
+                "key1": "new_secret_for_rotation_test_12345678901234567890",
+                "legacy": "old_secret_for_rotation_test_12345678901234567890",  # Keep old key
+            }
+        )
+        os.environ["JWT_PUBLIC_KEYS"] = json.dumps(
+            {
+                "key1": "new_secret_for_rotation_test_12345678901234567890",
+                "legacy": "old_secret_for_rotation_test_12345678901234567890",
+            }
+        )
 
         # Should still be able to decode old token (uses legacy key)
         decoded = decode_jwt_token(old_token)

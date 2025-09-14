@@ -126,16 +126,25 @@ class TestPhase5DocsAndTests:
 
             async def stream_response():
                 # Route event
-                yield "data: " + json.dumps(
-                    {"event": "route", "data": {"vendor": "openai", "model": "gpt-4o"}}
-                ) + "\n\n"
+                yield (
+                    "data: "
+                    + json.dumps(
+                        {
+                            "event": "route",
+                            "data": {"vendor": "openai", "model": "gpt-4o"},
+                        }
+                    )
+                    + "\n\n"
+                )
 
                 # Delta events
                 deltas = ["Hello", " world", " from", " AI!"]
                 for delta in deltas:
-                    yield "data: " + json.dumps(
-                        {"event": "delta", "data": {"text": delta}}
-                    ) + "\n\n"
+                    yield (
+                        "data: "
+                        + json.dumps({"event": "delta", "data": {"text": delta}})
+                        + "\n\n"
+                    )
                     await asyncio.sleep(0.01)
 
                 # Done event

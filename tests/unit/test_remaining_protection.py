@@ -7,6 +7,7 @@ Tests endpoints:
 - /v1/status/preflight and /v1/status/rate_limit → public (no auth, no CSRF)
 - /v1/status/observability, /v1/status/vector_store, /v1/status/integrations → require_admin
 """
+
 import os
 import time
 from unittest.mock import patch
@@ -65,7 +66,7 @@ def auth_headers():
     token = _create_jwt_token(["user:read"])
     return {
         "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": "test_csrf_token_1234567890123456"
+        "X-CSRF-Token": "test_csrf_token_1234567890123456",
     }
 
 
@@ -75,7 +76,7 @@ def admin_auth_headers():
     token = _create_jwt_token(["admin"])
     return {
         "Authorization": f"Bearer {token}",
-        "X-CSRF-Token": "admin_csrf_token_1234567890123456"
+        "X-CSRF-Token": "admin_csrf_token_1234567890123456",
     }
 
 
@@ -96,7 +97,9 @@ class TestCareEndpoints:
 
     def test_care_sessions_post_requires_auth_and_csrf(self, client):
         """POST /v1/care/sessions requires auth + CSRF."""
-        response = client.post("/v1/care/sessions", json={"id": "test", "resident_id": "user1"})
+        response = client.post(
+            "/v1/care/sessions", json={"id": "test", "resident_id": "user1"}
+        )
         assert response.status_code == 401
 
     def test_care_sessions_post_requires_csrf(self, client, auth_headers):
@@ -106,7 +109,7 @@ class TestCareEndpoints:
         response = client.post(
             "/v1/care/sessions",
             json={"id": "test", "resident_id": "user1"},
-            headers=headers_without_csrf
+            headers=headers_without_csrf,
         )
         assert response.status_code == 403
 
@@ -116,7 +119,7 @@ class TestCareEndpoints:
             response = client.post(
                 "/v1/care/sessions",
                 json={"id": "test", "resident_id": "user1"},
-                headers=auth_headers
+                headers=auth_headers,
             )
             assert response.status_code == 200
 
@@ -131,7 +134,7 @@ class TestCareEndpoints:
             response = client.patch(
                 "/v1/care/sessions/test123",
                 json={"status": "updated"},
-                headers=auth_headers
+                headers=auth_headers,
             )
             assert response.status_code == 200
 
@@ -197,8 +200,12 @@ class TestStatusEndpoints:
     def test_status_observability_with_admin(self, client, admin_auth_headers):
         """GET /v1/status/observability works with admin auth."""
         with patch("app.observability.get_ask_error_rate_by_backend", return_value={}):
-            with patch("app.observability.get_ask_latency_p95_by_backend", return_value={}):
-                response = client.get("/v1/status/observability", headers=admin_auth_headers)
+            with patch(
+                "app.observability.get_ask_latency_p95_by_backend", return_value={}
+            ):
+                response = client.get(
+                    "/v1/status/observability", headers=admin_auth_headers
+                )
                 assert response.status_code == 200
 
     def test_status_vector_store_requires_auth(self, client):
@@ -230,7 +237,10 @@ class TestStatusEndpoints:
 
     def test_status_integrations_with_admin(self, client, admin_auth_headers):
         """GET /v1/status/integrations works with admin auth."""
-        with patch("app.status.integrations_status", return_value={"spotify": {"connected": True}}):
+        with patch(
+            "app.status.integrations_status",
+            return_value={"spotify": {"connected": True}},
+        ):
             response = client.get("/v1/status/integrations", headers=admin_auth_headers)
             assert response.status_code == 200
             data = response.json()

@@ -35,9 +35,7 @@ def test_classic_login_sets_cookies_on_final_response(monkeypatch):
     client.post(
         "/v1/register", json={"username": "classic_user", "password": "secret123"}
     )
-    r = client.post(
-        "/v1/auth/login?username=classic_user"
-    )
+    r = client.post("/v1/auth/login?username=classic_user")
     assert r.status_code in (HTTPStatus.OK, HTTPStatus.FOUND)
     set_cookies = r.headers.get_list("set-cookie")
     assert set_cookies, "No Set-Cookie on login response"
@@ -89,7 +87,11 @@ def test_oauth_callback_sets_cookies_on_callback_response_single_hop(monkeypatch
 
     r = client.get("/v1/auth/google/callback?code=fake&state=xyz")
     # First hop sets cookies and 302s
-    assert r.status_code in (HTTPStatus.FOUND, HTTPStatus.TEMPORARY_REDIRECT, HTTPStatus.SEE_OTHER)
+    assert r.status_code in (
+        HTTPStatus.FOUND,
+        HTTPStatus.TEMPORARY_REDIRECT,
+        HTTPStatus.SEE_OTHER,
+    )
     set_cookies = r.headers.get_list("set-cookie")
     assert set_cookies, "OAuth callback did not set cookies on the response it returned"
     _assert_auth_cookies(set_cookies)

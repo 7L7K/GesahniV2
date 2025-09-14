@@ -156,4 +156,3 @@ def sanitize_next_path(raw: str | None) -> str:
     except Exception as e:
         logger.error("Error sanitizing redirect path %s: %s", raw, e)
         return DEFAULT_REDIRECT
-

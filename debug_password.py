@@ -8,8 +8,10 @@ from passlib.context import CryptContext
 
 _pwd = CryptContext(schemes=["bcrypt", "pbkdf2_sha256"], deprecated="auto")
 
+
 def _db_path() -> str:
     return os.getenv("USERS_DB", "users.db")
+
 
 async def test_password_validation():
     print("=== Password Validation Debug ===")
@@ -36,7 +38,8 @@ async def test_password_validation():
         try:
             async with aiosqlite.connect(_db_path()) as db:
                 async with db.execute(
-                    "SELECT password_hash FROM auth_users WHERE username=?", (username.lower(),)
+                    "SELECT password_hash FROM auth_users WHERE username=?",
+                    (username.lower(),),
                 ) as cur:
                     row = await cur.fetchone()
 
@@ -49,7 +52,9 @@ async def test_password_validation():
         except Exception as e:
             print(f"  ✗ Error: {e}")
             import traceback
+
             traceback.print_exc()
+
 
 if __name__ == "__main__":
     asyncio.run(test_password_validation())

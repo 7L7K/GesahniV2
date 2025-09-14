@@ -5,6 +5,7 @@ This test verifies that:
 2. There is exactly one handler for GET /v1/whoami
 3. GET /whoami redirects to /v1/whoami with 308 status
 """
+
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.testclient import TestClient
@@ -32,18 +33,21 @@ def test_me_whoami_deduplication():
 
         # Mock /v1/me router
         me_router = APIRouter()
+
         @me_router.get("/me")
         def mock_me():
             return {"user_id": None}
 
         # Mock /v1/auth router with whoami
         auth_router = APIRouter()
+
         @auth_router.get("/whoami")
         def mock_whoami():
             return {"authenticated": False}
 
         # Mock compat router with redirect
         compat_router = APIRouter(include_in_schema=False)
+
         @compat_router.get("/whoami")
         def mock_whoami_redirect():
             return RedirectResponse(url="/v1/whoami", status_code=308)
@@ -84,18 +88,21 @@ def test_single_handler_verification():
 
     # /v1/me router
     me_router = APIRouter()
+
     @me_router.get("/me")
     def me_endpoint():
         return {"endpoint": "me"}
 
     # /v1/auth router with /whoami
     auth_router = APIRouter()
+
     @auth_router.get("/whoami")
     def whoami_endpoint():
         return {"endpoint": "whoami", "authenticated": False}
 
     # Compat router with redirect
     compat_router = APIRouter(include_in_schema=False)
+
     @compat_router.get("/whoami")
     def whoami_redirect():
         return RedirectResponse(url="/v1/whoami", status_code=308)
@@ -106,7 +113,11 @@ def test_single_handler_verification():
     app.include_router(compat_router, prefix="")
 
     # Verify no route collisions by checking all routes exist
-    routes = {f"{list(r.methods)[0]} {r.path}" for r in app.routes if hasattr(r, 'methods') and hasattr(r, 'path')}
+    routes = {
+        f"{list(r.methods)[0]} {r.path}"
+        for r in app.routes
+        if hasattr(r, "methods") and hasattr(r, "path")
+    }
 
     # Should have GET /v1/me, GET /v1/whoami, GET /whoami
     assert "GET /v1/me" in routes
@@ -115,12 +126,16 @@ def test_single_handler_verification():
 
     # Verify exactly the expected routes (no duplicates)
     expected_routes = {"GET /v1/me", "GET /v1/whoami", "GET /whoami"}
-    actual_routes = {f"{list(r.methods)[0]} {r.path}" for r in app.routes if hasattr(r, 'methods') and hasattr(r, 'path')}
+    actual_routes = {
+        f"{list(r.methods)[0]} {r.path}"
+        for r in app.routes
+        if hasattr(r, "methods") and hasattr(r, "path")
+    }
 
     # Check that we don't have unexpected duplicates
     route_counts = {}
     for route in app.routes:
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
+        if hasattr(route, "methods") and hasattr(route, "path"):
             key = f"{list(route.methods)[0]} {route.path}"
             route_counts[key] = route_counts.get(key, 0) + 1
 

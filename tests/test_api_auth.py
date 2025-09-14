@@ -328,10 +328,10 @@ class TestPats:
         client = TestClient(app)
 
         # Mock the database functions to avoid foreign key issues
-        with patch("app.api.auth._ensure_auth") as mock_ensure, patch(
-            "app.api.auth._create_pat"
-        ) as mock_create:
-
+        with (
+            patch("app.api.auth._ensure_auth") as mock_ensure,
+            patch("app.api.auth._create_pat") as mock_create,
+        ):
             mock_ensure.return_value = None
             mock_create.return_value = None
 

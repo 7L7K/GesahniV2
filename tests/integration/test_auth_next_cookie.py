@@ -42,7 +42,9 @@ class TestAuthNextCookieFlow:
         # Simulate OAuth initiation that sets gs_next cookie
         # This would typically happen in OAuth flows before redirecting to auth provider
         response = Response()
-        request = Request(scope={"type": "http", "method": "GET", "path": "/", "headers": []})
+        request = Request(
+            scope={"type": "http", "method": "GET", "path": "/", "headers": []}
+        )
 
         # Set gs_next cookie as would happen in OAuth flow
         set_gs_next_cookie(response, "/dashboard", request)
@@ -57,7 +59,9 @@ class TestAuthNextCookieFlow:
         """Test that gs_next cookie is consumed and cleared after login."""
         # First, simulate setting gs_next cookie (as would happen in OAuth flow)
         response = Response()
-        request = Request(scope={"type": "http", "method": "GET", "path": "/", "headers": []})
+        request = Request(
+            scope={"type": "http", "method": "GET", "path": "/", "headers": []}
+        )
 
         set_gs_next_cookie(response, "/dashboard", request)
         cookie_header = response.headers["set-cookie"]
@@ -70,7 +74,7 @@ class TestAuthNextCookieFlow:
         login_response = self.client.post(
             "/v1/auth/login",
             params={"username": "test_user"},
-            cookies={"gs_next": cookie_value}
+            cookies={"gs_next": cookie_value},
         )
 
         # Login should succeed
@@ -115,7 +119,7 @@ class TestAuthNextCookieFlow:
             "//evil.com/path",
             "/../../../etc/passwd",
             "/login",
-            "/v1/auth/refresh"
+            "/v1/auth/refresh",
         ]
 
         for malicious_path in malicious_paths:
@@ -128,8 +132,16 @@ class TestAuthNextCookieFlow:
             # (cookies, explicit_next, expected_result)
             ({"gs_next": "/dashboard"}, None, "/dashboard"),
             ({"gs_next": "/login"}, None, DEFAULT_FALLBACK),  # Auth path rejected
-            ({"gs_next": "https://evil.com"}, None, DEFAULT_FALLBACK),  # Absolute URL rejected
-            ({"gs_next": "/dashboard"}, "/settings", "/settings"),  # Explicit next takes priority
+            (
+                {"gs_next": "https://evil.com"},
+                None,
+                DEFAULT_FALLBACK,
+            ),  # Absolute URL rejected
+            (
+                {"gs_next": "/dashboard"},
+                "/settings",
+                "/settings",
+            ),  # Explicit next takes priority
             ({}, "/dashboard", "/dashboard"),  # No cookie, use explicit
             ({}, None, DEFAULT_FALLBACK),  # No cookie, no explicit, use fallback
             ({}, "/login", DEFAULT_FALLBACK),  # Explicit auth path rejected
@@ -140,13 +152,17 @@ class TestAuthNextCookieFlow:
             mock_request.cookies = cookies
 
             result = get_safe_redirect_target(mock_request, explicit_next)
-            assert result == expected, f"Failed for cookies={cookies}, next={explicit_next}"
+            assert (
+                result == expected
+            ), f"Failed for cookies={cookies}, next={explicit_next}"
 
     def test_gs_next_cookie_operations_integration(self):
         """Test complete gs_next cookie lifecycle."""
         # Test setting
         response = Response()
-        request = Request(scope={"type": "http", "method": "GET", "path": "/", "headers": []})
+        request = Request(
+            scope={"type": "http", "method": "GET", "path": "/", "headers": []}
+        )
 
         set_gs_next_cookie(response, "/test-target", request)
 
@@ -187,8 +203,7 @@ class TestAuthNextCookieFlow:
         """Test integration with actual app endpoints."""
         # Test that the login endpoint works without gs_next cookie
         response = self.client.post(
-            "/v1/auth/login",
-            params={"username": "integration_test_user"}
+            "/v1/auth/login", params={"username": "integration_test_user"}
         )
         assert response.status_code == 200
 
@@ -199,7 +214,9 @@ class TestAuthNextCookieFlow:
         """Test the complete workflow of setting, using, and clearing gs_next cookie."""
         # Step 1: Set gs_next cookie (OAuth initiation)
         response1 = Response()
-        request1 = Request(scope={"type": "http", "method": "GET", "path": "/", "headers": []})
+        request1 = Request(
+            scope={"type": "http", "method": "GET", "path": "/", "headers": []}
+        )
         set_gs_next_cookie(response1, "/post-login-target", request1)
 
         # Step 2: Simulate having the cookie set for login
@@ -209,7 +226,7 @@ class TestAuthNextCookieFlow:
         login_response = self.client.post(
             "/v1/auth/login",
             params={"username": "workflow_test"},
-            cookies={"gs_next": "/post-login-target"}
+            cookies={"gs_next": "/post-login-target"},
         )
         assert login_response.status_code == 200
 

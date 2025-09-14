@@ -71,7 +71,8 @@ async def test_verify_ws_origin_validation():
 
     # Should close with policy violation code and reason
     websocket.close.assert_called_once_with(
-        code=4403, reason="origin_not_allowed"  # Forbidden - origin not allowed
+        code=4403,
+        reason="origin_not_allowed",  # Forbidden - origin not allowed
     )
 
 

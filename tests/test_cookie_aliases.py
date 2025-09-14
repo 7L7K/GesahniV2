@@ -10,6 +10,7 @@ import pytest
 def generate_test_token():
     """Generate a valid test JWT token"""
     from app.tokens import sign_access_token
+
     return sign_access_token("test_user_123")
 
 
@@ -56,7 +57,13 @@ class TestCookieMigration:
         calls = response.delete_cookie.call_args_list
 
         cookie_names = [call[0][0] for call in calls]  # Extract cookie names
-        expected_cookies = {"access_token", "refresh_token", "gsn_access", "gsn_refresh", "__session"}
+        expected_cookies = {
+            "access_token",
+            "refresh_token",
+            "gsn_access",
+            "gsn_refresh",
+            "__session",
+        }
 
         assert set(cookie_names) == expected_cookies
 
@@ -68,6 +75,7 @@ class TestCookieConfiguration:
         """Test COOKIE_CANON=classic configuration"""
         with patch.dict(os.environ, {"COOKIE_CANON": "classic"}):
             from app.web.cookies import ACCESS_ALIASES, ACCESS_CANON, REFRESH_CANON
+
             assert ACCESS_CANON == "access_token"
             assert REFRESH_CANON == "refresh_token"
             assert "access_token" in ACCESS_ALIASES
@@ -94,6 +102,7 @@ class TestCookieConfiguration:
             import importlib
 
             import app.web.cookies
+
             importlib.reload(app.web.cookies)
             assert app.web.cookies.ACCESS_CANON == "access_token"
             assert app.web.cookies.REFRESH_CANON == "refresh_token"
@@ -138,7 +147,13 @@ class TestCookieFunctions:
         calls = response.delete_cookie.call_args_list
 
         cookie_names = [call[0][0] for call in calls]  # Extract cookie names
-        expected_cookies = {"access_token", "refresh_token", "gsn_access", "gsn_refresh", "__session"}
+        expected_cookies = {
+            "access_token",
+            "refresh_token",
+            "gsn_access",
+            "gsn_refresh",
+            "__session",
+        }
 
         assert set(cookie_names) == expected_cookies
 
@@ -155,7 +170,7 @@ class TestCookieFunctions:
             refresh="refresh_token_value",
             secure=True,
             samesite="Lax",
-            domain=None
+            domain=None,
         )
 
         # Should have called set_cookie for both access and refresh
@@ -164,9 +179,12 @@ class TestCookieFunctions:
         assert len(calls) == 2
 
         # Check cookie names - the function should use canonical names based on current config
-        cookie_names = [call[0][0] for call in calls]  # First positional argument is key
+        cookie_names = [
+            call[0][0] for call in calls
+        ]  # First positional argument is key
         # Should use whatever the current canonical names are
         from app.web.cookies import ACCESS_CANON, REFRESH_CANON
+
         assert ACCESS_CANON in cookie_names
         assert REFRESH_CANON in cookie_names
 

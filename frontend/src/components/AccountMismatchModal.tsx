@@ -27,4 +27,3 @@ export default function AccountMismatchModal({ open, onClose, onReconnect, onDis
     </div>
   );
 }
-

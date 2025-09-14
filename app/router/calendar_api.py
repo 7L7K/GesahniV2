@@ -4,6 +4,7 @@ These wrappers call the canonical calendar router implementations in
 `app.api.calendar` and adapt their return values to the lightweight shapes
 expected by the alias router (dicts/lists rather than Pydantic models).
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -62,5 +63,3 @@ async def todays_events() -> dict[str, Any]:
         return {"events": items}
     except Exception:
         return {"events": []}
-
-

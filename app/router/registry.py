@@ -3,6 +3,7 @@
 This module intentionally avoids importing heavy application modules so it
 can be imported from low-level code without creating circular imports.
 """
+
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -28,6 +29,3 @@ def get_router() -> Router:
     if _router is None:
         raise RuntimeError("Router has not been configured. Call set_router() first.")
     return _router
-
-
-

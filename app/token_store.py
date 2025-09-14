@@ -169,7 +169,9 @@ async def start_cleanup_task() -> None:
                     _local_revoked_families._maybe_cleanup()
                     _local_revoked_access._maybe_cleanup()
 
-                await chaos_token_cleanup_operation("local_storage_cleanup", perform_cleanup)
+                await chaos_token_cleanup_operation(
+                    "local_storage_cleanup", perform_cleanup
+                )
 
                 # Log memory usage for monitoring
                 total_entries = (

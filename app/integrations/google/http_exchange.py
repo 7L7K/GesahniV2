@@ -45,9 +45,17 @@ async def async_token_exchange(
         try:
             r = await client.post(token_url, data=data, headers=headers)
         except (httpx.RequestError, httpx.TimeoutException) as exc:
-            logger.warning("google_token_exchange_failed: network", extra={"meta": {"error": str(exc)}})
+            logger.warning(
+                "google_token_exchange_failed: network",
+                extra={"meta": {"error": str(exc)}},
+            )
             # Map network/timeout to sanitized OAuthError
-            raise OAuthError(code=ERR_OAUTH_EXCHANGE_FAILED, http_status=504, reason="timeout", extra=None)
+            raise OAuthError(
+                code=ERR_OAUTH_EXCHANGE_FAILED,
+                http_status=504,
+                reason="timeout",
+                extra=None,
+            )
 
         # Always avoid logging tokens
         if r.status_code != 200:
@@ -74,10 +82,20 @@ async def async_token_exchange(
             )
 
             if isinstance(err, dict) and err.get("error") == "invalid_grant":
-                raise OAuthError(code=ERR_OAUTH_INVALID_GRANT, http_status=400, reason="invalid_grant", extra=None)
+                raise OAuthError(
+                    code=ERR_OAUTH_INVALID_GRANT,
+                    http_status=400,
+                    reason="invalid_grant",
+                    extra=None,
+                )
 
             # Generic exchange failure
-            raise OAuthError(code=ERR_OAUTH_EXCHANGE_FAILED, http_status=400, reason="exchange_failed", extra=None)
+            raise OAuthError(
+                code=ERR_OAUTH_EXCHANGE_FAILED,
+                http_status=400,
+                reason="exchange_failed",
+                extra=None,
+            )
 
         td = r.json()
         now = int(time.time())
@@ -87,11 +105,17 @@ async def async_token_exchange(
         # Log the full Google response for debugging (with secrets redacted)
         loggable_response = td.copy()
         if "access_token" in loggable_response:
-            loggable_response["access_token"] = f"[REDACTED:{len(loggable_response['access_token'])}chars]"
+            loggable_response["access_token"] = (
+                f"[REDACTED:{len(loggable_response['access_token'])}chars]"
+            )
         if "refresh_token" in loggable_response and loggable_response["refresh_token"]:
-            loggable_response["refresh_token"] = f"[REDACTED:{len(loggable_response['refresh_token'])}chars]"
+            loggable_response["refresh_token"] = (
+                f"[REDACTED:{len(loggable_response['refresh_token'])}chars]"
+            )
         if "id_token" in loggable_response and loggable_response["id_token"]:
-            loggable_response["id_token"] = f"[REDACTED:{len(loggable_response['id_token'])}chars]"
+            loggable_response["id_token"] = (
+                f"[REDACTED:{len(loggable_response['id_token'])}chars]"
+            )
 
         logger.info(
             "Google OAuth token exchange successful",
@@ -110,5 +134,3 @@ async def async_token_exchange(
         )
 
         return td
-
-

@@ -60,22 +60,27 @@ def _get_package_versions() -> dict[str, str]:
         try:
             if package == "fastapi":
                 import fastapi
+
                 versions[package] = fastapi.__version__
             elif package == "uvicorn":
                 import uvicorn
+
                 versions[package] = uvicorn.__version__
             elif package == "pydantic":
                 import pydantic
+
                 versions[package] = pydantic.VERSION
             elif package == "qdrant_client":
                 try:
                     import qdrant_client  # type: ignore
+
                     versions[package] = getattr(qdrant_client, "__version__", "unknown")
                 except ImportError:
                     versions[package] = "not installed"
             elif package == "openai":
                 try:
                     import openai  # type: ignore
+
                     versions[package] = openai.__version__
                 except ImportError:
                     versions[package] = "not installed"
@@ -104,31 +109,42 @@ def _get_middleware_info(app: FastAPI) -> list[dict[str, Any]]:
     """Extract middleware information from FastAPI app."""
     middleware_info = []
     for middleware in app.user_middleware:
-        middleware_info.append({
-            "class_name": middleware.cls.__name__,
-            "options": getattr(middleware, "options", {}),
-        })
+        middleware_info.append(
+            {
+                "class_name": middleware.cls.__name__,
+                "options": getattr(middleware, "options", {}),
+            }
+        )
     return middleware_info
 
 
 def _route_dump(app) -> List[Dict[str, Any]]:
     out = []
     for r in app.routes:
-        out.append({
-            "path": getattr(r, "path", None),
-            "name": getattr(r, "name", None),
-            "methods": sorted(getattr(r, "methods", []) or []),
-            "endpoint": getattr(getattr(r, "endpoint", None), "__name__", None),
-            "include_in_schema": getattr(r, "include_in_schema", None),
-        })
+        out.append(
+            {
+                "path": getattr(r, "path", None),
+                "name": getattr(r, "name", None),
+                "methods": sorted(getattr(r, "methods", []) or []),
+                "endpoint": getattr(getattr(r, "endpoint", None), "__name__", None),
+                "include_in_schema": getattr(r, "include_in_schema", None),
+            }
+        )
     out.sort(key=lambda x: (x.get("path") or "", ",".join(x.get("methods") or [])))
     return out
+
 
 def _middleware_dump(app) -> List[Dict[str, Any]]:
     out = []
     for m in getattr(app, "user_middleware", []):
-        out.append({"cls": getattr(m, "cls", type(m)).__name__, "options": getattr(m, "options", {})})
+        out.append(
+            {
+                "cls": getattr(m, "cls", type(m)).__name__,
+                "options": getattr(m, "options", {}),
+            }
+        )
     return out
+
 
 def _module_versions(names: List[str]) -> Dict[str, str]:
     out: Dict[str, str] = {}
@@ -140,6 +156,7 @@ def _module_versions(names: List[str]) -> Dict[str, str]:
         except Exception:
             out[n] = "not-importable"
     return out
+
 
 def probe(app: FastAPI) -> dict[str, Any]:
     """Startup wiring introspection and import/middleware visibility probe.

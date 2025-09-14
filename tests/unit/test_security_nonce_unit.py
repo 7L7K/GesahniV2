@@ -1,6 +1,6 @@
 import pytest
-from starlette.requests import Request
 from fastapi import HTTPException
+from starlette.requests import Request
 
 
 @pytest.mark.asyncio

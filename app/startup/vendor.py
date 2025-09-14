@@ -21,7 +21,9 @@ import os
 logger = logging.getLogger(__name__)
 
 
-async def check_vendor_health_gated(vendor: str, *, timeout: int = 10) -> dict[str, str]:
+async def check_vendor_health_gated(
+    vendor: str, *, timeout: int = 10
+) -> dict[str, str]:
     """Perform a gated health check for the named vendor.
 
     The check runs only when ``STARTUP_VENDOR_PINGS`` is truthy. Returns a dict
@@ -39,9 +41,12 @@ async def check_vendor_health_gated(vendor: str, *, timeout: int = 10) -> dict[s
     Returns:
         A dictionary with at least a ``status`` key describing the result.
     """
-    vendor_pings_enabled = (
-        os.getenv("STARTUP_VENDOR_PINGS", "0").strip().lower() in {"1", "true", "yes", "on"}
-    )
+    vendor_pings_enabled = os.getenv("STARTUP_VENDOR_PINGS", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     if not vendor_pings_enabled:
         logger.debug("Startup vendor pings disabled; skipping %s health check", vendor)
@@ -113,10 +118,21 @@ async def _check_openai_health(timeout: int) -> dict[str, str]:
             )
 
             if text and len(text.strip()) > 0:
-                logger.info("vendor_health vendor=openai ok=true reason=successful_ping model=%s", model)
-                return {"status": "healthy", "model": model, "response_length": len(text.strip())}
+                logger.info(
+                    "vendor_health vendor=openai ok=true reason=successful_ping model=%s",
+                    model,
+                )
+                return {
+                    "status": "healthy",
+                    "model": model,
+                    "response_length": len(text.strip()),
+                }
             else:
-                return {"status": "unhealthy", "reason": "empty_response", "model": model}
+                return {
+                    "status": "unhealthy",
+                    "reason": "empty_response",
+                    "model": model,
+                }
 
         except Exception as e:
             error_type = type(e).__name__
@@ -180,7 +196,12 @@ def should_perform_startup_checks() -> bool:
     This helper centralizes the gating flag so callers can reason about costs
     of enabling pings in CI or developer workflows.
     """
-    return os.getenv("STARTUP_VENDOR_PINGS", "0").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("STARTUP_VENDOR_PINGS", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def get_startup_check_timeout() -> int:
@@ -192,5 +213,3 @@ def get_startup_check_timeout() -> int:
         return int(os.getenv("STARTUP_CHECK_TIMEOUT", "10"))
     except ValueError:
         return 10
-
-

@@ -42,6 +42,7 @@ def log_debug_routing_info(vendor: str, model: str, reason: str) -> None:
     """Log debug routing information if debug mode is enabled."""
     if is_debug_routing_enabled():
         import logging
+
         logger = logging.getLogger(__name__)
         logger.debug(
             f"Debug routing: vendor={vendor}, model={model}, reason={reason}, "

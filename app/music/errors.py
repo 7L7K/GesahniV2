@@ -24,5 +24,3 @@ class NotFound(MusicError):
 
 class PolicyRejected(MusicError):
     pass
-
-

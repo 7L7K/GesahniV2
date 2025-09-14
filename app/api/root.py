@@ -20,17 +20,18 @@ def root():
 @router.get("/api", include_in_schema=False)
 def api_info():
     """API info endpoint - provides links to available endpoints."""
-    return JSONResponse({
-        "ok": True,
-        "message": "GesahniV2 API",
-        "version": "2.0",
-        "docs": "/docs",
-        "health": "/v1/health",
-        "endpoints": {
-            "health": "/v1/health",
+    return JSONResponse(
+        {
+            "ok": True,
+            "message": "GesahniV2 API",
+            "version": "2.0",
             "docs": "/docs",
-            "redoc": "/redoc",
-            "openapi": "/openapi.json"
+            "health": "/v1/health",
+            "endpoints": {
+                "health": "/v1/health",
+                "docs": "/docs",
+                "redoc": "/redoc",
+                "openapi": "/openapi.json",
+            },
         }
-    })
-
+    )

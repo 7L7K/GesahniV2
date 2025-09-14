@@ -4,7 +4,9 @@ import datetime
 from typing import Any
 
 
-def is_quiet_hours(now: datetime.datetime | None = None, start_hour: int = 22, end_hour: int = 7) -> bool:
+def is_quiet_hours(
+    now: datetime.datetime | None = None, start_hour: int = 22, end_hour: int = 7
+) -> bool:
     now = now or datetime.datetime.now()
     h = now.hour
     if start_hour <= end_hour:
@@ -25,5 +27,3 @@ def select_provider(preferred: str | None, available: list[str]) -> str | None:
         if choice in available:
             return choice
     return available[0] if available else None
-
-

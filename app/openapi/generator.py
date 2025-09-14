@@ -3,6 +3,7 @@
 This module handles OpenAPI schema generation without importing any
 router modules that could create circular dependencies.
 """
+
 from typing import Any
 
 

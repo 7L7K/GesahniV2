@@ -505,4 +505,3 @@ tests/unit/test_url_helpers.py: 51
 tests/unit/test_websocket_origin_validation_unit.py: 8
 tests/unit/test_ws_helper_unit.py: 7
 tests/unit/test_ws_origin_check.py: 2
-

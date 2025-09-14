@@ -33,13 +33,18 @@ async def mint_access(request: MintAccessRequest, response: Response):
     # Create access token using centralized configuration
     access_token = sign_access_token(
         user_id,
-        extra={"ttl_override": ttl_minutes}  # Custom TTL for dev testing
+        extra={"ttl_override": ttl_minutes},  # Custom TTL for dev testing
     )
 
     # Create session
     session_id = await sessions_store.create_session(user_id)
 
     # Set cookies
-    set_auth_cookies(response, access=access_token, session_id=session_id, access_ttl=ttl_minutes*60)
+    set_auth_cookies(
+        response,
+        access=access_token,
+        session_id=session_id,
+        access_ttl=ttl_minutes * 60,
+    )
 
     return Response(status_code=204)

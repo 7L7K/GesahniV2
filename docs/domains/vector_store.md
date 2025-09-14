@@ -217,7 +217,7 @@ ranked = sorted(filtered, key=lambda x: x.score, reverse=True)
 # Dense vector search
 dense_results = dense_search(query_vector, k=k_dense)
 
-# Sparse text search  
+# Sparse text search
 sparse_results = sparse_search(query_text, k=k_sparse)
 
 # Combine with reciprocal rank fusion

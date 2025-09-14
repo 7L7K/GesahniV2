@@ -1,312 +1,301 @@
 {
-    "title": "Authentication Monitoring",
-    "uid": "auth-monitoring",
-    "version": 1,
-    "panels": [
+  "title": "Authentication Monitoring",
+  "uid": "auth-monitoring",
+  "version": 1,
+  "panels": [
+    {
+      "title": "Whoami Calls During Boot",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
         {
-            "title": "Whoami Calls During Boot",
-            "type": "stat",
-            "gridPos": {
-                "x": 0,
-                "y": 0,
-                "w": 6,
-                "h": 4
-            },
-            "targets": [
-                {
-                    "expr": "sum(whoami_calls_total{boot_phase=\"true\"})",
-                    "legendFormat": "Whoami calls during boot"
-                }
-            ],
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "yellow",
-                                "value": 1
-                            },
-                            {
-                                "color": "red",
-                                "value": 2
-                            }
-                        ]
-                    }
-                }
-            },
-            "alert": {
-                "name": "Multiple whoami calls during boot",
-                "message": "More than 1 whoami call detected during boot phase (first 30 seconds)",
-                "conditions": [
-                    {
-                        "evaluator": {
-                            "type": "gt",
-                            "params": [
-                                1
-                            ]
-                        },
-                        "operator": {
-                            "type": "and"
-                        },
-                        "query": {
-                            "params": [
-                                "A",
-                                "5m",
-                                "now"
-                            ]
-                        },
-                        "reducer": {
-                            "type": "last",
-                            "params": []
-                        },
-                        "type": "query"
-                    }
-                ],
-                "frequency": "1m",
-                "handler": 1,
-                "noDataState": "no_data",
-                "notifications": []
-            }
-        },
-        {
-            "title": "401 Errors During Boot",
-            "type": "stat",
-            "gridPos": {
-                "x": 6,
-                "y": 0,
-                "w": 6,
-                "h": 4
-            },
-            "targets": [
-                {
-                    "expr": "sum(privileged_calls_blocked_total) by (reason)",
-                    "legendFormat": "{{reason}}"
-                }
-            ],
-            "fieldConfig": {
-                "defaults": {
-                    "color": {
-                        "mode": "thresholds"
-                    },
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "green",
-                                "value": null
-                            },
-                            {
-                                "color": "red",
-                                "value": 1
-                            }
-                        ]
-                    }
-                }
-            },
-            "alert": {
-                "name": "401 errors during boot",
-                "message": "401 errors detected during boot phase",
-                "conditions": [
-                    {
-                        "evaluator": {
-                            "type": "gt",
-                            "params": [
-                                0
-                            ]
-                        },
-                        "operator": {
-                            "type": "and"
-                        },
-                        "query": {
-                            "params": [
-                                "A",
-                                "5m",
-                                "now"
-                            ]
-                        },
-                        "reducer": {
-                            "type": "last",
-                            "params": []
-                        },
-                        "type": "query"
-                    }
-                ],
-                "frequency": "1m",
-                "handler": 1,
-                "noDataState": "no_data",
-                "notifications": []
-            }
-        },
-        {
-            "title": "Whoami Calls by Status",
-            "type": "timeseries",
-            "gridPos": {
-                "x": 0,
-                "y": 4,
-                "w": 12,
-                "h": 8
-            },
-            "targets": [
-                {
-                    "expr": "sum(rate(whoami_calls_total[5m])) by (status, source)",
-                    "legendFormat": "{{status}} ({{source}})"
-                }
-            ]
-        },
-        {
-            "title": "Auth Finish Calls",
-            "type": "timeseries",
-            "gridPos": {
-                "x": 0,
-                "y": 12,
-                "w": 12,
-                "h": 8
-            },
-            "targets": [
-                {
-                    "expr": "sum(rate(finish_calls_total[5m])) by (method, reason)",
-                    "legendFormat": "{{method}} - {{reason}}"
-                }
-            ]
-        },
-        {
-            "title": "Privileged Calls Blocked",
-            "type": "timeseries",
-            "gridPos": {
-                "x": 0,
-                "y": 20,
-                "w": 12,
-                "h": 8
-            },
-            "targets": [
-                {
-                    "expr": "sum(rate(privileged_calls_blocked_total[5m])) by (reason)",
-                    "legendFormat": "{{reason}}"
-                }
-            ]
-        },
-        {
-            "title": "WebSocket Reconnection Attempts",
-            "type": "timeseries",
-            "gridPos": {
-                "x": 0,
-                "y": 28,
-                "w": 12,
-                "h": 8
-            },
-            "targets": [
-                {
-                    "expr": "sum(rate(ws_reconnect_attempts_total[5m])) by (endpoint, reason)",
-                    "legendFormat": "{{endpoint}} - {{reason}}"
-                }
-            ]
-        },
-        {
-            "title": "Auth Event Duration",
-            "type": "heatmap",
-            "gridPos": {
-                "x": 12,
-                "y": 0,
-                "w": 12,
-                "h": 8
-            },
-            "targets": [
-                {
-                    "expr": "sum(rate(auth_event_duration_seconds_bucket[5m])) by (le, event_type)",
-                    "legendFormat": "{{event_type}}"
-                }
-            ]
-        },
-        {
-            "title": "Authentication Success Rate",
-            "type": "gauge",
-            "gridPos": {
-                "x": 12,
-                "y": 8,
-                "w": 6,
-                "h": 4
-            },
-            "targets": [
-                {
-                    "expr": "sum(rate(whoami_calls_total{status=\"success\"}[5m])) / sum(rate(whoami_calls_total[5m])) * 100",
-                    "legendFormat": "Success Rate %"
-                }
-            ],
-            "fieldConfig": {
-                "defaults": {
-                    "min": 0,
-                    "max": 100,
-                    "unit": "percent",
-                    "thresholds": {
-                        "steps": [
-                            {
-                                "color": "red",
-                                "value": null
-                            },
-                            {
-                                "color": "yellow",
-                                "value": 95
-                            },
-                            {
-                                "color": "green",
-                                "value": 99
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        {
-            "title": "Total Auth Events",
-            "type": "stat",
-            "gridPos": {
-                "x": 18,
-                "y": 8,
-                "w": 6,
-                "h": 4
-            },
-            "targets": [
-                {
-                    "expr": "sum(whoami_calls_total) + sum(finish_calls_total)",
-                    "legendFormat": "Total Auth Events"
-                }
-            ]
+          "expr": "sum(whoami_calls_total{boot_phase=\"true\"})",
+          "legendFormat": "Whoami calls during boot"
         }
-    ],
-    "time": {
-        "from": "now-1h",
-        "to": "now"
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          }
+        }
+      },
+      "alert": {
+        "name": "Multiple whoami calls during boot",
+        "message": "More than 1 whoami call detected during boot phase (first 30 seconds)",
+        "conditions": [
+          {
+            "evaluator": {
+              "type": "gt",
+              "params": [
+                1
+              ]
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "type": "last",
+              "params": []
+            },
+            "type": "query"
+          }
+        ],
+        "frequency": "1m",
+        "handler": 1,
+        "noDataState": "no_data",
+        "notifications": []
+      }
     },
-    "timepicker": {},
-    "templating": {
-        "list": []
+    {
+      "title": "401 Errors During Boot",
+      "type": "stat",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(privileged_calls_blocked_total) by (reason)",
+          "legendFormat": "{{reason}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        }
+      },
+      "alert": {
+        "name": "401 errors during boot",
+        "message": "401 errors detected during boot phase",
+        "conditions": [
+          {
+            "evaluator": {
+              "type": "gt",
+              "params": [
+                0
+              ]
+            },
+            "operator": {
+              "type": "and"
+            },
+            "query": {
+              "params": [
+                "A",
+                "5m",
+                "now"
+              ]
+            },
+            "reducer": {
+              "type": "last",
+              "params": []
+            },
+            "type": "query"
+          }
+        ],
+        "frequency": "1m",
+        "handler": 1,
+        "noDataState": "no_data",
+        "notifications": []
+      }
     },
-    "annotations": {
-        "list": []
+    {
+      "title": "Whoami Calls by Status",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(whoami_calls_total[5m])) by (status, source)",
+          "legendFormat": "{{status}} ({{source}})"
+        }
+      ]
     },
-    "refresh": "30s",
-    "schemaVersion": 27,
-    "style": "dark",
-    "tags": [
-        "authentication",
-        "monitoring"
-    ],
-    "templating": {
-        "list": []
+    {
+      "title": "Auth Finish Calls",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 12,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(finish_calls_total[5m])) by (method, reason)",
+          "legendFormat": "{{method}} - {{reason}}"
+        }
+      ]
     },
-    "time": {
-        "from": "now-1h",
-        "to": "now"
+    {
+      "title": "Privileged Calls Blocked",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 20,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(privileged_calls_blocked_total[5m])) by (reason)",
+          "legendFormat": "{{reason}}"
+        }
+      ]
     },
-    "timepicker": {},
-    "timezone": "",
-    "title": "Authentication Monitoring",
-    "uid": "auth-monitoring",
-    "version": 1
+    {
+      "title": "WebSocket Reconnection Attempts",
+      "type": "timeseries",
+      "gridPos": {
+        "x": 0,
+        "y": 28,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(ws_reconnect_attempts_total[5m])) by (endpoint, reason)",
+          "legendFormat": "{{endpoint}} - {{reason}}"
+        }
+      ]
+    },
+    {
+      "title": "Auth Event Duration",
+      "type": "heatmap",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(auth_event_duration_seconds_bucket[5m])) by (le, event_type)",
+          "legendFormat": "{{event_type}}"
+        }
+      ]
+    },
+    {
+      "title": "Authentication Success Rate",
+      "type": "gauge",
+      "gridPos": {
+        "x": 12,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(rate(whoami_calls_total{status=\"success\"}[5m])) / sum(rate(whoami_calls_total[5m])) * 100",
+          "legendFormat": "Success Rate %"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "max": 100,
+          "unit": "percent",
+          "thresholds": {
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 95
+              },
+              {
+                "color": "green",
+                "value": 99
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Total Auth Events",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 8,
+        "w": 6,
+        "h": 4
+      },
+      "targets": [
+        {
+          "expr": "sum(whoami_calls_total) + sum(finish_calls_total)",
+          "legendFormat": "Total Auth Events"
+        }
+      ]
+    }
+  ],
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "refresh": "30s",
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": [
+    "authentication",
+    "monitoring"
+  ],
+  "timezone": ""
 }

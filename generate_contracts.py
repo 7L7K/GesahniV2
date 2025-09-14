@@ -104,7 +104,9 @@ def generate_dev_spotify_contract():
     schema = get_schema(client)
 
     contracts_dir = Path(__file__).parent / "contracts"
-    save_schema(schema, contracts_dir / "openapi.dev.spotify.json", "dev + Spotify contract")
+    save_schema(
+        schema, contracts_dir / "openapi.dev.spotify.json", "dev + Spotify contract"
+    )
 
     # Clean up env
     os.environ.pop("SPOTIFY_ENABLED", None)
@@ -126,7 +128,9 @@ def generate_prod_contract():
     schema = get_schema(client)
 
     contracts_dir = Path(__file__).parent / "contracts"
-    save_schema(schema, contracts_dir / "openapi.prod.min.json", "prod minimal contract")
+    save_schema(
+        schema, contracts_dir / "openapi.prod.min.json", "prod minimal contract"
+    )
 
     # Clean up env
     os.environ.pop("ENV", None)

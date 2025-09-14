@@ -72,8 +72,10 @@ from ..deps.user import get_current_user_id
 
 # Use unified Spotify client that reads/writes tokens via auth_store_tokens
 from ..integrations.spotify.client import SpotifyAuthError, SpotifyClient
-from ..models.music_state import MusicVibe, load_state as load_state_memory, save_state as save_state_memory
-from ..music.store import get_music_session, save_music_state, load_music_state
+from ..models.music_state import MusicVibe
+from ..models.music_state import load_state as load_state_memory
+from ..models.music_state import save_state as save_state_memory
+from ..music.store import get_music_session, load_music_state, save_music_state
 
 router = APIRouter(prefix="", tags=["Music"])  # rate limit applied selectively in main
 
@@ -81,6 +83,7 @@ router = APIRouter(prefix="", tags=["Music"])  # rate limit applied selectively 
 # ============================================================================
 # MUSIC STATE PERSISTENCE WRAPPERS
 # ============================================================================
+
 
 async def load_state(user_id: str) -> MusicState:
     """Load music state, preferring database but falling back to memory."""
@@ -90,6 +93,7 @@ async def load_state(user_id: str) -> MusicState:
         if db_state:
             # Convert dict back to MusicState object
             from ..models.music_state import MusicState
+
             vibe_data = db_state.get("vibe", {})
             state = MusicState(
                 vibe=MusicVibe(

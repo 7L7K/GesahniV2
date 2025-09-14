@@ -63,6 +63,7 @@ async def apple_start(request: Request) -> Response:
     # redirected to safe, same-origin application pages after OAuth completion.
     if request.query_params.get("next"):
         from ..redirect_utils import sanitize_redirect_path, set_gs_next_cookie
+
         sanitized_next = sanitize_redirect_path(next_url, "/", request)
         set_gs_next_cookie(resp, sanitized_next, request)
     # Generate a random state and set short-lived cookies to validate callback and redirect target
@@ -90,7 +91,14 @@ async def apple_start(request: Request) -> Response:
     # Set OAuth state cookies using centralized cookie surface
     from ..web.cookies import set_oauth_state_cookies
 
-    set_oauth_state_cookies(resp=resp, state=state, next_url=next_url, request=request, ttl=600, provider="oauth")
+    set_oauth_state_cookies(
+        resp=resp,
+        state=state,
+        next_url=next_url,
+        request=request,
+        ttl=600,
+        provider="oauth",
+    )
     return resp
 
 
@@ -213,11 +221,13 @@ async def apple_callback(request: Request, response: Response) -> Response:
 
     # Use get_safe_redirect_target for gs_next cookie priority
     from ..redirect_utils import get_safe_redirect_target
+
     next_url = get_safe_redirect_target(request, fallback="/")
 
     # Sample cookie gauge for observability
     try:
         from ..metrics import AUTH_REDIRECT_COOKIE_IN_USE
+
         gs_next_present = get_gs_next_cookie(request) is not None
         AUTH_REDIRECT_COOKIE_IN_USE.set(1 if gs_next_present else 0)
     except Exception:

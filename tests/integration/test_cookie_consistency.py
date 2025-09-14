@@ -323,7 +323,6 @@ class TestCookieConsistency:
         """Test that dev mode correctly sets Secure=False for HTTP."""
         # Test with dev mode enabled
         with patch.dict("os.environ", {"DEV_MODE": "1"}):
-
             response = client.post(
                 "/v1/auth/login?username=testuser_dev_mode",
                 headers={"X-CSRF-Token": "test"},
@@ -349,7 +348,6 @@ class TestCookieConsistency:
         """Test that production correctly sets Secure=True for HTTPS."""
         # Mock HTTPS request
         with patch("app.cookie_config._get_scheme", return_value="https"):
-
             response = client.post(
                 "/v1/auth/login?username=testuser_prod_mode",
                 headers={"X-CSRF-Token": "test"},

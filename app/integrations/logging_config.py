@@ -13,6 +13,7 @@ def get_trace_id_hex() -> str | None:
     """Get current trace ID for log correlation."""
     try:
         from .otel_utils import get_trace_id_hex
+
         return get_trace_id_hex()
     except Exception:
         return None

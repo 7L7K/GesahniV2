@@ -34,4 +34,3 @@ test.describe('Google service toggles', () => {
     await expect(page.locator('text=Account Mismatch')).toBeVisible({ timeout: 3000 });
   });
 });
-

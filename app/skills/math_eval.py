@@ -32,7 +32,7 @@ def _eval_node(node: ast.AST) -> Any:
         if isinstance(node.op, ast.Div):
             return left / right
         if isinstance(node.op, ast.Pow):
-            return left ** right
+            return left**right
         if isinstance(node.op, ast.Mod):
             return left % right
         raise EvalError("unsupported binary operator")
@@ -125,7 +125,9 @@ def evaluate_expr(expr: str) -> tuple[Any, str]:
     try:
         import re
 
-        expr = re.sub(r"(?P<pct>\d+(?:\.\d+)?)\s*%", lambda m: f"(({m.group('pct')})/100.0)", expr)
+        expr = re.sub(
+            r"(?P<pct>\d+(?:\.\d+)?)\s*%", lambda m: f"(({m.group('pct')})/100.0)", expr
+        )
     except Exception:
         pass
 
@@ -180,5 +182,3 @@ def evaluate_expr(expr: str) -> tuple[Any, str]:
 
 
 __all__ = ["evaluate_expr", "EvalError", "EPS"]
-
-

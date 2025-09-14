@@ -27,12 +27,17 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Check route coverage")
-    parser.add_argument("--fail-on-missing", action="store_true",
-                       help="Exit with non-zero code if routes are uncovered")
-    parser.add_argument("--verbose", "-v", action="store_true",
-                       help="Show detailed coverage report")
-    parser.add_argument("--json", action="store_true",
-                       help="Output coverage report as JSON")
+    parser.add_argument(
+        "--fail-on-missing",
+        action="store_true",
+        help="Exit with non-zero code if routes are uncovered",
+    )
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="Show detailed coverage report"
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Output coverage report as JSON"
+    )
 
     args = parser.parse_args()
 
@@ -48,20 +53,20 @@ def main():
         print(f"Uncovered routes: {report['uncovered_routes']}")
         print(f"Coverage: {report['coverage_percentage']:.1f}%")
 
-        if args.verbose and report['uncovered']:
+        if args.verbose and report["uncovered"]:
             print("\nUncovered routes:")
-            for method, path in report['uncovered']:
+            for method, path in report["uncovered"]:
                 print(f"  {method}: {path}")
 
             print("\nCovered routes:")
-            for method, path in report['covered']:
+            for method, path in report["covered"]:
                 print(f"  {method}: {path}")
 
     # Exit with failure if requested and routes are uncovered
-    if args.fail_on_missing and report['uncovered_routes'] > 0:
+    if args.fail_on_missing and report["uncovered_routes"] > 0:
         print(f"\n❌ FAIL: {report['uncovered_routes']} routes are uncovered")
         sys.exit(1)
-    elif report['uncovered_routes'] == 0:
+    elif report["uncovered_routes"] == 0:
         print("\n✅ SUCCESS: All routes are covered!")
         sys.exit(0)
     else:

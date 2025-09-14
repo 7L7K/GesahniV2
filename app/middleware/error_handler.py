@@ -56,13 +56,23 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
             # Extract details from the translated exception
             status_code = translated_exc.status_code
             detail = getattr(translated_exc, "detail", {})
-            code = detail.get("code", "internal_error") if isinstance(detail, dict) else "internal_error"
-            message = detail.get("message", "Internal error") if isinstance(detail, dict) else "Internal error"
+            code = (
+                detail.get("code", "internal_error")
+                if isinstance(detail, dict)
+                else "internal_error"
+            )
+            message = (
+                detail.get("message", "Internal error")
+                if isinstance(detail, dict)
+                else "Internal error"
+            )
             hint = detail.get("hint") if isinstance(detail, dict) else None
 
         except Exception as translation_error:
             # Fallback if translation fails
-            logger.warning(f"Error translation failed: {translation_error}, falling back to generic error")
+            logger.warning(
+                f"Error translation failed: {translation_error}, falling back to generic error"
+            )
             status_code = 500
             code = "internal_error"
             message = "Internal server error"

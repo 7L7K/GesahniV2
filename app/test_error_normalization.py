@@ -125,9 +125,11 @@ async def test_payload_too_large():
 @router.get("/test/validation-error-helper")
 async def test_validation_error_helper():
     """Test endpoint that uses validation_error helper."""
-    raise validation_error(errors=[
-        {"field": "test_field", "message": "Test validation error", "type": "test"}
-    ])
+    raise validation_error(
+        errors=[
+            {"field": "test_field", "message": "Test validation error", "type": "test"}
+        ]
+    )
 
 
 @router.get("/test/internal-error-helper")

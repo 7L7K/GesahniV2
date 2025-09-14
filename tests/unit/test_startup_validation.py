@@ -1,6 +1,7 @@
 """
 Tests to validate startup behavior, middleware stack, and application composition.
 """
+
 import os
 from unittest.mock import patch
 
@@ -16,8 +17,8 @@ def test_create_app_returns_fastapi_instance():
     app = create_app()
 
     assert isinstance(app, FastAPI), "create_app should return FastAPI instance"
-    assert hasattr(app, 'routes'), "App should have routes attribute"
-    assert hasattr(app, 'user_middleware'), "App should have user_middleware attribute"
+    assert hasattr(app, "routes"), "App should have routes attribute"
+    assert hasattr(app, "user_middleware"), "App should have user_middleware attribute"
 
 
 def test_middleware_stack_setup():
@@ -25,21 +26,25 @@ def test_middleware_stack_setup():
     app = FastAPI()
 
     # Count initial middleware
-    initial_middleware = len(getattr(app, 'user_middleware', []))
+    initial_middleware = len(getattr(app, "user_middleware", []))
 
     # Setup middleware
     setup_middleware_stack(app)
 
     # Should have added middleware
-    final_middleware = len(getattr(app, 'user_middleware', []))
-    assert final_middleware > initial_middleware, "Middleware stack should add middleware"
+    final_middleware = len(getattr(app, "user_middleware", []))
+    assert (
+        final_middleware > initial_middleware
+    ), "Middleware stack should add middleware"
 
     # Check for critical middleware
-    middleware_names = [mw.cls.__name__ for mw in getattr(app, 'user_middleware', [])]
-    critical_middleware = ['CORSMiddleware', 'RequestIDMiddleware', 'AuditMiddleware']
+    middleware_names = [mw.cls.__name__ for mw in getattr(app, "user_middleware", [])]
+    critical_middleware = ["CORSMiddleware", "RequestIDMiddleware", "AuditMiddleware"]
 
     for mw_name in critical_middleware:
-        assert mw_name in middleware_names, f"Critical middleware {mw_name} should be present"
+        assert (
+            mw_name in middleware_names
+        ), f"Critical middleware {mw_name} should be present"
 
 
 def test_ci_mode_middleware_exclusions():
@@ -52,14 +57,22 @@ def test_ci_mode_middleware_exclusions():
     try:
         setup_middleware_stack(app)
 
-        middleware_names = [mw.cls.__name__ for mw in getattr(app, 'user_middleware', [])]
+        middleware_names = [
+            mw.cls.__name__ for mw in getattr(app, "user_middleware", [])
+        ]
 
         # In CI mode, RateLimitMiddleware should not be present
-        assert "RateLimitMiddleware" not in middleware_names, "RateLimitMiddleware should be excluded in CI mode"
+        assert (
+            "RateLimitMiddleware" not in middleware_names
+        ), "RateLimitMiddleware should be excluded in CI mode"
 
         # But other middleware should still be present
-        assert "RequestIDMiddleware" in middleware_names, "RequestIDMiddleware should be present"
-        assert "AuditMiddleware" in middleware_names, "AuditMiddleware should be present"
+        assert (
+            "RequestIDMiddleware" in middleware_names
+        ), "RequestIDMiddleware should be present"
+        assert (
+            "AuditMiddleware" in middleware_names
+        ), "AuditMiddleware should be present"
 
     finally:
         # Clean up
@@ -76,8 +89,12 @@ def test_rate_limit_enabled_flag():
 
     try:
         setup_middleware_stack(app)
-        middleware_names = [mw.cls.__name__ for mw in getattr(app, 'user_middleware', [])]
-        assert "RateLimitMiddleware" not in middleware_names, "RateLimitMiddleware should be excluded when disabled"
+        middleware_names = [
+            mw.cls.__name__ for mw in getattr(app, "user_middleware", [])
+        ]
+        assert (
+            "RateLimitMiddleware" not in middleware_names
+        ), "RateLimitMiddleware should be excluded when disabled"
 
     finally:
         if "RATE_LIMIT_ENABLED" in os.environ:
@@ -86,11 +103,13 @@ def test_rate_limit_enabled_flag():
     # Test with rate limiting enabled (default)
     app2 = FastAPI()
     setup_middleware_stack(app2)
-    middleware_names = [mw.cls.__name__ for mw in getattr(app2, 'user_middleware', [])]
+    middleware_names = [mw.cls.__name__ for mw in getattr(app2, "user_middleware", [])]
 
     # In non-CI mode, RateLimitMiddleware should be present
     if "PYTEST_CURRENT_TEST" not in os.environ:  # Only if not in pytest
-        assert "RateLimitMiddleware" in middleware_names, "RateLimitMiddleware should be present when enabled"
+        assert (
+            "RateLimitMiddleware" in middleware_names
+        ), "RateLimitMiddleware should be present when enabled"
 
 
 def test_startup_profile_detection():
@@ -99,21 +118,26 @@ def test_startup_profile_detection():
 
     # Test CI detection
     with patch.dict(os.environ, {"CI": "1"}, clear=True):
-        with patch('app.startup.config._is_truthy') as mock_truthy:
-            mock_truthy.side_effect = lambda v: (v or "").strip().lower() in {"1", "true", "yes", "on"}
+        with patch("app.startup.config._is_truthy") as mock_truthy:
+            mock_truthy.side_effect = lambda v: (v or "").strip().lower() in {
+                "1",
+                "true",
+                "yes",
+                "on",
+            }
             profile = detect_profile()
             assert profile.name == "ci", f"Expected CI profile, got {profile.name}"
 
     # Test dev detection (default)
     with patch.dict(os.environ, {}, clear=True):
-        with patch('app.startup.config._is_truthy') as mock_truthy:
+        with patch("app.startup.config._is_truthy") as mock_truthy:
             mock_truthy.side_effect = lambda v: False  # Nothing is truthy
             profile = detect_profile()
             assert profile.name == "dev", f"Expected dev profile, got {profile.name}"
 
     # Test prod detection
     with patch.dict(os.environ, {"ENV": "prod"}, clear=True):
-        with patch('app.startup.config._is_truthy') as mock_truthy:
+        with patch("app.startup.config._is_truthy") as mock_truthy:
             # Only ENV=prod should be truthy
             mock_truthy.side_effect = lambda v: v == "prod"
             profile = detect_profile()
@@ -125,19 +149,15 @@ def test_application_routes_structure():
     app = create_app()
 
     # Get all route paths
-    route_paths = [str(route.path) for route in app.routes if hasattr(route, 'path')]
+    route_paths = [str(route.path) for route in app.routes if hasattr(route, "path")]
 
     # Check for core API routes
-    expected_routes = [
-        "/health",
-        "/v1/ask",
-        "/v1/auth",
-        "/v1/admin",
-        "/v1/google"
-    ]
+    expected_routes = ["/health", "/v1/ask", "/v1/auth", "/v1/admin", "/v1/google"]
 
     for expected_route in expected_routes:
-        assert any(expected_route in path for path in route_paths), f"Expected route {expected_route} not found in {route_paths}"
+        assert any(
+            expected_route in path for path in route_paths
+        ), f"Expected route {expected_route} not found in {route_paths}"
 
     # Check that we have a reasonable number of routes
     assert len(route_paths) > 10, f"Expected at least 10 routes, got {len(route_paths)}"
@@ -191,7 +211,7 @@ def test_environment_isolation():
         test_vars = {
             "TEST_VAR_1": "value1",
             "TEST_VAR_2": "value2",
-            "SPOTIFY_ENABLED": "1"
+            "SPOTIFY_ENABLED": "1",
         }
 
         original_env = dict(os.environ)
@@ -209,11 +229,14 @@ def test_environment_isolation():
 
             # The router plan should reflect the test variables
             from app.routers.config import build_plan
+
             plan = build_plan()
             plan_names = [spec.import_path for spec in plan]
 
             # Should include Spotify routers since SPOTIFY_ENABLED=1
-            assert any("spotify" in name for name in plan_names), "Should include Spotify routers with SPOTIFY_ENABLED=1"
+            assert any(
+                "spotify" in name for name in plan_names
+            ), "Should include Spotify routers with SPOTIFY_ENABLED=1"
 
         finally:
             # Restore original environment

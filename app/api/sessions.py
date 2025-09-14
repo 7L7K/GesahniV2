@@ -17,7 +17,10 @@ async def list_sessions_endpoint(
     if user_id == "anon":
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
     out = await sessions_store.list_user_sessions(user_id)
     return {"items": out}
 
@@ -29,7 +32,10 @@ async def revoke_session(
     if user_id == "anon":
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
     await sessions_store.revoke_family(sid)
     return {"status": "ok"}
 
@@ -41,7 +47,10 @@ async def rename_device(
     if user_id == "anon":
         from ..http_errors import unauthorized
 
-        raise unauthorized(message="authentication required", hint="login or include Authorization header")
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
     ok = await sessions_store.rename_device(user_id, did, new_name)
     if not ok:
         raise HTTPException(status_code=400, detail="rename_failed")

@@ -43,12 +43,11 @@ class TestSpotifyOAuthRobust:
         }
 
         # Mock the token storage
-        with patch("app.auth_store_tokens.TokenDAO", return_value=dao), patch(
-            "app.api.spotify.get_spotify_oauth_token"
-        ) as mock_get_token, patch(
-            "app.api.spotify.verify_spotify_token"
-        ) as mock_verify:
-
+        with (
+            patch("app.auth_store_tokens.TokenDAO", return_value=dao),
+            patch("app.api.spotify.get_spotify_oauth_token") as mock_get_token,
+            patch("app.api.spotify.verify_spotify_token") as mock_verify,
+        ):
             mock_get_token.return_value = callback_data
             mock_verify.return_value = {"id": "spotify_user_123"}
 
@@ -82,12 +81,11 @@ class TestSpotifyOAuthRobust:
             "token_type": "Bearer",
         }
 
-        with patch("app.auth_store_tokens.TokenDAO", return_value=dao), patch(
-            "app.api.spotify.get_spotify_oauth_token"
-        ) as mock_get_token, patch(
-            "app.api.spotify.verify_spotify_token"
-        ) as mock_verify:
-
+        with (
+            patch("app.auth_store_tokens.TokenDAO", return_value=dao),
+            patch("app.api.spotify.get_spotify_oauth_token") as mock_get_token,
+            patch("app.api.spotify.verify_spotify_token") as mock_verify,
+        ):
             mock_get_token.return_value = callback_data
             mock_verify.return_value = {"id": "spotify_user_123"}
 
@@ -160,11 +158,13 @@ class TestSpotifyOAuthRobust:
 
         await dao.upsert_token(valid_token)
 
-        with patch("app.auth_store_tokens.TokenDAO", return_value=dao), patch(
-            "app.integrations.spotify.client.SpotifyClient._bearer_token_only",
-            new_callable=AsyncMock,
-        ) as mock_bearer:
-
+        with (
+            patch("app.auth_store_tokens.TokenDAO", return_value=dao),
+            patch(
+                "app.integrations.spotify.client.SpotifyClient._bearer_token_only",
+                new_callable=AsyncMock,
+            ) as mock_bearer,
+        ):
             mock_bearer.return_value = None  # Success
 
             response = client.get(
@@ -196,14 +196,17 @@ class TestSpotifyOAuthRobust:
 
         await dao.upsert_token(expired_token)
 
-        with patch("app.auth_store_tokens.TokenDAO", return_value=dao), patch(
-            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
-            new_callable=AsyncMock,
-        ) as mock_refresh, patch(
-            "app.integrations.spotify.client.SpotifyClient._bearer_token_only",
-            new_callable=AsyncMock,
-        ) as mock_bearer:
-
+        with (
+            patch("app.auth_store_tokens.TokenDAO", return_value=dao),
+            patch(
+                "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+                new_callable=AsyncMock,
+            ) as mock_refresh,
+            patch(
+                "app.integrations.spotify.client.SpotifyClient._bearer_token_only",
+                new_callable=AsyncMock,
+            ) as mock_bearer,
+        ):
             # Mock successful refresh
             mock_refresh.return_value = {
                 "access_token": "refreshed_token_123",
@@ -242,11 +245,13 @@ class TestSpotifyOAuthRobust:
 
         await dao.upsert_token(expired_token)
 
-        with patch("app.auth_store_tokens.TokenDAO", return_value=dao), patch(
-            "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
-            new_callable=AsyncMock,
-        ) as mock_refresh:
-
+        with (
+            patch("app.auth_store_tokens.TokenDAO", return_value=dao),
+            patch(
+                "app.integrations.spotify.client.SpotifyClient._refresh_access_token",
+                new_callable=AsyncMock,
+            ) as mock_refresh,
+        ):
             # Mock refresh failure
             mock_refresh.side_effect = Exception("Invalid refresh token")
 

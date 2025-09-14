@@ -1,7 +1,7 @@
 groups:
-- name: gesahni_recordings
-  interval: 30s
-  rules:
+  - name: gesahni_recordings
+    interval: 30s
+    rules:
   - record: job:http_requests:rate5m
     expr: sum by (route, method) (rate(http_requests_total[5m]))
   - record: job:http_requests_error_ratio:rate5m
@@ -26,4 +26,4 @@ groups:
       sum(rate(http_requests_total{status=~"5.."}[5m]))
       /
       clamp_min(sum(rate(http_requests_total[5m])), 1)
-    )
+      )

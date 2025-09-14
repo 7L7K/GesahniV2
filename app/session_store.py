@@ -78,7 +78,14 @@ class SessionCookieStore:
         """Get Redis key for session."""
         return f"session:{session_id}"
 
-    def create_session(self, jti: str, expires_at: float, *, identity: dict | None = None, refresh_fam_id: str | None = None) -> str:
+    def create_session(
+        self,
+        jti: str,
+        expires_at: float,
+        *,
+        identity: dict | None = None,
+        refresh_fam_id: str | None = None,
+    ) -> str:
         """Create a new opaque session ID and store it mapped to the JTI.
 
         Args:
@@ -104,7 +111,9 @@ class SessionCookieStore:
                 ident["sub"] = ident.get("user_id")
             ident.setdefault("jti", jti)
             ident.setdefault("exp", int(expires_at))
-            ident.setdefault("scopes", identity.get("scopes") or identity.get("scope") or [])
+            ident.setdefault(
+                "scopes", identity.get("scopes") or identity.get("scope") or []
+            )
             now_s = int(time.time())
             payload.update(
                 {
@@ -214,7 +223,10 @@ class SessionCookieStore:
                 for sid, entry in self._memory_store.items()
                 if (
                     (isinstance(entry, tuple) and entry[1] <= current_time)
-                    or (isinstance(entry, dict) and float(entry.get("expires_at", 0)) <= current_time)
+                    or (
+                        isinstance(entry, dict)
+                        and float(entry.get("expires_at", 0)) <= current_time
+                    )
                 )
             ]
             for sid in expired:
@@ -410,7 +422,11 @@ def list_sessions(status: SessionStatus | None = None) -> list[dict[str, Any]]:
         if session_dir.is_dir():
             meta = load_meta(session_dir.name)
             # Only include sessions with valid metadata (at minimum session_id)
-            if meta and meta.get("session_id") and (status is None or meta.get("status") == status.value):
+            if (
+                meta
+                and meta.get("session_id")
+                and (status is None or meta.get("status") == status.value)
+            ):
                 sessions.append(meta)
     return sorted(sessions, key=lambda x: x.get("created_at", ""), reverse=True)
 

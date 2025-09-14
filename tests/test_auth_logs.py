@@ -2,6 +2,7 @@
 """
 Test script to demonstrate authentication diagnostic logs
 """
+
 import os
 import subprocess
 import time

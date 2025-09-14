@@ -34,9 +34,10 @@ async def test_http_logging_initialized_once(monkeypatch):
     http_logger.setLevel(logging.NOTSET)
     core_logger.setLevel(logging.NOTSET)
 
-    with patch.object(http_logger, "setLevel") as http_set, patch.object(
-        core_logger, "setLevel"
-    ) as core_set:
+    with (
+        patch.object(http_logger, "setLevel") as http_set,
+        patch.object(core_logger, "setLevel") as core_set,
+    ):
         importlib.reload(http_utils)
         assert http_set.call_count == 1
         assert core_set.call_count == 1

@@ -1,4 +1,3 @@
-
 import pytest
 
 
@@ -22,5 +21,3 @@ async def test_vector_store_probe_handles_missing_backend(monkeypatch):
     from app.startup.components import init_vector_store
 
     await init_vector_store()
-
-

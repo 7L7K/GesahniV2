@@ -2,6 +2,7 @@
 OpenAPI contract tests - freeze API surface for different environments.
 When you intentionally add/remove routes, update the snapshot files in the same PR.
 """
+
 import json
 
 from fastapi.testclient import TestClient

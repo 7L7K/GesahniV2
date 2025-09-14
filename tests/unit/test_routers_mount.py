@@ -17,5 +17,3 @@ def test_register_routers_mounts_without_error():
     # Check that features_mounted exists on app.state (best-effort)
     mounted = getattr(app.state, "features_mounted", None)
     assert isinstance(mounted, dict) or mounted is None
-
-

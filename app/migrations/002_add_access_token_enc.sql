@@ -30,5 +30,3 @@ DROP TABLE third_party_tokens_old;
 
 COMMIT;
 PRAGMA foreign_keys=on;
-
-

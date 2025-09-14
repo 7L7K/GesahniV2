@@ -15,26 +15,32 @@ from .model_router import ModelRouter
 # Create a global model router instance for testing
 _model_router = ModelRouter()
 
+
 # Expose model router methods as module-level functions for test compatibility
 def _validate_model_allowlist(model: str, vendor: str) -> None:
     """Validate model against allow-list."""
     return _model_router._validate_model_allowlist(model, vendor)
 
+
 def _get_fallback_vendor(vendor: str) -> str:
     """Get the fallback vendor."""
     return _model_router._get_fallback_vendor(vendor)
+
 
 def _get_fallback_model(vendor: str) -> str:
     """Get the fallback model."""
     return _model_router._get_fallback_model(vendor)
 
+
 # Simple in-memory circuit breaker state for testing
 _circuit_breaker_state = {}
+
 
 # Placeholder functions for missing router functionality
 def _log_golden_trace(*args, **kwargs):
     """Placeholder for golden trace logging."""
     pass
+
 
 async def _user_cb_record_failure(user_id, *args, **kwargs):
     """Record a circuit breaker failure."""
@@ -44,16 +50,19 @@ async def _user_cb_record_failure(user_id, *args, **kwargs):
     if _circuit_breaker_state[user_id]["failures"] >= 3:  # Open after 3 failures
         _circuit_breaker_state[user_id]["open"] = True
 
+
 async def _user_cb_reset(user_id, *args, **kwargs):
     """Reset circuit breaker for user."""
     if user_id in _circuit_breaker_state:
         _circuit_breaker_state[user_id] = {"failures": 0, "open": False}
+
 
 async def _user_circuit_open(user_id, *args, **kwargs):
     """Check if circuit breaker is open for user."""
     if user_id not in _circuit_breaker_state:
         return False
     return _circuit_breaker_state[user_id]["open"]
+
 
 # Import commonly used router components
 from .config import CONFIG
@@ -63,9 +72,11 @@ from .state import HEALTH, SEM_CACHE
 try:
     from ..router import start_openai_health_background_loop
 except ImportError:
+
     def start_openai_health_background_loop(loop_interval: float = 5.0) -> None:
         """Mock health background loop function."""
         pass
+
 
 # Import timeout and model constants from policy module
 try:
@@ -87,27 +98,33 @@ import types
 # Mock memgpt namespace for tests
 memgpt = types.SimpleNamespace(store_interaction=lambda *a, **k: None)
 
+
 # Mock memory and cache functions for tests
 def add_user_memory(*a, **k):
     """Mock user memory function."""
     pass
 
+
 def cache_answer(prompt, answer, cache_id=None):
     """Mock cache answer function."""
     pass
+
 
 # Add more missing attributes for test compatibility
 _llama_user_failures = {}
 OPENAI_HEALTHY = True
 openai_circuit_open = False
 
+
 def _check_vendor_health(vendor):
     """Mock vendor health check."""
     return True
 
+
 async def ask_llama(*args, **kwargs):
     """Mock ask_llama function."""
     return "llama_response"
+
 
 __all__ = [
     "route_prompt",

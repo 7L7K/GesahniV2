@@ -9,10 +9,14 @@ def test_no_path_method_collisions():
 
     for route in app.routes:
         # Handle both APIRoute and other route types
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
+        if hasattr(route, "methods") and hasattr(route, "path"):
             methods = route.methods or []
             path = route.path
-            endpoint_name = getattr(route.endpoint, "__name__", "?") if hasattr(route, 'endpoint') else "?"
+            endpoint_name = (
+                getattr(route.endpoint, "__name__", "?")
+                if hasattr(route, "endpoint")
+                else "?"
+            )
 
             for method in methods:
                 key = (path, method)

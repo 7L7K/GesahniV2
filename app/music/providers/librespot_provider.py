@@ -27,5 +27,3 @@ class LibrespotProvider:
 
     async def get_devices(self) -> list[dict[str, Any]]:
         return []
-
-

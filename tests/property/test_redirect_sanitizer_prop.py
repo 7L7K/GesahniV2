@@ -144,4 +144,3 @@ def test_no_double_slashes_in_output(raw: str):
     result = sanitize_next_path(raw)
     # Repeated slashes should be collapsed everywhere (the leading slash remains single)
     assert "//" not in result
-

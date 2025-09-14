@@ -34,6 +34,7 @@ async def devices(request: Request, user_id: str = Depends(get_current_user_id))
     except SpotifyRateLimitedError as e:
         # Surface upstream rate limit with Retry-After when available
         from fastapi.responses import Response
+
         retry_after = str(e.retry_after) if getattr(e, "retry_after", None) else None
         headers = {"Retry-After": retry_after} if retry_after else {}
         return Response(status_code=429, headers=headers)
@@ -44,7 +45,11 @@ async def devices(request: Request, user_id: str = Depends(get_current_user_id))
             pass
         from ..http_errors import unauthorized
 
-        raise unauthorized(code="spotify_not_authenticated", message="Spotify not authenticated", hint="connect Spotify account")
+        raise unauthorized(
+            code="spotify_not_authenticated",
+            message="Spotify not authenticated",
+            hint="connect Spotify account",
+        )
     except Exception:
         logger.exception("spotify.devices_error")
         try:
@@ -56,7 +61,9 @@ async def devices(request: Request, user_id: str = Depends(get_current_user_id))
 
 
 @router.post("/play")
-async def play(request: Request, body: dict, user_id: str = Depends(get_current_user_id)):
+async def play(
+    request: Request, body: dict, user_id: str = Depends(get_current_user_id)
+):
     """Proxy play request to Spotify.
 
     Body shape: { "uris"?: [], "context_uri"?: "", "device_id"?: "" }
@@ -87,6 +94,7 @@ async def play(request: Request, body: dict, user_id: str = Depends(get_current_
             raise HTTPException(status_code=502, detail="play_failed")
     except SpotifyRateLimitedError as e:
         from fastapi.responses import Response
+
         retry_after = str(e.retry_after) if getattr(e, "retry_after", None) else None
         headers = {"Retry-After": retry_after} if retry_after else {}
         return Response(status_code=429, headers=headers)
@@ -97,7 +105,11 @@ async def play(request: Request, body: dict, user_id: str = Depends(get_current_
             pass
         from ..http_errors import unauthorized
 
-        raise unauthorized(code="spotify_not_authenticated", message="Spotify not authenticated", hint="connect Spotify account")
+        raise unauthorized(
+            code="spotify_not_authenticated",
+            message="Spotify not authenticated",
+            hint="connect Spotify account",
+        )
     except HTTPException:
         raise
     except Exception:

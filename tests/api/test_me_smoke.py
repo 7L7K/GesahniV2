@@ -19,6 +19,7 @@ def test_me_smoke():
     original_get_stats = None
     try:
         from app.user_store import user_store
+
         original_get_stats = user_store.get_stats
 
         async def mock_get_stats(user_id):
@@ -26,7 +27,7 @@ def test_me_smoke():
                 user_id="test_user",
                 login_count=7,
                 request_count=42,
-                last_login="2025-09-05T00:00:00Z"
+                last_login="2025-09-05T00:00:00Z",
             )
 
         user_store.get_stats = mock_get_stats
@@ -52,4 +53,5 @@ def test_me_smoke():
 
         if original_get_stats is not None:
             from app.user_store import user_store
+
             user_store.get_stats = original_get_stats

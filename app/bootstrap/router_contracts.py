@@ -3,6 +3,7 @@
 This module defines a minimal Protocol that other parts of the
 application can import without pulling heavy dependencies.
 """
+
 from typing import Protocol, runtime_checkable
 
 

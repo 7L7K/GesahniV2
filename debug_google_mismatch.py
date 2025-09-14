@@ -34,7 +34,7 @@ async def debug_mismatch():
         provider="google",
         service="calendar",
         status="enabled",
-        provider_sub="sub-a"
+        provider_sub="sub-a",
     )
     print(f"Enabled calendar on token A: {ok}")
 
@@ -57,13 +57,17 @@ async def debug_mismatch():
 
     # Check what get_token returns
     current_token = await dao.get_token("u42", "google")
-    print(f"get_token returned: {current_token.id if current_token else None} with provider_sub: {current_token.provider_sub if current_token else None}")
+    print(
+        f"get_token returned: {current_token.id if current_token else None} with provider_sub: {current_token.provider_sub if current_token else None}"
+    )
 
     # Check what get_all_user_tokens returns
     all_tokens = await dao.get_all_user_tokens("u42")
     print(f"All tokens count: {len(all_tokens)}")
     for i, token in enumerate(all_tokens):
-        print(f"  Token {i}: {token.id} provider_sub: {token.provider_sub} service_state: {token.service_state} created_at: {token.created_at}")
+        print(
+            f"  Token {i}: {token.id} provider_sub: {token.provider_sub} service_state: {token.service_state} created_at: {token.created_at}"
+        )
 
     # Check token creation times
     print(f"Token A created_at: {a.created_at}")
@@ -99,20 +103,29 @@ async def debug_mismatch():
     all_tokens = await dao.get_all_user_tokens("u42")
 
     print("\n=== Account Mismatch Debug ===")
-    print(f"Current token: {current_token.id} provider_sub: {current_token.provider_sub}")
+    print(
+        f"Current token: {current_token.id} provider_sub: {current_token.provider_sub}"
+    )
     print(f"All tokens: {len(all_tokens)}")
 
     for i, oth in enumerate(all_tokens):
         print(f"  Checking token {i}: {oth.id} provider_sub: {oth.provider_sub}")
-        if getattr(oth, "provider_sub", None) and getattr(oth, "provider_sub", None) != getattr(current_token, "provider_sub", None):
-            print(f"    Different provider_sub detected: {oth.provider_sub} != {current_token.provider_sub}")
+        if getattr(oth, "provider_sub", None) and getattr(
+            oth, "provider_sub", None
+        ) != getattr(current_token, "provider_sub", None):
+            print(
+                f"    Different provider_sub detected: {oth.provider_sub} != {current_token.provider_sub}"
+            )
             from app.service_state import parse as parse_state_func
+
             st = parse_state_func(getattr(oth, "service_state", None))
             print(f"    Parsed service_state: {st}")
             for svc_name, entry in st.items():
                 print(f"      Service {svc_name}: {entry}")
                 if entry.get("status") == "enabled":
-                    print(f"        Found enabled service: {svc_name} - should raise account_mismatch!")
+                    print(
+                        f"        Found enabled service: {svc_name} - should raise account_mismatch!"
+                    )
                     break
 
     try:
@@ -120,10 +133,11 @@ async def debug_mismatch():
         print("enable_service succeeded (unexpected)")
     except Exception as e:
         print(f"enable_service failed with: {type(e).__name__}")
-        if hasattr(e, 'detail') and isinstance(e.detail, dict):
+        if hasattr(e, "detail") and isinstance(e.detail, dict):
             print(f"Error code: {e.detail.get('code')}")
         else:
             print(f"Error: {e}")
+
 
 if __name__ == "__main__":
     asyncio.run(debug_mismatch())

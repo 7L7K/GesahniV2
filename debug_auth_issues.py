@@ -39,7 +39,7 @@ def test_auth_endpoints():
         response = requests.get(f"{base_url}/v1/google/auth/login_url", timeout=10)
         if response.status_code == 200:
             data = response.json()
-            auth_url = data.get('auth_url', '')
+            auth_url = data.get("auth_url", "")
 
             print("✅ Google login URL generated successfully")
             print(f"   Auth URL length: {len(auth_url)} chars")
@@ -48,7 +48,13 @@ def test_auth_endpoints():
             parsed = urlparse(auth_url)
             params = parse_qs(parsed.query)
 
-            required_params = ['client_id', 'redirect_uri', 'response_type', 'scope', 'state']
+            required_params = [
+                "client_id",
+                "redirect_uri",
+                "response_type",
+                "scope",
+                "state",
+            ]
             missing_params = [p for p in required_params if p not in params]
 
             if missing_params:
@@ -73,7 +79,7 @@ def test_auth_endpoints():
             print("✅ Google status endpoint working")
             print(f"   Connected: {data.get('connected', 'unknown')}")
             print(f"   Linked: {data.get('linked', 'unknown')}")
-            if not data.get('connected', True):
+            if not data.get("connected", True):
                 print(f"   Reason: {data.get('reason', 'none')}")
         else:
             print(f"❌ Google status failed: HTTP {response.status_code}")
@@ -91,7 +97,7 @@ def test_auth_endpoints():
             print(f"   Connected: {data.get('connected', 'unknown')}")
             print(f"   Devices OK: {data.get('devices_ok', 'unknown')}")
             print(f"   State OK: {data.get('state_ok', 'unknown')}")
-            if not data.get('connected', True):
+            if not data.get("connected", True):
                 print(f"   Reason: {data.get('reason', 'none')}")
         else:
             print(f"❌ Spotify status failed: HTTP {response.status_code}")
@@ -110,8 +116,8 @@ def test_auth_endpoints():
             print("✅ Config endpoint accessible")
 
             # Check for OAuth configurations
-            google_config = {k: v for k, v in data.items() if 'google' in k.lower()}
-            spotify_config = {k: v for k, v in data.items() if 'spotify' in k.lower()}
+            google_config = {k: v for k, v in data.items() if "google" in k.lower()}
+            spotify_config = {k: v for k, v in data.items() if "spotify" in k.lower()}
 
             if google_config:
                 print(f"   Google config found: {list(google_config.keys())}")
@@ -133,7 +139,9 @@ def test_auth_endpoints():
         response = requests.get("http://localhost:3000", timeout=10)
         if response.status_code == 200:
             print("✅ Frontend is accessible")
-            print("   Note: This is a React app - actual OAuth UI requires browser interaction")
+            print(
+                "   Note: This is a React app - actual OAuth UI requires browser interaction"
+            )
         else:
             print(f"❌ Frontend check failed: HTTP {response.status_code}")
     except Exception as e:
@@ -176,6 +184,7 @@ def test_auth_endpoints():
     print("- Settings Page: http://localhost:3000/settings")
 
     return True
+
 
 if __name__ == "__main__":
     test_auth_endpoints()

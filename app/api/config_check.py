@@ -2,6 +2,7 @@
 Configuration self-check endpoint for operational visibility.
 Provides read-only summary of environment and feature configuration.
 """
+
 import os
 
 from fastapi import APIRouter
@@ -52,5 +53,5 @@ def config_check():
             "openai_available": bool(os.getenv("OPENAI_API_KEY")),
             "home_assistant_token": bool(os.getenv("HOME_ASSISTANT_TOKEN")),
             "spotify_client_id": bool(os.getenv("SPOTIFY_CLIENT_ID")),
-        }
+        },
     }

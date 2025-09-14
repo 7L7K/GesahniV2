@@ -476,6 +476,7 @@ async def check_ollama_health(cache_result: bool = True) -> HealthCheckResult:
     try:
         # Check if LLaMA is explicitly disabled
         import os
+
         llama_enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
         if llama_enabled in {"0", "false", "no", "off"}:
             return HealthCheckResult(
@@ -634,6 +635,7 @@ async def check_home_assistant_health(cache_result: bool = True) -> HealthCheckR
     try:
         # Check if Home Assistant is explicitly disabled
         import os
+
         ha_enabled = (os.getenv("HOME_ASSISTANT_ENABLED") or "").strip().lower()
         if ha_enabled in {"0", "false", "no", "off"}:
             return HealthCheckResult(
@@ -1038,7 +1040,8 @@ async def get_health_cache_info() -> dict[str, Any]:
         for key, cached in health_cache._cache.items():
             cache_entries[key] = {
                 "expires_at": cached.expires_at,
-                "age_seconds": time.time() - (cached.expires_at - health_cache.default_ttl),
+                "age_seconds": time.time()
+                - (cached.expires_at - health_cache.default_ttl),
                 "check_duration_ms": cached.check_duration_ms,
             }
 

@@ -3,6 +3,7 @@
 This module contains all budget-related functions and calculations.
 No router imports to avoid circular dependencies.
 """
+
 import time
 
 from .policy import ROUTER_BUDGET_MS

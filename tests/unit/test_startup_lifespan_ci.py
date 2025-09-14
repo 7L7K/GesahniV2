@@ -1,4 +1,3 @@
-
 import pytest
 
 
@@ -28,5 +27,3 @@ async def test_util_check_vendor_gating(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     res2 = await check_vendor_health_gated("openai")
     assert res2["status"] == "missing_config"
-
-

@@ -328,7 +328,9 @@ async def process_postcall(data: PostCallData) -> PostCallResult:
             "intent": (data.metadata or {}).get("intent") if data.metadata else None,
             "provider": data.vendor,
             "model": data.model,
-            "tokens_est_method": (data.metadata or {}).get("tokens_est_method", "approx"),
+            "tokens_est_method": (data.metadata or {}).get(
+                "tokens_est_method", "approx"
+            ),
             "cache_hit": (data.metadata or {}).get("cache_hit", False),
             "fallback_from": (data.metadata or {}).get("fallback_from"),
             "error_type": result.errors[0] if result.errors else None,

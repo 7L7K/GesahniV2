@@ -82,7 +82,10 @@ def require_roles(required: Iterable[str], *, any_of: bool = True):
         if not user_id or user_id == "anon":
             from ..http_errors import unauthorized
 
-            raise unauthorized(message="authentication required", hint="login or include Authorization header")
+            raise unauthorized(
+                message="authentication required",
+                hint="login or include Authorization header",
+            )
         # Authorize based on roles (403 if missing)
         if not has_roles(request, required, any_of=any_of):
             raise HTTPException(status_code=403, detail="forbidden")

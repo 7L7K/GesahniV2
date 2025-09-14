@@ -20,7 +20,9 @@ from typing import Any, Optional
 _factory: Callable[[str], Callable[[dict], Awaitable[dict]]] | None = None
 
 
-def register_backend_factory(factory: Callable[[str], Callable[[dict], Awaitable[dict]]]) -> None:
+def register_backend_factory(
+    factory: Callable[[str], Callable[[dict], Awaitable[dict]]]
+) -> None:
     """Register a backend factory used to resolve backend callables at runtime.
 
     Keep this registration in startup so imports remain cheap.
@@ -39,7 +41,9 @@ def get_backend_callable(name: str) -> Callable[[dict], Awaitable[dict]]:
     return _factory(name)
 
 
-def resolve_backend(model_override: str | None = None, default_backend: str = "dryrun") -> str:
+def resolve_backend(
+    model_override: str | None = None, default_backend: str = "dryrun"
+) -> str:
     """Resolve backend name from model or environment.
 
     Frozen routing contract:
@@ -77,7 +81,9 @@ def resolve_backend(model_override: str | None = None, default_backend: str = "d
     return default_backend
 
 
-def get_backend_for_request(model_override: str | None = None) -> Callable[[dict], Awaitable[dict]]:
+def get_backend_for_request(
+    model_override: str | None = None,
+) -> Callable[[dict], Awaitable[dict]]:
     """Get backend callable for a request with automatic model routing.
 
     Args:
@@ -91,5 +97,3 @@ def get_backend_for_request(model_override: str | None = None) -> Callable[[dict
     """
     backend_name = resolve_backend(model_override)
     return get_backend_callable(backend_name)
-
-

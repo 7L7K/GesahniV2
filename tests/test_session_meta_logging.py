@@ -32,7 +32,11 @@ def test_capture_save_sets_transcript_uri_when_sharing_enabled(
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
-        loop.run_until_complete(_save_session(sid, audio=None, video=None, transcript="hello 555-222-3333", tags=None))  # type: ignore
+        loop.run_until_complete(
+            _save_session(
+                sid, audio=None, video=None, transcript="hello 555-222-3333", tags=None
+            )
+        )  # type: ignore
     finally:
         try:
             loop.stop()

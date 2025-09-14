@@ -3,7 +3,7 @@ Tests for token health monitoring endpoints and metrics
 """
 
 import time
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -268,6 +268,7 @@ class TestTokenHealthMonitoring:
     async def test_health_performance_under_load(self, tmp_path):
         """Test health monitoring performance with many tokens"""
         import time
+
         from app.auth_store_tokens import TokenDAO
 
         db_path = str(tmp_path / "load_test.db")

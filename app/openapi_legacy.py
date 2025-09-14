@@ -3,6 +3,7 @@ OpenAPI configuration module for GesahniV2.
 
 This module handles OpenAPI tag ordering, route visibility, and schema customization.
 """
+
 import os
 from typing import Any
 

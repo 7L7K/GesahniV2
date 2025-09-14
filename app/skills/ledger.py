@@ -38,10 +38,13 @@ async def record_action(
     return bool(inserted)
 
 
-async def get_last_reversible_action(user_id: str | None = None, action_types: list[str] | None = None) -> dict[str, Any] | None:
+async def get_last_reversible_action(
+    user_id: str | None = None, action_types: list[str] | None = None
+) -> dict[str, Any] | None:
     """Query the authoritative PostgreSQL ledger for the latest reversible action.
 
     Returns a dict with keys: id, type, skill, slots, reversible, reverse_id, ts, idempotency_key, user_id
     """
-    return storage.get_last_reversible_action(user_id=user_id, action_types=action_types)
-
+    return storage.get_last_reversible_action(
+        user_id=user_id, action_types=action_types
+    )

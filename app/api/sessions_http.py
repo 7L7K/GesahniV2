@@ -116,7 +116,9 @@ async def list_sessions_listing(
     # Add missing fields for test compatibility
     if isinstance(sessions, list):
         # Sort by created_at to determine the most recent session
-        sorted_sessions = sorted(sessions, key=lambda x: x.get("created_at", ""), reverse=True)
+        sorted_sessions = sorted(
+            sessions, key=lambda x: x.get("created_at", ""), reverse=True
+        )
 
         for i, session in enumerate(sorted_sessions):
             # Add device_id (default for media sessions)
@@ -158,7 +160,9 @@ async def list_sessions_paginated(
         return {"items": [], "next_cursor": None}
 
     # Sort sessions by created_at descending (most recent first)
-    sorted_sessions = sorted(all_sessions, key=lambda x: x.get("created_at", ""), reverse=True)
+    sorted_sessions = sorted(
+        all_sessions, key=lambda x: x.get("created_at", ""), reverse=True
+    )
 
     # Add missing fields for test compatibility
     for i, session in enumerate(sorted_sessions):
@@ -190,10 +194,7 @@ async def list_sessions_paginated(
     if end_index < len(sorted_sessions):
         next_cursor = page_sessions[-1].get("session_id") if page_sessions else None
 
-    return {
-        "items": page_sessions,
-        "next_cursor": next_cursor
-    }
+    return {"items": page_sessions, "next_cursor": next_cursor}
 
 
 @router.post("/sessions/{session_id}/transcribe")
@@ -253,4 +254,3 @@ async def get_transcription(
 
 
 __all__ = ["router"]
-

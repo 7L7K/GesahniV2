@@ -24,7 +24,3 @@ def cleanup() -> None:
     for k in list(_PENDING.keys()):
         if _PENDING[k]["expires"] < now:
             _PENDING.pop(k, None)
-
-
-
-

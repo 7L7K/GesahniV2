@@ -23,12 +23,14 @@ async def temp_db(tmp_path):
     original_auth_db = None
     try:
         import app.auth_store
+
         original_auth_db = app.auth_store.DB_PATH
         app.auth_store.DB_PATH = tmp_path / "test_auth.db"
 
         # Override token store DB path
         original_token_db = None
         import app.auth_store_tokens
+
         original_token_db = app.auth_store_tokens.TokenDAO.DEFAULT_DB_PATH
         app.auth_store_tokens.TokenDAO.DEFAULT_DB_PATH = tmp_path / "test_tokens.db"
 
@@ -51,6 +53,7 @@ async def temp_db(tmp_path):
 @pytest.fixture
 async def create_test_identity(tmp_path):
     """Factory to create test identity."""
+
     async def _create_identity(user_id: str):
         identity_id = str(uuid.uuid4())
         provider_sub = f"spotify_sub_{int(time.time())}"
@@ -62,7 +65,7 @@ async def create_test_identity(tmp_path):
             provider_iss="https://accounts.spotify.com",
             provider_sub=provider_sub,
             email_normalized=f"user_{int(time.time())}@example.com",
-            email_verified=True
+            email_verified=True,
         )
         return identity_id
 
@@ -95,11 +98,11 @@ async def test_manual_token_refresh(temp_db, create_test_identity, caplog):
         access_token="B" + "A" * 17,  # Valid format: starts with B, length = 18
         refresh_token="A" + "B" * 17,  # Valid format: starts with A, length = 18
         scopes="user-read-email,user-read-private",
-                        # Set expiry to exactly the refresh cutoff so it is both a candidate and passes validation
-                        expires_at=now + 300,
+        # Set expiry to exactly the refresh cutoff so it is both a candidate and passes validation
+        expires_at=now + 300,
         created_at=now - 3600,  # Created 1 hour ago
         updated_at=now - 3600,
-        is_valid=True
+        is_valid=True,
     )
 
     print("🔄 Creating expired token...")
@@ -135,7 +138,9 @@ async def test_manual_token_refresh(temp_db, create_test_identity, caplog):
         # Check if token was updated
         updated_token = await dao.get_token(user_id, "spotify")
         if updated_token:
-            print(f"🔍 Token after refresh: expires_at={updated_token.expires_at}, original={original_expires_at}")
+            print(
+                f"🔍 Token after refresh: expires_at={updated_token.expires_at}, original={original_expires_at}"
+            )
             if updated_token.expires_at != original_expires_at:
                 print("✅ SUCCESS: Token expires_at was updated!")
             else:
@@ -151,8 +156,12 @@ async def test_manual_token_refresh(temp_db, create_test_identity, caplog):
         print(f"📋 Log messages: {log_messages}")
 
         # Look for expected log patterns
-        refresh_start_found = any("refresh.start" in msg or "Starting refresh" in msg for msg in log_messages)
-        refresh_exchange_found = any("refresh.exchange" in msg or "Token refresh" in msg for msg in log_messages)
+        refresh_start_found = any(
+            "refresh.start" in msg or "Starting refresh" in msg for msg in log_messages
+        )
+        refresh_exchange_found = any(
+            "refresh.exchange" in msg or "Token refresh" in msg for msg in log_messages
+        )
 
         if refresh_start_found:
             print("✅ Found refresh.start log")
@@ -189,10 +198,12 @@ async def main():
         original_token_db = None
         try:
             import app.auth_store
+
             original_auth_db = app.auth_store.DB_PATH
             app.auth_store.DB_PATH = auth_db_path
 
             import app.auth_store_tokens
+
             original_token_db = app.auth_store_tokens.DEFAULT_DB_PATH
             app.auth_store_tokens.DEFAULT_DB_PATH = token_db_path
 
@@ -211,7 +222,7 @@ async def main():
                 provider_iss="https://accounts.spotify.com",
                 provider_sub=provider_sub,
                 email_normalized=f"user_{int(time.time())}@example.com",
-                email_verified=True
+                email_verified=True,
             )
 
             # Create DAO with explicit db path
@@ -234,7 +245,7 @@ async def main():
                 expires_at=now + 301,
                 created_at=now - 3600,
                 updated_at=now - 3600,
-                is_valid=True
+                is_valid=True,
             )
 
             print("🔄 Creating expired token...")
@@ -245,7 +256,9 @@ async def main():
             retrieved = await dao.get_token(user_id, "spotify")
             assert retrieved is not None
             original_expires_at = retrieved.expires_at
-            print(f"✅ Created token with expires_at: {original_expires_at} (expires in {original_expires_at - now} seconds)")
+            print(
+                f"✅ Created token with expires_at: {original_expires_at} (expires in {original_expires_at - now} seconds)"
+            )
 
             # Check candidates
             candidates = _get_candidates(now)
@@ -262,14 +275,20 @@ async def main():
                 # Check result
                 updated_token = await dao.get_token(user_id, "spotify")
                 if updated_token:
-                    print(f"🔍 Token after refresh: expires_at={updated_token.expires_at}")
+                    print(
+                        f"🔍 Token after refresh: expires_at={updated_token.expires_at}"
+                    )
                     if updated_token.expires_at != original_expires_at:
                         print("✅ SUCCESS: Token expires_at was updated!")
                         print("🎉 Manual token refresh test PASSED!")
                     else:
                         print("❌ Token expires_at was not updated")
-                        print("This is expected since we don't have real Spotify tokens")
-                        print("✅ SUCCESS: Refresh job ran and attempted token exchange!")
+                        print(
+                            "This is expected since we don't have real Spotify tokens"
+                        )
+                        print(
+                            "✅ SUCCESS: Refresh job ran and attempted token exchange!"
+                        )
                 else:
                     print("❌ Token not found after refresh")
 
@@ -281,7 +300,9 @@ async def main():
 
             # Show that the refresh job found candidates (even if not ours)
             if candidates:
-                print(f"🔍 Refresh job found {len(candidates)} candidate tokens in the system")
+                print(
+                    f"🔍 Refresh job found {len(candidates)} candidate tokens in the system"
+                )
                 print("📋 Expected logs from refresh job:")
                 print("   - refresh.start log with identity_id")
                 print("   - refresh.exchange.ok (or .failed with error)")

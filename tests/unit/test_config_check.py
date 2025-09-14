@@ -1,6 +1,7 @@
 """
 Tests for configuration check endpoint.
 """
+
 from unittest.mock import patch
 
 from app.api.config_check import config_check
@@ -11,19 +12,23 @@ class TestConfigCheck:
 
     def test_config_check_dev_environment(self):
         """Test config check returns correct values for dev environment."""
-        with patch.dict("os.environ", {
-            "ENV": "dev",
-            "SPOTIFY_ENABLED": "1",
-            "APPLE_OAUTH_ENABLED": "0",
-            "DEVICE_AUTH_ENABLED": "1",
-            "JWT_SECRET": "test_secret_123",
-            "COOKIES_SECURE": "0",  # Dev might not need HTTPS
-            "COOKIES_SAMESITE": "lax",
-            "REQ_ID_ENABLED": "1",
-            "OPENAI_API_KEY": "test_key",
-            "HOME_ASSISTANT_TOKEN": "test_token",
-            "SPOTIFY_CLIENT_ID": "test_id",
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "dev",
+                "SPOTIFY_ENABLED": "1",
+                "APPLE_OAUTH_ENABLED": "0",
+                "DEVICE_AUTH_ENABLED": "1",
+                "JWT_SECRET": "test_secret_123",
+                "COOKIES_SECURE": "0",  # Dev might not need HTTPS
+                "COOKIES_SAMESITE": "lax",
+                "REQ_ID_ENABLED": "1",
+                "OPENAI_API_KEY": "test_key",
+                "HOME_ASSISTANT_TOKEN": "test_token",
+                "SPOTIFY_CLIENT_ID": "test_id",
+            },
+            clear=True,
+        ):
             result = config_check()
 
             assert result["env"] == "dev"
@@ -48,21 +53,25 @@ class TestConfigCheck:
 
     def test_config_check_prod_environment(self):
         """Test config check returns correct values for prod environment."""
-        with patch.dict("os.environ", {
-            "ENV": "prod",
-            "CI": "0",
-            "DEV_MODE": "0",
-            "SPOTIFY_ENABLED": "1",
-            "APPLE_OAUTH_ENABLED": "1",
-            "DEVICE_AUTH_ENABLED": "0",
-            "JWT_SECRET": "a" * 64,  # Long secure secret
-            "COOKIES_SECURE": "1",
-            "COOKIES_SAMESITE": "strict",
-            "REQ_ID_ENABLED": "1",
-            "RATE_LIMIT_ENABLED": "1",
-            "CORS_ENABLED": "1",
-            "DETERMINISTIC_ROUTER": "1",
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "prod",
+                "CI": "0",
+                "DEV_MODE": "0",
+                "SPOTIFY_ENABLED": "1",
+                "APPLE_OAUTH_ENABLED": "1",
+                "DEVICE_AUTH_ENABLED": "0",
+                "JWT_SECRET": "a" * 64,  # Long secure secret
+                "COOKIES_SECURE": "1",
+                "COOKIES_SAMESITE": "strict",
+                "REQ_ID_ENABLED": "1",
+                "RATE_LIMIT_ENABLED": "1",
+                "CORS_ENABLED": "1",
+                "DETERMINISTIC_ROUTER": "1",
+            },
+            clear=True,
+        ):
             result = config_check()
 
             assert result["env"] == "prod"
@@ -87,15 +96,19 @@ class TestConfigCheck:
 
     def test_config_check_ci_environment(self):
         """Test config check returns correct values for CI environment."""
-        with patch.dict("os.environ", {
-            "ENV": "ci",
-            "CI": "1",
-            "SPOTIFY_ENABLED": "1",  # Configured but router will disable in CI
-            "APPLE_OAUTH_ENABLED": "0",
-            "JWT_SECRET": "ci_secret",
-            "COOKIES_SECURE": "1",
-            "COOKIES_SAMESITE": "strict",
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "ci",
+                "CI": "1",
+                "SPOTIFY_ENABLED": "1",  # Configured but router will disable in CI
+                "APPLE_OAUTH_ENABLED": "0",
+                "JWT_SECRET": "ci_secret",
+                "COOKIES_SECURE": "1",
+                "COOKIES_SAMESITE": "strict",
+            },
+            clear=True,
+        ):
             result = config_check()
 
             assert result["env"] == "ci"
@@ -103,7 +116,9 @@ class TestConfigCheck:
             assert result["dev_mode"] is False
 
             # Features show configured values (router disables in CI, but config shows what's set)
-            assert result["features"]["spotify"] is True  # Configured value, router handles CI disabling
+            assert (
+                result["features"]["spotify"] is True
+            )  # Configured value, router handles CI disabling
             assert result["features"]["apple_oauth"] is False
 
             # Security
@@ -111,14 +126,18 @@ class TestConfigCheck:
 
     def test_config_check_dev_mode_bypass(self):
         """Test that dev mode bypass shows relaxed settings."""
-        with patch.dict("os.environ", {
-            "ENV": "prod",
-            "DEV_MODE": "1",  # Dev mode enabled
-            "JWT_SECRET": "weak",  # Would be rejected in strict prod
-            "COOKIES_SECURE": "0",  # Would be rejected in strict prod
-            "COOKIES_SAMESITE": "lax",  # Would be rejected in strict prod
-            "REQ_ID_ENABLED": "0",  # Would be rejected in strict prod
-        }, clear=True):
+        with patch.dict(
+            "os.environ",
+            {
+                "ENV": "prod",
+                "DEV_MODE": "1",  # Dev mode enabled
+                "JWT_SECRET": "weak",  # Would be rejected in strict prod
+                "COOKIES_SECURE": "0",  # Would be rejected in strict prod
+                "COOKIES_SAMESITE": "lax",  # Would be rejected in strict prod
+                "REQ_ID_ENABLED": "0",  # Would be rejected in strict prod
+            },
+            clear=True,
+        ):
             result = config_check()
 
             assert result["env"] == "prod"

@@ -27,7 +27,12 @@ def run_config_validation() -> None:
 
     # SameSite=None requires Secure
     samesite = (os.getenv("COOKIE_SAMESITE") or "lax").lower()
-    secure = (os.getenv("COOKIE_SECURE") or "").strip().lower() in {"1", "true", "yes", "on"}
+    secure = (os.getenv("COOKIE_SECURE") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if samesite == "none" and not secure:
         problems.append(
             {
@@ -38,7 +43,12 @@ def run_config_validation() -> None:
         )
 
     # CORS with credentials
-    creds = (os.getenv("CORS_ALLOW_CREDENTIALS") or "true").lower() in {"1", "true", "yes", "on"}
+    creds = (os.getenv("CORS_ALLOW_CREDENTIALS") or "true").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
     if not creds:
         problems.append(
             {
@@ -49,7 +59,10 @@ def run_config_validation() -> None:
         )
 
     # Host cookie prefix safety
-    if secure and (os.getenv("USE_HOST_COOKIE_PREFIX", "1").lower() not in {"1", "true", "yes", "on"}):
+    if secure and (
+        os.getenv("USE_HOST_COOKIE_PREFIX", "1").lower()
+        not in {"1", "true", "yes", "on"}
+    ):
         problems.append(
             {
                 "code": "host_prefix_disabled",

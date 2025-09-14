@@ -35,7 +35,15 @@ class MusicOrchestrator:
                 return self.providers[choice]
         return next(iter(self.providers.values()), None)
 
-    async def play(self, utterance: str | None = None, *, entity=None, room: str | None = None, vibe: str | None = None, provider_hint: str | None = None) -> dict:
+    async def play(
+        self,
+        utterance: str | None = None,
+        *,
+        entity=None,
+        room: str | None = None,
+        vibe: str | None = None,
+        provider_hint: str | None = None,
+    ) -> dict:
         provider = self._provider_for(provider_hint)
         if not provider:
             raise RuntimeError("No provider available")
@@ -45,12 +53,30 @@ class MusicOrchestrator:
             hits = await self.search(utterance)
             # Normalize hits into candidates list
             candidates: list[dict] = []
-            for t in (hits.get("track") or []):
-                candidates.append({"type": "track", "id": t.id if hasattr(t, "id") else t.get("id"), "label": getattr(t, "title", None) or t.get("name")})
-            for a in (hits.get("album") or []):
-                candidates.append({"type": "album", "id": a.id if hasattr(a, "id") else a.get("id"), "label": getattr(a, "title", None) or a.get("name")})
-            for p in (hits.get("playlist") or []):
-                candidates.append({"type": "playlist", "id": p.id if hasattr(p, "id") else p.get("id"), "label": getattr(p, "name", None) or p.get("name")})
+            for t in hits.get("track") or []:
+                candidates.append(
+                    {
+                        "type": "track",
+                        "id": t.id if hasattr(t, "id") else t.get("id"),
+                        "label": getattr(t, "title", None) or t.get("name"),
+                    }
+                )
+            for a in hits.get("album") or []:
+                candidates.append(
+                    {
+                        "type": "album",
+                        "id": a.id if hasattr(a, "id") else a.get("id"),
+                        "label": getattr(a, "title", None) or a.get("name"),
+                    }
+                )
+            for p in hits.get("playlist") or []:
+                candidates.append(
+                    {
+                        "type": "playlist",
+                        "id": p.id if hasattr(p, "id") else p.get("id"),
+                        "label": getattr(p, "name", None) or p.get("name"),
+                    }
+                )
             # If zero, fallback to provider play with utterance as query (best-effort)
             if not candidates:
                 # best-effort: try direct play with utterance as search query
@@ -70,7 +96,11 @@ class MusicOrchestrator:
 
         # device selection
         device_id = await self.device_select(room)
-        await provider.play(entity["id"] if entity else "", entity["type"] if entity else "track", device_id=device_id)
+        await provider.play(
+            entity["id"] if entity else "",
+            entity["type"] if entity else "track",
+            device_id=device_id,
+        )
         self.state.active_provider = provider.name
         self.state.active_device = device_id
         return {"provider": provider.name, "device": device_id}
@@ -80,7 +110,9 @@ class MusicOrchestrator:
         if p and hasattr(p, "seek"):
             await p.seek(position_ms)
 
-    async def recommend_more_like(self, seed_track_id: str | None = None, limit: int = 10) -> list[dict]:
+    async def recommend_more_like(
+        self, seed_track_id: str | None = None, limit: int = 10
+    ) -> list[dict]:
         p = self._provider_for(self.state.active_provider)
         if not p or not hasattr(p, "recommendations"):
             return []
@@ -89,7 +121,15 @@ class MusicOrchestrator:
         # normalize to minimal dicts
         out = []
         for t in recs:
-            out.append({"id": t.get("id"), "name": t.get("name"), "artists": ", ".join([a.get("name", "") for a in t.get("artists", [])])})
+            out.append(
+                {
+                    "id": t.get("id"),
+                    "name": t.get("name"),
+                    "artists": ", ".join(
+                        [a.get("name", "") for a in t.get("artists", [])]
+                    ),
+                }
+            )
         return out
 
     async def pause(self) -> None:
@@ -112,12 +152,18 @@ class MusicOrchestrator:
         if p:
             await p.previous()
 
-    async def set_volume(self, level: int, *, duck: bool = False, timeout_s: int = 8) -> None:
+    async def set_volume(
+        self, level: int, *, duck: bool = False, timeout_s: int = 8
+    ) -> None:
         p = self._provider_for(self.state.active_provider)
         if p:
             await p.set_volume(level)
 
-    async def search(self, term: str, types: tuple[str, ...] = ("track", "artist", "album", "playlist")) -> dict:
+    async def search(
+        self,
+        term: str,
+        types: tuple[str, ...] = ("track", "artist", "album", "playlist"),
+    ) -> dict:
         p = self._provider_for()
         if not p:
             return {}
@@ -185,4 +231,7 @@ class MusicOrchestrator:
                 pass
 
     async def state(self) -> dict:
-        return {"active_provider": self.state.active_provider, "active_device": self.state.active_device}
+        return {
+            "active_provider": self.state.active_provider,
+            "active_device": self.state.active_device,
+        }

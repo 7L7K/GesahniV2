@@ -49,7 +49,9 @@ class SpotifyBudgetManager:
             # Exponential backoff: 1s, 2s, 4s, 8s, 16s, max 60s
             delay = min(1.0 * (2 ** (self._backoff_multiplier - 1)), 60.0)
             self._backoff_until = now + delay
-            self._backoff_multiplier = min(self._backoff_multiplier + 1, 6)  # Cap at 2^5 = 32s
+            self._backoff_multiplier = min(
+                self._backoff_multiplier + 1, 6
+            )  # Cap at 2^5 = 32s
 
     def clear_backoff(self) -> None:
         """Clear backoff state after successful request."""

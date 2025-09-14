@@ -7,11 +7,13 @@ router = APIRouter(tags=["Admin"])
 
 
 @router.get("/logs")
-async def logs(limit: int = Query(default=100, ge=1, le=500), user_id: str = Depends(get_current_user_id)) -> dict:
+async def logs(
+    limit: int = Query(default=100, ge=1, le=500),
+    user_id: str = Depends(get_current_user_id),
+) -> dict:
     """Return recent error logs for the authenticated user.
 
     Uses an in-process ring buffer populated by the logging configuration.
     """
     items = get_last_errors(limit)
     return {"logs": items}
-

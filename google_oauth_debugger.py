@@ -49,14 +49,14 @@ def run_script(script_name, description):
     try:
         # Set PYTHONPATH for imports
         env = os.environ.copy()
-        env['PYTHONPATH'] = str(Path(__file__).parent)
+        env["PYTHONPATH"] = str(Path(__file__).parent)
 
         result = subprocess.run(
             [sys.executable, str(script_path)],
             capture_output=True,
             text=True,
             env=env,
-            cwd=Path(__file__).parent
+            cwd=Path(__file__).parent,
         )
 
         if result.returncode == 0:
@@ -168,7 +168,7 @@ def show_expected_behavior():
         "exp": 1634567890,
         "iat": 1634567290,
         "email": "user@example.com",
-        "email_verified": True
+        "email_verified": True,
     }
     print(json.dumps(sample_token, indent=2))
 

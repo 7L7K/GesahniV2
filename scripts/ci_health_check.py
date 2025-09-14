@@ -11,13 +11,7 @@ from pathlib import Path
 
 def run_command(cmd: list, cwd: str = None, env: dict = None) -> tuple[int, str, str]:
     """Run a command and return (returncode, stdout, stderr)"""
-    result = subprocess.run(
-        cmd,
-        cwd=cwd,
-        env=env,
-        capture_output=True,
-        text=True
-    )
+    result = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True)
     return result.returncode, result.stdout, result.stderr
 
 
@@ -61,10 +55,7 @@ def run_smoke_test():
     env["PYTHONPATH"] = os.getcwd()  # Use current working directory
 
     # Try running smoke test (may fail due to environment, but that's ok)
-    returncode, stdout, stderr = run_command(
-        ["python", "scripts/smoke.py"],
-        env=env
-    )
+    returncode, stdout, stderr = run_command(["python", "scripts/smoke.py"], env=env)
 
     # Smoke test might fail due to Python environment issues
     # but database operations should still work
@@ -104,7 +95,7 @@ def verify_schema():
         print(f"❌ Schema verification failed: {stderr}")
         return False
 
-    schemas = [line.strip() for line in stdout.strip().split('\n') if line.strip()]
+    schemas = [line.strip() for line in stdout.strip().split("\n") if line.strip()]
 
     if len(schemas) == 6:
         print(f"✅ All 6 schemas present: {', '.join(schemas)}")

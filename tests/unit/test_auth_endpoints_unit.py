@@ -8,8 +8,6 @@ These tests focus on specific endpoint behaviors and edge cases:
 """
 
 
-
-
 class TestWhoamiEndpoint:
     """Unit tests for /whoami endpoint authentication scenarios."""
 

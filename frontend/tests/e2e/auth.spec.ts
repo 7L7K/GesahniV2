@@ -24,5 +24,3 @@ test.describe('Auth flow', () => {
         expect([401, 403]).toContain(whoami3.status());
     });
 });
-
-

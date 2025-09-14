@@ -23,6 +23,7 @@ class TestStatusRouting:
     def app(self):
         """Create test app with status routes."""
         from app.main import create_app
+
         return create_app()
 
     @pytest.fixture
@@ -197,9 +198,11 @@ class TestStatusRouting:
             "/v1/status/vector_store",
             "/v1/status/integrations",
             "/v1/status/rate_limit",
-            "/v1/status/observability"
+            "/v1/status/observability",
         ]
 
         documented_paths = set(paths.keys())
         for expected_path in expected_status_paths:
-            assert expected_path in documented_paths, f"Missing {expected_path} in OpenAPI schema"
+            assert (
+                expected_path in documented_paths
+            ), f"Missing {expected_path} in OpenAPI schema"

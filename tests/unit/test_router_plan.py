@@ -1,7 +1,9 @@
 from app.routers.config import build_plan
 
 
-def names(plan): return [s.import_path for s in plan]
+def names(plan):
+    return [s.import_path for s in plan]
+
 
 def test_ci_hides_optionals(monkeypatch):
     # Set CI=1 and clear optional flags
@@ -14,6 +16,7 @@ def test_ci_hides_optionals(monkeypatch):
     assert all("spotify" not in p for p in plan)
     assert all("oauth_apple" not in p for p in plan)
     assert all("auth_device" not in p for p in plan)
+
 
 def test_dev_opt_in(monkeypatch):
     # Clear CI, pytest flag, and optional flags first

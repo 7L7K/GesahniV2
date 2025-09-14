@@ -15,7 +15,10 @@ def _ws_origin_allowed(ws: WebSocket) -> bool:
         origin = ws.headers.get("Origin")
         configured = list(getattr(ws.app.state, "allowed_origins", []))  # type: ignore[attr-defined]
         if not configured:
-            _env = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000") or "http://localhost:3000"
+            _env = (
+                os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+                or "http://localhost:3000"
+            )
             configured = [o.strip() for o in _env.split(",") if o.strip()]
         return (not origin) or (origin in configured)
     except Exception:
@@ -23,7 +26,9 @@ def _ws_origin_allowed(ws: WebSocket) -> bool:
 
 
 @router.websocket("/ws/transcribe")
-async def websocket_transcribe(ws: WebSocket, user_id: str = Depends(get_current_user_id)):
+async def websocket_transcribe(
+    ws: WebSocket, user_id: str = Depends(get_current_user_id)
+):
     if not _ws_origin_allowed(ws):
         try:
             await ws.close(code=1008, reason="origin_not_allowed")
@@ -36,7 +41,9 @@ async def websocket_transcribe(ws: WebSocket, user_id: str = Depends(get_current
 
 
 @router.websocket("/ws/storytime")
-async def websocket_storytime(ws: WebSocket, user_id: str = Depends(get_current_user_id)):
+async def websocket_storytime(
+    ws: WebSocket, user_id: str = Depends(get_current_user_id)
+):
     if not _ws_origin_allowed(ws):
         try:
             await ws.close(code=1008, reason="origin_not_allowed")
@@ -70,7 +77,9 @@ async def websocket_storytime(ws: WebSocket, user_id: str = Depends(get_current_
 
 # Legacy aliases (keep working, hidden from docs)
 @router.websocket("/transcribe")
-async def _legacy_transcribe(ws: WebSocket, user_id: str = Depends(get_current_user_id)):
+async def _legacy_transcribe(
+    ws: WebSocket, user_id: str = Depends(get_current_user_id)
+):
     await websocket_transcribe(ws, user_id)  # type: ignore[arg-type]
 
 
@@ -80,4 +89,3 @@ async def _legacy_storytime(ws: WebSocket, user_id: str = Depends(get_current_us
 
 
 __all__ = ["router"]
-

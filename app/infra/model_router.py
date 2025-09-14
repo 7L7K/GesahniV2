@@ -30,5 +30,7 @@ def get_model_router() -> ModelRouter:
         RuntimeError: If the model router has not been initialized
     """
     if _model_router is None:
-        raise RuntimeError("Model router has not been initialized. Call init_model_router() first.")
+        raise RuntimeError(
+            "Model router has not been initialized. Call init_model_router() first."
+        )
     return _model_router

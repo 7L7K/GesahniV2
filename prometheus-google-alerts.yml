@@ -27,7 +27,7 @@ groups:
           service: google_oauth
         annotations:
           summary: "High Google OAuth refresh failure rate"
-          description: "Google OAuth token refresh failure rate >1% ({{ $value | printf "%.2f" }})"
+          description: "Google OAuth token refresh failure rate >1% ({{ $value }} printf %.2f)"
           runbook_url: "https://docs.example.com/google-oauth-troubleshooting"
 
       # Warning alert: Invalid grant detected (user revoked consent)

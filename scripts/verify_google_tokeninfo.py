@@ -29,16 +29,22 @@ def test_google_tokeninfo(token: str) -> dict:
         response = requests.get(url, params=params, timeout=10)
         return {
             "status_code": response.status_code,
-            "response": response.json() if response.headers.get("content-type", "").startswith("application/json") else response.text,
+            "response": (
+                response.json()
+                if response.headers.get("content-type", "").startswith(
+                    "application/json"
+                )
+                else response.text
+            ),
             "headers": dict(response.headers),
-            "success": response.status_code == 200
+            "success": response.status_code == 200,
         }
     except Exception as e:
         return {
             "status_code": None,
             "response": f"Request failed: {e}",
             "headers": {},
-            "success": False
+            "success": False,
         }
 
 

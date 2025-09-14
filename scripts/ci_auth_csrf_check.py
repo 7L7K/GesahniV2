@@ -26,25 +26,25 @@ def main():
     """Main CI check function."""
     parser = argparse.ArgumentParser(description="CI Auth/CSRF Protection Check")
     parser.add_argument(
-        '--max-issues',
+        "--max-issues",
         type=int,
         default=0,
-        help='Maximum number of issues allowed (default: 0)'
+        help="Maximum number of issues allowed (default: 0)",
     )
     parser.add_argument(
-        '--allow-public-issues',
-        action='store_true',
-        help='Allow issues with public routes (only fail on protected route issues)'
+        "--allow-public-issues",
+        action="store_true",
+        help="Allow issues with public routes (only fail on protected route issues)",
     )
     parser.add_argument(
-        '--audit-script',
-        default='auth_csrf_audit.py',
-        help='Path to the audit script (default: auth_csrf_audit.py)'
+        "--audit-script",
+        default="auth_csrf_audit.py",
+        help="Path to the audit script (default: auth_csrf_audit.py)",
     )
     parser.add_argument(
-        '--output',
-        default='audit_ci_results.json',
-        help='Output file for audit results (default: audit_ci_results.json)'
+        "--output",
+        default="audit_ci_results.json",
+        help="Output file for audit results (default: audit_ci_results.json)",
     )
 
     args = parser.parse_args()
@@ -64,7 +64,7 @@ def main():
     # Run the audit script
     print("🔍 Running auth/CSRF dependency audit...")
     try:
-        cmd = [sys.executable, str(audit_script), '--output', str(output_file)]
+        cmd = [sys.executable, str(audit_script), "--output", str(output_file)]
         result = subprocess.run(cmd, capture_output=True, text=True, check=False)
 
         if result.returncode != 0:
@@ -83,19 +83,19 @@ def main():
         return 3
 
     try:
-        with open(output_file, 'r') as f:
+        with open(output_file, "r") as f:
             report = json.load(f)
     except Exception as e:
         print(f"❌ Failed to read audit results: {e}")
         return 3
 
     # Analyze results
-    summary = report.get('summary', {})
-    issues = report.get('issues', [])
+    summary = report.get("summary", {})
+    issues = report.get("issues", [])
 
-    total_routes = summary.get('total_routes', 0)
-    unprotected_protected = summary.get('unprotected_protected_routes', 0)
-    total_issues = summary.get('issues_found', 0)
+    total_routes = summary.get("total_routes", 0)
+    unprotected_protected = summary.get("unprotected_protected_routes", 0)
+    total_issues = summary.get("issues_found", 0)
 
     print("\n📊 AUDIT RESULTS:")
     print(f"   Total routes analyzed: {total_routes}")
@@ -103,18 +103,30 @@ def main():
     print(f"   Total issues: {total_issues}")
 
     # Check for critical issues
-    allow_unprotected = os.getenv('ALLOW_UNPROTECTED_ROUTES_FOR_TESTING', '0').strip().lower() in {'1', 'true', 'yes', 'on'}
+    allow_unprotected = os.getenv(
+        "ALLOW_UNPROTECTED_ROUTES_FOR_TESTING", "0"
+    ).strip().lower() in {"1", "true", "yes", "on"}
 
     if unprotected_protected > 0:
         if allow_unprotected:
-            print(f"\n⚠️  WARNING: Found {unprotected_protected} unprotected protected routes!")
-            print("   ALLOW_UNPROTECTED_ROUTES_FOR_TESTING=1 is set, so allowing this for testing.")
+            print(
+                f"\n⚠️  WARNING: Found {unprotected_protected} unprotected protected routes!"
+            )
+            print(
+                "   ALLOW_UNPROTECTED_ROUTES_FOR_TESTING=1 is set, so allowing this for testing."
+            )
         else:
-            print(f"\n❌ CRITICAL: Found {unprotected_protected} unprotected protected routes!")
-            print("   These routes require authentication but are missing dependency chains.")
+            print(
+                f"\n❌ CRITICAL: Found {unprotected_protected} unprotected protected routes!"
+            )
+            print(
+                "   These routes require authentication but are missing dependency chains."
+            )
 
             # Show some examples
-            protected_issues = [issue for issue in issues if 'Protected route missing' in issue]
+            protected_issues = [
+                issue for issue in issues if "Protected route missing" in issue
+            ]
             for issue in protected_issues[:5]:  # Show first 5
                 print(f"   - {issue}")
 
@@ -125,7 +137,9 @@ def main():
 
     # Check total issues threshold
     if total_issues > args.max_issues:
-        print(f"\n⚠️  WARNING: Found {total_issues} issues (threshold: {args.max_issues})")
+        print(
+            f"\n⚠️  WARNING: Found {total_issues} issues (threshold: {args.max_issues})"
+        )
 
         if not args.allow_public_issues:
             print("   Failing CI due to issue count exceeding threshold.")
@@ -137,10 +151,12 @@ def main():
     if total_issues == 0:
         print("\n✅ SUCCESS: No auth/CSRF protection issues found!")
     else:
-        print(f"\n⚠️  CAUTION: Found {total_issues} issues but within acceptable threshold.")
+        print(
+            f"\n⚠️  CAUTION: Found {total_issues} issues but within acceptable threshold."
+        )
 
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

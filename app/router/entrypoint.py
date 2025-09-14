@@ -6,6 +6,7 @@ FastAPI request/app context it falls back to a light-weight config-based
 resolver that mirrors the startup logic.  Log usage so we can track legacy
 calls and remove this bridge after migration.
 """
+
 from __future__ import annotations
 
 import logging
@@ -155,6 +156,7 @@ async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]
                 try:
                     # Build a minimal AskRequest for hooks
                     from app.api.ask_contract import AskRequest as _AR
+
                     req = _AR(
                         text=str(payload.get("prompt") or ""),
                         session_id=payload.get("session_id"),
@@ -164,23 +166,33 @@ async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]
                         metadata=payload.get("metadata") or {},
                     )
                     result.setdefault("observability", {})
-                    result["observability"]["hooks"] = await _run_post_hooks(result, req)
+                    result["observability"]["hooks"] = await _run_post_hooks(
+                        result, req
+                    )
                     rd = result["observability"].setdefault("route_decision", {})
                     rd.setdefault("skill_won", None)
                     rd.setdefault("intent", payload.get("intent_hint") or "")
-                    rd.setdefault("model", result.get("model") or payload.get("model_override") or "")
+                    rd.setdefault(
+                        "model",
+                        result.get("model") or payload.get("model_override") or "",
+                    )
                     rd.setdefault("vendor", result.get("vendor") or "")
                     rd.setdefault("cache_hit", bool(result.get("cache_hit")))
                 except Exception:
                     result.setdefault("observability", {})
                     result["observability"]["hooks"] = {"results": [], "ok": True}
-                    result["observability"].setdefault("route_decision", {
-                        "skill_won": None,
-                        "intent": payload.get("intent_hint") or "",
-                        "model": result.get("model") or payload.get("model_override") or "",
-                        "vendor": result.get("vendor") or "",
-                        "cache_hit": bool(result.get("cache_hit")),
-                    })
+                    result["observability"].setdefault(
+                        "route_decision",
+                        {
+                            "skill_won": None,
+                            "intent": payload.get("intent_hint") or "",
+                            "model": result.get("model")
+                            or payload.get("model_override")
+                            or "",
+                            "vendor": result.get("vendor") or "",
+                            "cache_hit": bool(result.get("cache_hit")),
+                        },
+                    )
                 try:
                     result.setdefault("usage", {})
                     ensure_usage_ints(result["usage"])  # type: ignore[index]
@@ -202,6 +214,7 @@ async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]
             # Post-execution hooks (supervised)
             try:
                 from app.api.ask_contract import AskRequest as _AR
+
                 req = _AR(
                     text=str(payload.get("prompt") or ""),
                     session_id=payload.get("session_id"),
@@ -215,19 +228,26 @@ async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]
                 rd = result["observability"].setdefault("route_decision", {})
                 rd.setdefault("skill_won", None)
                 rd.setdefault("intent", payload.get("intent_hint") or "")
-                rd.setdefault("model", result.get("model") or payload.get("model_override") or "")
+                rd.setdefault(
+                    "model", result.get("model") or payload.get("model_override") or ""
+                )
                 rd.setdefault("vendor", result.get("vendor") or "")
                 rd.setdefault("cache_hit", bool(result.get("cache_hit")))
             except Exception:
                 result.setdefault("observability", {})
                 result["observability"]["hooks"] = {"results": [], "ok": True}
-                result["observability"].setdefault("route_decision", {
-                    "skill_won": None,
-                    "intent": payload.get("intent_hint") or "",
-                    "model": result.get("model") or payload.get("model_override") or "",
-                    "vendor": result.get("vendor") or "",
-                    "cache_hit": bool(result.get("cache_hit")),
-                })
+                result["observability"].setdefault(
+                    "route_decision",
+                    {
+                        "skill_won": None,
+                        "intent": payload.get("intent_hint") or "",
+                        "model": result.get("model")
+                        or payload.get("model_override")
+                        or "",
+                        "vendor": result.get("vendor") or "",
+                        "cache_hit": bool(result.get("cache_hit")),
+                    },
+                )
             try:
                 result.setdefault("usage", {})
                 ensure_usage_ints(result["usage"])  # type: ignore[index]
@@ -245,16 +265,21 @@ async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]
     except Exception:
         backend = "dryrun"
 
-    logger.info("compat.route_prompt: falling back to config resolver backend=%s", backend)
+    logger.info(
+        "compat.route_prompt: falling back to config resolver backend=%s", backend
+    )
 
     try:
         if backend == "openai":
             from app.routers.openai_router import openai_router
 
-            logger.warning("compat.route_prompt: calling OpenAI backend via bridge (legacy path)")
+            logger.warning(
+                "compat.route_prompt: calling OpenAI backend via bridge (legacy path)"
+            )
             result = await openai_router(payload)
             try:
                 from app.api.ask_contract import AskRequest as _AR
+
                 req = _AR(
                     text=str(payload.get("prompt") or ""),
                     session_id=payload.get("session_id"),
@@ -268,19 +293,26 @@ async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]
                 rd = result["observability"].setdefault("route_decision", {})
                 rd.setdefault("skill_won", None)
                 rd.setdefault("intent", payload.get("intent_hint") or "")
-                rd.setdefault("model", result.get("model") or payload.get("model_override") or "")
+                rd.setdefault(
+                    "model", result.get("model") or payload.get("model_override") or ""
+                )
                 rd.setdefault("vendor", result.get("vendor") or "")
                 rd.setdefault("cache_hit", bool(result.get("cache_hit")))
             except Exception:
                 result.setdefault("observability", {})
                 result["observability"]["hooks"] = {"results": [], "ok": True}
-                result["observability"].setdefault("route_decision", {
-                    "skill_won": None,
-                    "intent": payload.get("intent_hint") or "",
-                    "model": result.get("model") or payload.get("model_override") or "",
-                    "vendor": result.get("vendor") or "",
-                    "cache_hit": bool(result.get("cache_hit")),
-                })
+                result["observability"].setdefault(
+                    "route_decision",
+                    {
+                        "skill_won": None,
+                        "intent": payload.get("intent_hint") or "",
+                        "model": result.get("model")
+                        or payload.get("model_override")
+                        or "",
+                        "vendor": result.get("vendor") or "",
+                        "cache_hit": bool(result.get("cache_hit")),
+                    },
+                )
             try:
                 result.setdefault("usage", {})
                 ensure_usage_ints(result["usage"])  # type: ignore[index]
@@ -292,10 +324,13 @@ async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]
         elif backend == "llama":
             from app.routers.llama_router import llama_router
 
-            logger.warning("compat.route_prompt: calling LLaMA backend via bridge (legacy path)")
+            logger.warning(
+                "compat.route_prompt: calling LLaMA backend via bridge (legacy path)"
+            )
             result = await llama_router(payload)
             try:
                 from app.api.ask_contract import AskRequest as _AR
+
                 req = _AR(
                     text=str(payload.get("prompt") or ""),
                     session_id=payload.get("session_id"),

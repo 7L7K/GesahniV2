@@ -36,5 +36,3 @@ code=$(curl -s -o /dev/null -w "%{http_code}" -b cookies.txt "$BASE_URL/v1/whoam
 echo "HTTP $code"
 
 echo -e "\nDone."
-
-

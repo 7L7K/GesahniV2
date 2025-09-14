@@ -21,10 +21,13 @@ def export_openapi():
     schema = app.openapi()
 
     # Write to file
-    with open('artifacts/test_baseline/openapi.json', 'w') as f:
+    with open("artifacts/test_baseline/openapi.json", "w") as f:
         json.dump(schema, f, indent=2)
 
-    print(f"Exported OpenAPI spec with {len(schema.get('paths', {}))} paths to artifacts/test_baseline/openapi.json")
+    print(
+        f"Exported OpenAPI spec with {len(schema.get('paths', {}))} paths to artifacts/test_baseline/openapi.json"
+    )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     export_openapi()

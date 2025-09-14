@@ -24,5 +24,3 @@ LLM output.
   result in no action and a crisp explanation to the user. Actions requiring
   confirmation (e.g., large volume jumps, unlocking doors, large thermostat
   deltas) should surface the need for confirmation instead of executing.
-
-

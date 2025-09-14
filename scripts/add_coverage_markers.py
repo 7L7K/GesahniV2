@@ -40,7 +40,7 @@ def extract_http_calls(content: str) -> List[Tuple[str, str]]:
                 method, path = match
             else:
                 # Handle single capture group patterns
-                method = pattern.split('\\.')[1].split('\\(')[0]
+                method = pattern.split("\\.")[1].split("\\(")[0]
                 path = match
             calls.append((method.upper(), path))
 
@@ -50,7 +50,7 @@ def extract_http_calls(content: str) -> List[Tuple[str, str]]:
 def find_test_functions(content: str) -> List[Tuple[str, int, str]]:
     """Find test functions and their content."""
     functions = []
-    lines = content.split('\n')
+    lines = content.split("\n")
 
     current_function = None
     current_start = None
@@ -59,11 +59,13 @@ def find_test_functions(content: str) -> List[Tuple[str, int, str]]:
 
     for i, line in enumerate(lines):
         # Check for function definition
-        func_match = re.match(r'^\s*def\s+(test_\w+)\s*\(', line)
+        func_match = re.match(r"^\s*def\s+(test_\w+)\s*\(", line)
         if func_match:
             # Save previous function if exists
             if current_function:
-                functions.append((current_function, current_start, '\n'.join(current_content)))
+                functions.append(
+                    (current_function, current_start, "\n".join(current_content))
+                )
 
             current_function = func_match.group(1)
             current_start = i
@@ -71,7 +73,11 @@ def find_test_functions(content: str) -> List[Tuple[str, int, str]]:
             indent_level = len(line) - len(line.lstrip())
         elif current_function:
             current_indent = len(line) - len(line.lstrip()) if line.strip() else 0
-            if current_indent > indent_level or (line.strip() and current_indent == indent_level and not line.startswith(' ')):
+            if current_indent > indent_level or (
+                line.strip()
+                and current_indent == indent_level
+                and not line.startswith(" ")
+            ):
                 # End of function
                 current_content.append(line)
             else:
@@ -80,14 +86,14 @@ def find_test_functions(content: str) -> List[Tuple[str, int, str]]:
 
     # Add last function
     if current_function:
-        functions.append((current_function, current_start, '\n'.join(current_content)))
+        functions.append((current_function, current_start, "\n".join(current_content)))
 
     return functions
 
 
 def has_coverage_marker(content: str) -> bool:
     """Check if function already has coverage markers."""
-    return 'covers:' in content or '@pytest.mark.covers' in content
+    return "covers:" in content or "@pytest.mark.covers" in content
 
 
 def suggest_markers(http_calls: List[Tuple[str, str]]) -> List[str]:
@@ -96,7 +102,7 @@ def suggest_markers(http_calls: List[Tuple[str, str]]) -> List[str]:
     seen = set()
 
     for method, path in http_calls:
-        if path.startswith('/v1/') and (method, path) not in seen:
+        if path.startswith("/v1/") and (method, path) not in seen:
             markers.append(f"covers: {method}: {path}")
             seen.add((method, path))
 
@@ -108,7 +114,7 @@ def add_markers_to_function(func_content: str, markers: List[str]) -> str:
     if not markers:
         return func_content
 
-    lines = func_content.split('\n')
+    lines = func_content.split("\n")
     if len(lines) >= 2 and '"""' in lines[1]:
         # Has docstring, add to docstring
         docstring_start = 1
@@ -119,16 +125,19 @@ def add_markers_to_function(func_content: str, markers: List[str]) -> str:
                 break
 
         # Add markers to docstring
-        markers_text = '\n'.join(f'    {marker}' for marker in markers)
+        markers_text = "\n".join(f"    {marker}" for marker in markers)
         lines.insert(docstring_end, markers_text)
-        return '\n'.join(lines)
+        return "\n".join(lines)
     else:
         # No docstring, add as decorators
-        decorators = [f'@pytest.mark.covers("{marker.replace("covers: ", "")}")' for marker in markers]
+        decorators = [
+            f'@pytest.mark.covers("{marker.replace("covers: ", "")}")'
+            for marker in markers
+        ]
         # Insert decorators before function definition
         func_def_line = 0
         for i, line in enumerate(lines):
-            if line.strip().startswith('def '):
+            if line.strip().startswith("def "):
                 func_def_line = i
                 break
 
@@ -136,7 +145,7 @@ def add_markers_to_function(func_content: str, markers: List[str]) -> str:
         for decorator in reversed(decorators):
             lines.insert(func_def_line, decorator)
 
-        return '\n'.join(lines)
+        return "\n".join(lines)
 
 
 def process_test_file(file_path: Path, dry_run: bool = True, auto_add: bool = False):
@@ -164,7 +173,9 @@ def process_test_file(file_path: Path, dry_run: bool = True, auto_add: bool = Fa
             print(f"  {func_name}: No v1 routes found in HTTP calls")
             continue
 
-        print(f"  {func_name}: Found {len(http_calls)} HTTP calls, suggesting {len(markers)} markers")
+        print(
+            f"  {func_name}: Found {len(http_calls)} HTTP calls, suggesting {len(markers)} markers"
+        )
         for marker in markers:
             print(f"    {marker}")
 
@@ -190,8 +201,14 @@ def main():
 
     parser = argparse.ArgumentParser(description="Add coverage markers to tests")
     parser.add_argument("files", nargs="+", help="Test files to process")
-    parser.add_argument("--dry-run", action="store_true", help="Show suggestions without modifying files")
-    parser.add_argument("--auto-add", action="store_true", help="Automatically add suggested markers")
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show suggestions without modifying files",
+    )
+    parser.add_argument(
+        "--auto-add", action="store_true", help="Automatically add suggested markers"
+    )
 
     args = parser.parse_args()
 
@@ -203,11 +220,15 @@ def main():
             print(f"Error: {path} does not exist")
             continue
 
-        suggestions = process_test_file(path, dry_run=args.dry_run, auto_add=args.auto_add)
+        suggestions = process_test_file(
+            path, dry_run=args.dry_run, auto_add=args.auto_add
+        )
         total_suggestions += len(suggestions)
 
     if args.dry_run:
-        print(f"\n📋 Found {total_suggestions} functions that could benefit from coverage markers")
+        print(
+            f"\n📋 Found {total_suggestions} functions that could benefit from coverage markers"
+        )
         print("Run with --auto-add to apply suggestions")
     elif args.auto_add:
         print(f"\n✅ Added coverage markers to {total_suggestions} functions")

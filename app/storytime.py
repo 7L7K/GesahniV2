@@ -33,6 +33,7 @@ still being initialized. Import only the constant at use-time to avoid
 ImportError during app startup.
 """
 
+
 # Don't import OPENAI_TIMEOUT_MS at module import time to avoid import cycles.
 def _get_openai_timeout_ms() -> int:
     import os
@@ -41,6 +42,8 @@ def _get_openai_timeout_ms() -> int:
         return int(os.getenv("OPENAI_TIMEOUT_MS", "6000"))
     except Exception:
         return 6000
+
+
 from .token_utils import count_tokens
 
 logger = logging.getLogger(__name__)

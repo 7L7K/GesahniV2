@@ -36,4 +36,3 @@ CREATE INDEX IF NOT EXISTS idx_google_provider_identity ON third_party_tokens(pr
 -- CREATE INDEX IF NOT EXISTS idx_google_provider_identity ON third_party_tokens(provider, provider_sub);
 
 -- End
-

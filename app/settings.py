@@ -16,6 +16,7 @@ def _truthy(v: str | None) -> bool:
 # Object settings (lightweight; only a few core fields)
 # ----------------------------------------------------------------------------
 if BaseSettings:
+
     class Settings(BaseSettings):
         # When True, enforce strict token/contracts and issuer checks. Default True for prod.
         STRICT_CONTRACTS: bool = True
@@ -41,8 +42,12 @@ else:
         def __init__(self) -> None:
             prefix = "GESAHNI_"
             self.STRICT_CONTRACTS = _truthy(os.getenv(prefix + "STRICT_CONTRACTS", "1"))
-            self.OPTIONAL_PROBES_ENABLED = _truthy(os.getenv(prefix + "OPTIONAL_PROBES_ENABLED", "1"))
-            self.HTTP_CLIENT_TIMEOUT = float(os.getenv(prefix + "HTTP_CLIENT_TIMEOUT", "10.0"))
+            self.OPTIONAL_PROBES_ENABLED = _truthy(
+                os.getenv(prefix + "OPTIONAL_PROBES_ENABLED", "1")
+            )
+            self.HTTP_CLIENT_TIMEOUT = float(
+                os.getenv(prefix + "HTTP_CLIENT_TIMEOUT", "10.0")
+            )
             self.TEST_MODE = _truthy(os.getenv(prefix + "TEST_MODE", "0"))
 
     settings = Settings()
@@ -61,11 +66,15 @@ def _split_csv(env_value: str | None, default: Iterable[str]) -> list[str]:
 
 
 def allowed_gpt_models() -> list[str]:
-    return _split_csv(os.getenv("ALLOWED_GPT_MODELS"), ["gpt-4o", "gpt-4", "gpt-3.5-turbo"])
+    return _split_csv(
+        os.getenv("ALLOWED_GPT_MODELS"), ["gpt-4o", "gpt-4", "gpt-3.5-turbo"]
+    )
 
 
 def allowed_llama_models() -> list[str]:
-    return _split_csv(os.getenv("ALLOWED_LLAMA_MODELS"), ["llama3", "llama3:latest", "llama3.1"])
+    return _split_csv(
+        os.getenv("ALLOWED_LLAMA_MODELS"), ["llama3", "llama3:latest", "llama3.1"]
+    )
 
 
 def openai_timeout_ms() -> int:
@@ -178,7 +187,12 @@ def dry_run() -> bool:
 
 
 def auth_dev_bypass() -> bool:
-    return os.getenv("AUTH_DEV_BYPASS", "0").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("AUTH_DEV_BYPASS", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def skills_version() -> str:
@@ -209,7 +223,12 @@ def qdrant_collection() -> str:
 
 
 def strict_vector_store() -> bool:
-    return os.getenv("STRICT_VECTOR_STORE", "0").strip().lower() in {"1", "true", "yes", "on"}
+    return os.getenv("STRICT_VECTOR_STORE", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
 
 def embed_dim() -> int:
@@ -220,5 +239,9 @@ def embed_dim() -> int:
 
 
 def debug_model_routing() -> bool:
-    return os.getenv("DEBUG_MODEL_ROUTING", "0").strip().lower() in {"1", "true", "yes", "on"}
-
+    return os.getenv("DEBUG_MODEL_ROUTING", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }

@@ -74,4 +74,3 @@ CREATE INDEX IF NOT EXISTS idx_tokens_identity_id ON third_party_tokens(identity
 
 COMMIT;
 PRAGMA foreign_keys=on;
-

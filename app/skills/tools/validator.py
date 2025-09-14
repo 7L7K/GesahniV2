@@ -28,7 +28,11 @@ def validate_when(parsed_when: Any) -> tuple[bool, str, bool]:
     if parsed_when is None:
         return False, "Missing or ambiguous time ('when').", False
     if isinstance(parsed_when, str):
-        return False, "Recurring times (e.g. 'every day') are not accepted; please provide a concrete time.", False
+        return (
+            False,
+            "Recurring times (e.g. 'every day') are not accepted; please provide a concrete time.",
+            False,
+        )
     if isinstance(parsed_when, datetime):
         return True, "", False
     return False, "Unsupported 'when' format.", False
@@ -59,12 +63,17 @@ def validate_level(level: int | None) -> tuple[bool, str, bool]:
     return True, "", False
 
 
-def validate_temperature(target_temp: int | None, current_temp: int | None = None) -> tuple[bool, str, bool]:
+def validate_temperature(
+    target_temp: int | None, current_temp: int | None = None
+) -> tuple[bool, str, bool]:
     if target_temp is None:
         return False, "Missing temperature.", False
     if not (MIN_TEMP <= target_temp <= MAX_TEMP):
         return False, f"Temperature must be between {MIN_TEMP} and {MAX_TEMP}°C.", False
-    if current_temp is not None and abs(target_temp - current_temp) >= TEMP_CONFIRM_DELTA:
+    if (
+        current_temp is not None
+        and abs(target_temp - current_temp) >= TEMP_CONFIRM_DELTA
+    ):
         return False, "Large temperature change requires confirmation.", True
     return True, "", False
 
@@ -74,6 +83,7 @@ def validate_lock_action(action: str) -> tuple[bool, str, bool]:
     if action.lower() == "unlock":
         return False, "Unlocking doors requires explicit confirmation.", True
     return True, "", False
+
 
 """
 Validation policy for tool slot shapes (design-only).
@@ -105,5 +115,3 @@ Fallback behaviors:
 - If numeric out-of-range: clamp only when safe and inform user; else ask.
 
 """
-
-

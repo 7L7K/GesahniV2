@@ -132,8 +132,10 @@ def mark_oauth_tx_consummated(state: str) -> None:
 
 def cleanup_expired_oauth_tx() -> None:
     now = _now()
-    to_del = [s for s, r in _oauth_tx_store.items() if now - r.get("created_at", 0) > r.get("ttl", 600)]
+    to_del = [
+        s
+        for s, r in _oauth_tx_store.items()
+        if now - r.get("created_at", 0) > r.get("ttl", 600)
+    ]
     for s in to_del:
         _oauth_tx_store.pop(s, None)
-
-

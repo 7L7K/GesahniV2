@@ -10,7 +10,8 @@ import os
 import sys
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
+
 
 def test_google_scopes():
     """Test that Google OAuth scopes include openid."""
@@ -18,24 +19,27 @@ def test_google_scopes():
 
     try:
         from app.integrations.google.config import get_google_scopes
+
         scopes = get_google_scopes()
 
         print(f"Configured scopes: {scopes}")
         print()
 
         # Check for openid scope
-        has_openid = 'openid' in scopes
+        has_openid = "openid" in scopes
         print(f"✓ Contains 'openid' scope: {has_openid}")
 
         if has_openid:
             print("  → This is required for Google to issue ID tokens")
         else:
-            print("  ✗ WARNING: Missing 'openid' scope - Google will not issue ID tokens!")
+            print(
+                "  ✗ WARNING: Missing 'openid' scope - Google will not issue ID tokens!"
+            )
             print("  → Add 'openid' to your GOOGLE_SCOPES environment variable")
 
         # Check for profile scopes
-        has_email = 'https://www.googleapis.com/auth/userinfo.email' in scopes
-        has_profile = 'https://www.googleapis.com/auth/userinfo.profile' in scopes
+        has_email = "https://www.googleapis.com/auth/userinfo.email" in scopes
+        has_profile = "https://www.googleapis.com/auth/userinfo.profile" in scopes
 
         print(f"✓ Contains email scope: {has_email}")
         print(f"✓ Contains profile scope: {has_profile}")
@@ -46,6 +50,7 @@ def test_google_scopes():
         # Test URL generation
         try:
             from app.integrations.google.oauth import GoogleOAuth
+
             oauth = GoogleOAuth()
             auth_url = oauth.get_authorization_url("test_state")
 
@@ -53,14 +58,16 @@ def test_google_scopes():
             print()
 
             # Check if URL contains openid
-            if 'openid' in auth_url:
+            if "openid" in auth_url:
                 print("✓ OAuth URL contains 'openid' scope")
             else:
                 print("✗ OAuth URL missing 'openid' scope!")
 
         except Exception as e:
             print(f"Error generating OAuth URL: {e}")
-            print("This might be due to missing GOOGLE_CLIENT_ID/SECRET environment variables")
+            print(
+                "This might be due to missing GOOGLE_CLIENT_ID/SECRET environment variables"
+            )
 
         return has_openid
 
@@ -87,12 +94,15 @@ def test_oauth_flow_simulation():
             "exp": 2000000000,
             "iat": 1000000000,
             "email": "test@example.com",
-            "email_verified": True
+            "email_verified": True,
         }
 
         # Test jwt_decode function
         print("Testing JWT decode function...")
-        decoded = jwt_decode(jwt.encode(mock_payload, "dummy_key", algorithm="HS256"), options={"verify_signature": False})
+        decoded = jwt_decode(
+            jwt.encode(mock_payload, "dummy_key", algorithm="HS256"),
+            options={"verify_signature": False},
+        )
         print(f"✓ JWT decode successful: iss={decoded.get('iss')}")
 
         # Test issuer validation logic

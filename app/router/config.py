@@ -39,4 +39,3 @@ def _load() -> Config:
 
 
 CONFIG = _load()
-

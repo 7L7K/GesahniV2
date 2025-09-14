@@ -67,18 +67,28 @@ def load_env(force: bool | int | str = False) -> None:
         _logger.info("env_loader: TEST MODE activated - applying safe defaults")
 
         # Only apply rate limit defaults if ENABLE_RATE_LIMIT_IN_TESTS is not set
-        enable_rate_limiting_in_tests = os.getenv("ENABLE_RATE_LIMIT_IN_TESTS", "0").lower() in ("1", "true", "yes")
+        enable_rate_limiting_in_tests = os.getenv(
+            "ENABLE_RATE_LIMIT_IN_TESTS", "0"
+        ).lower() in (
+            "1",
+            "true",
+            "yes",
+        )
         if not enable_rate_limiting_in_tests:
-            os.environ.setdefault("RATE_LIMIT_MODE", "off")       # kills 429s (unless explicitly enabled)
+            os.environ.setdefault(
+                "RATE_LIMIT_MODE", "off"
+            )  # kills 429s (unless explicitly enabled)
 
         # Apply other test-safe defaults
-        os.environ.setdefault("AUTH_MODE", "cookie")              # predictable auth for tests
-        os.environ.setdefault("CSRF_ENFORCED", "1")               # enable CSRF but...
-        os.environ.setdefault("CSRF_MISSING_CODE", "400")         # normalize error code to 400
-        os.environ.setdefault("COOKIE_SECURE", "0")               # allow TestClient
-        os.environ.setdefault("COOKIE_SAMESITE", "Lax")           # safe default
-        os.environ.setdefault("ALLOW_DEV_ROUTERS", "1")           # mount compat routes for tests
-        os.environ.setdefault("JWT_OPTIONAL_IN_TESTS", "1")       # allow optional auth in tests
+        os.environ.setdefault("AUTH_MODE", "cookie")  # predictable auth for tests
+        os.environ.setdefault("CSRF_ENFORCED", "1")  # enable CSRF but...
+        os.environ.setdefault("CSRF_MISSING_CODE", "400")  # normalize error code to 400
+        os.environ.setdefault("COOKIE_SECURE", "0")  # allow TestClient
+        os.environ.setdefault("COOKIE_SAMESITE", "Lax")  # safe default
+        os.environ.setdefault("ALLOW_DEV_ROUTERS", "1")  # mount compat routes for tests
+        os.environ.setdefault(
+            "JWT_OPTIONAL_IN_TESTS", "1"
+        )  # allow optional auth in tests
 
     # Snapshot current mtimes and existence
     def _mtime(path: Path) -> float:

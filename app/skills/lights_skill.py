@@ -122,7 +122,11 @@ class LightsSkill(Skill):
             await record_action(
                 "lights.set",
                 idempotency_key=idemp,
-                metadata={"entity": entity, "level": level, "prev": {"state": prev_state, "brightness": prev_brightness}},
+                metadata={
+                    "entity": entity,
+                    "level": level,
+                    "prev": {"state": prev_state, "brightness": prev_brightness},
+                },
                 reversible=True,
             )
             return f"Set {friendly} to {level}% brightness."
@@ -159,7 +163,11 @@ class LightsSkill(Skill):
         await record_action(
             "lights.toggle",
             idempotency_key=idemp,
-            metadata={"entity": entity, "service": service, "prev": {"state": prev_state}},
+            metadata={
+                "entity": entity,
+                "service": service,
+                "prev": {"state": prev_state},
+            },
             reversible=True,
         )
         return f"Turned {action} {friendly}."

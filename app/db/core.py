@@ -30,9 +30,7 @@ if not DATABASE_URL:
         "DATABASE_URL environment variable is required (PostgreSQL-only)"
     )
 if DATABASE_URL.split(":", 1)[0].lower() == "sqlite":
-    raise RuntimeError(
-        "Legacy datastore path hit — not allowed in Postgres-only mode"
-    )
+    raise RuntimeError("Legacy datastore path hit — not allowed in Postgres-only mode")
 
 # Validate PostgreSQL URL format
 if not DATABASE_URL.startswith("postgresql://"):

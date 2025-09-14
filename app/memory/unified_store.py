@@ -204,9 +204,7 @@ def create_vector_store() -> VectorStore:
                     "QdrantVectorStore unavailable (qdrant-client not installed)"
                 )
             except Exception as e:
-                raise RuntimeError(
-                    f"QdrantVectorStore unavailable ({e})"
-                )
+                raise RuntimeError(f"QdrantVectorStore unavailable ({e})")
 
             # Parse host:port
             host = config.host or "localhost"

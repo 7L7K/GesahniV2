@@ -13,13 +13,11 @@ def setup_test_db():
     """Create test database with all required tables."""
 
     # Get test DB path - check all possible env vars
-    test_db_path = (os.getenv("CARE_DB") or
-                   os.getenv("AUTH_DB") or
-                   os.getenv("MUSIC_DB"))
+    test_db_path = os.getenv("CARE_DB") or os.getenv("AUTH_DB") or os.getenv("MUSIC_DB")
 
     if not test_db_path:
         # Create a temp file if not set
-        test_db_path = tempfile.mktemp(suffix='.db')
+        test_db_path = tempfile.mktemp(suffix=".db")
         print(f"No DB path env vars found, using temp file: {test_db_path}")
     else:
         print(f"Using DB path from env: {test_db_path}")
@@ -32,7 +30,8 @@ def setup_test_db():
     cursor = conn.cursor()
 
     # care_sessions table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS care_sessions (
             id TEXT PRIMARY KEY,
             resident_id TEXT,
@@ -41,18 +40,22 @@ def setup_test_db():
             created_at REAL,
             updated_at REAL
         )
-    """)
+    """
+    )
 
     # auth_users table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS auth_users (
             username TEXT PRIMARY KEY,
             password_hash TEXT NOT NULL
         )
-    """)
+    """
+    )
 
     # contacts table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS contacts (
             id TEXT PRIMARY KEY,
             resident_id TEXT,
@@ -61,10 +64,12 @@ def setup_test_db():
             priority INTEGER,
             quiet_hours TEXT
         )
-    """)
+    """
+    )
 
     # tv_config table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS tv_config (
             resident_id TEXT PRIMARY KEY,
             ambient_rotation INTEGER,
@@ -73,10 +78,12 @@ def setup_test_db():
             default_vibe TEXT,
             updated_at REAL
         )
-    """)
+    """
+    )
 
     # music_tokens table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS music_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             provider TEXT NOT NULL,
@@ -87,10 +94,12 @@ def setup_test_db():
             scope TEXT,
             UNIQUE(provider, provider_user_id)
         )
-    """)
+    """
+    )
 
     # third_party_tokens table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS third_party_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             identity_id TEXT NOT NULL,
@@ -103,10 +112,12 @@ def setup_test_db():
             scope TEXT,
             UNIQUE(identity_id, provider)
         )
-    """)
+    """
+    )
 
     # auth_identities table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS auth_identities (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -119,10 +130,12 @@ def setup_test_db():
             updated_at REAL,
             FOREIGN KEY (user_id) REFERENCES auth_users(username)
         )
-    """)
+    """
+    )
 
     # pat_tokens table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS pat_tokens (
             id TEXT PRIMARY KEY,
             user_id TEXT NOT NULL,
@@ -134,20 +147,24 @@ def setup_test_db():
             revoked_at REAL,
             FOREIGN KEY (user_id) REFERENCES auth_users(username)
         )
-    """)
+    """
+    )
 
     # notes table
-    cursor.execute("""
+    cursor.execute(
+        """
         CREATE TABLE IF NOT EXISTS notes (
             text TEXT
         )
-    """)
+    """
+    )
 
     conn.commit()
     conn.close()
 
     print(f"Test database setup complete at: {test_db_path}")
     return test_db_path
+
 
 if __name__ == "__main__":
     setup_test_db()

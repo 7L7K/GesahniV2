@@ -1,4 +1,5 @@
 """Tests for idempotency middleware and per-route rate limiting."""
+
 import uuid
 from unittest.mock import MagicMock, patch
 
@@ -25,7 +26,7 @@ class TestIdempotencyMiddleware:
         self.store = get_idempotency_store()
 
         # Clear any existing data
-        if hasattr(self.store, '_memory_store'):
+        if hasattr(self.store, "_memory_store"):
             self.store._memory_store.clear()
 
         # Add test routes
@@ -48,7 +49,7 @@ class TestIdempotencyMiddleware:
 
     def teardown_method(self):
         """Clean up after each test."""
-        if hasattr(self.store, '_memory_store'):
+        if hasattr(self.store, "_memory_store"):
             self.store._memory_store.clear()
 
     def test_idempotency_key_not_provided(self):
@@ -64,12 +65,16 @@ class TestIdempotencyMiddleware:
         headers = {"Idempotency-Key": idempotency_key}
 
         # First request
-        response1 = self.client.post("/v1/ask", json={"prompt": "test"}, headers=headers)
+        response1 = self.client.post(
+            "/v1/ask", json={"prompt": "test"}, headers=headers
+        )
         assert response1.status_code == 200
         data1 = response1.json()
 
         # Second request with same key
-        response2 = self.client.post("/v1/ask", json={"prompt": "test"}, headers=headers)
+        response2 = self.client.post(
+            "/v1/ask", json={"prompt": "test"}, headers=headers
+        )
         assert response2.status_code == 200
         data2 = response2.json()
 
@@ -81,8 +86,12 @@ class TestIdempotencyMiddleware:
         headers1 = {"Idempotency-Key": str(uuid.uuid4())}
         headers2 = {"Idempotency-Key": str(uuid.uuid4())}
 
-        response1 = self.client.post("/v1/ask", json={"prompt": "test"}, headers=headers1)
-        response2 = self.client.post("/v1/ask", json={"prompt": "test"}, headers=headers2)
+        response1 = self.client.post(
+            "/v1/ask", json={"prompt": "test"}, headers=headers1
+        )
+        response2 = self.client.post(
+            "/v1/ask", json={"prompt": "test"}, headers=headers2
+        )
 
         assert response1.status_code == 200
         assert response2.status_code == 200
@@ -102,7 +111,9 @@ class TestIdempotencyMiddleware:
         self.client.post("/v1/ask", json={"prompt": "test1"}, headers=headers)
 
         # Second request with same key but different body
-        response = self.client.post("/v1/ask", json={"prompt": "test2"}, headers=headers)
+        response = self.client.post(
+            "/v1/ask", json={"prompt": "test2"}, headers=headers
+        )
         assert response.status_code == 409
 
         data = response.json()
@@ -127,11 +138,15 @@ class TestIdempotencyMiddleware:
         headers = {"Idempotency-Key": idempotency_key}
 
         # First request to payment endpoint
-        response1 = self.client.post("/v1/payments", json={"amount": 100}, headers=headers)
+        response1 = self.client.post(
+            "/v1/payments", json={"amount": 100}, headers=headers
+        )
         assert response1.status_code == 200
 
         # Second request with same key should return same result
-        response2 = self.client.post("/v1/payments", json={"amount": 100}, headers=headers)
+        response2 = self.client.post(
+            "/v1/payments", json={"amount": 100}, headers=headers
+        )
         assert response2.status_code == 200
 
         data1 = response1.json()
@@ -148,7 +163,7 @@ class TestIdempotencyMiddleware:
         data = response.json()
         assert "Invalid Idempotency-Key format" in data.get("detail", "")
 
-    @patch('app.router.ask_api.get_idempotency_store')
+    @patch("app.router.ask_api.get_idempotency_store")
     def test_idempotency_redis_fallback(self, mock_get_store):
         """Test that ask endpoint handles Redis unavailability gracefully."""
         # Mock store to raise exception
@@ -187,7 +202,8 @@ class TestPerRouteRateLimiting:
 
         # Ensure rate limiting is enabled in tests
         import os
-        os.environ['ENABLE_RATE_LIMIT_IN_TESTS'] = '1'
+
+        os.environ["ENABLE_RATE_LIMIT_IN_TESTS"] = "1"
 
         # Add test routes
         @self.app.post("/v1/ask")
@@ -217,6 +233,7 @@ class TestPerRouteRateLimiting:
         # Add middleware - important: add in correct order
         # RequestIDMiddleware should be added first for proper logging
         from app.middleware import RequestIDMiddleware
+
         self.app.add_middleware(RequestIDMiddleware)
         self.app.add_middleware(RateLimitMiddleware)
 
@@ -326,7 +343,7 @@ class TestPerRouteRateLimiting:
         assert response.status_code == 429
         assert "Retry-After" in response.headers
 
-    @patch.dict('os.environ', {'RATE_LIMIT_MODE': 'off'})
+    @patch.dict("os.environ", {"RATE_LIMIT_MODE": "off"})
     def test_rate_limit_disabled_by_env(self):
         """Test that rate limiting can be disabled via environment variable."""
         # Should allow unlimited requests when disabled
@@ -344,7 +361,7 @@ class TestIdempotencyAndRateLimitIntegration:
 
         # Clear states
         store = get_idempotency_store()
-        if hasattr(store, '_memory_store'):
+        if hasattr(store, "_memory_store"):
             store._memory_store.clear()
         _test_clear_buckets()
         _test_clear_metrics()
@@ -355,7 +372,8 @@ class TestIdempotencyAndRateLimitIntegration:
 
         # Ensure rate limiting is enabled in tests
         import os
-        os.environ['ENABLE_RATE_LIMIT_IN_TESTS'] = '1'
+
+        os.environ["ENABLE_RATE_LIMIT_IN_TESTS"] = "1"
 
         @self.app.post("/v1/ask")
         async def ask_endpoint():
@@ -363,6 +381,7 @@ class TestIdempotencyAndRateLimitIntegration:
 
         # Add both middlewares in correct order
         from app.middleware import RequestIDMiddleware
+
         self.app.add_middleware(RequestIDMiddleware)
         self.app.add_middleware(IdempotencyMiddleware)
         self.app.add_middleware(RateLimitMiddleware)
@@ -372,7 +391,7 @@ class TestIdempotencyAndRateLimitIntegration:
     def teardown_method(self):
         """Clean up after each test."""
         store = get_idempotency_store()
-        if hasattr(store, '_memory_store'):
+        if hasattr(store, "_memory_store"):
             store._memory_store.clear()
         _test_clear_buckets()
         _test_clear_metrics()
@@ -384,12 +403,16 @@ class TestIdempotencyAndRateLimitIntegration:
         headers = {"Idempotency-Key": idempotency_key}
 
         # First request - should succeed and be cached
-        response1 = self.client.post("/v1/ask", json={"prompt": "test"}, headers=headers)
+        response1 = self.client.post(
+            "/v1/ask", json={"prompt": "test"}, headers=headers
+        )
         assert response1.status_code == 200
         data1 = response1.json()
 
         # Second request with same key - should return cached response and bypass rate limit
-        response2 = self.client.post("/v1/ask", json={"prompt": "test"}, headers=headers)
+        response2 = self.client.post(
+            "/v1/ask", json={"prompt": "test"}, headers=headers
+        )
         assert response2.status_code == 200
         data2 = response2.json()
 
@@ -400,12 +423,16 @@ class TestIdempotencyAndRateLimitIntegration:
         """Test that rate limiting applies when using different idempotency keys."""
         # First request with key1
         headers1 = {"Idempotency-Key": str(uuid.uuid4())}
-        response1 = self.client.post("/v1/ask", json={"prompt": "test"}, headers=headers1)
+        response1 = self.client.post(
+            "/v1/ask", json={"prompt": "test"}, headers=headers1
+        )
         assert response1.status_code == 200
 
         # Second request with key2 - should be rate limited (only 1 request allowed)
         headers2 = {"Idempotency-Key": str(uuid.uuid4())}
-        response2 = self.client.post("/v1/ask", json={"prompt": "test"}, headers=headers2)
+        response2 = self.client.post(
+            "/v1/ask", json={"prompt": "test"}, headers=headers2
+        )
         assert response2.status_code == 429
 
 

@@ -23,7 +23,9 @@ def _save_routines(r: dict[str, list[str]]) -> None:
         import json
 
         _ROUTINES_PATH.parent.mkdir(parents=True, exist_ok=True)
-        _ROUTINES_PATH.write_text(json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8")
+        _ROUTINES_PATH.write_text(
+            json.dumps(r, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     except Exception:
         pass
 
@@ -42,7 +44,12 @@ class RoutineSkill(Skill):
             r = _load_routines()
             r[name] = steps
             _save_routines(r)
-            await record_action("routine.create", idempotency_key=f"routine:create:{name}", metadata={"name": name, "steps": steps}, reversible=False)
+            await record_action(
+                "routine.create",
+                idempotency_key=f"routine:create:{name}",
+                metadata={"name": name, "steps": steps},
+                reversible=False,
+            )
             return f"Saved routine {name} with {len(steps)} steps."
         if gd.get("name"):
             name = gd["name"].strip()
@@ -50,7 +57,12 @@ class RoutineSkill(Skill):
             if name not in r:
                 return f"No routine named {name}."
             # Execute steps best-effort: record only
-            await record_action("routine.run", idempotency_key=f"routine:run:{name}:{int(__import__('time').time())}", metadata={"name": name, "steps": r[name]}, reversible=True)
+            await record_action(
+                "routine.run",
+                idempotency_key=f"routine:run:{name}:{int(__import__('time').time())}",
+                metadata={"name": name, "steps": r[name]},
+                reversible=True,
+            )
             return f"Running routine {name} now: {', '.join(r[name])}"
         return "Could not parse routine command."
 
@@ -75,7 +87,9 @@ def _load_routines() -> dict:
 
 def _save_routines(d: dict) -> None:
     try:
-        ROUTINES_DB.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+        ROUTINES_DB.write_text(
+            json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
     except Exception:
         pass
 
@@ -94,7 +108,11 @@ class RoutineSkill(Skill):
             r = _load_routines()
             r[name] = {"steps": steps, "created_at": datetime.now().isoformat()}
             _save_routines(r)
-            await record_action("routine.create", idempotency_key=f"routine:{name}", metadata={"steps": steps})
+            await record_action(
+                "routine.create",
+                idempotency_key=f"routine:{name}",
+                metadata={"steps": steps},
+            )
             return f"Routine '{name}' created with {len(steps)} steps."
 
         if gd.get("rname"):
@@ -104,11 +122,14 @@ class RoutineSkill(Skill):
             if not routine:
                 return f"No routine named {name}."
             # execute steps (best-effort: just record in ledger and notes)
-            await record_action("routine.run", idempotency_key=f"routine:run:{name}:{int(datetime.now().timestamp()//10)}", metadata={"name": name})
+            await record_action(
+                "routine.run",
+                idempotency_key=f"routine:run:{name}:{int(datetime.now().timestamp()//10)}",
+                metadata={"name": name},
+            )
             return f"Running routine '{name}': {', '.join(routine.get('steps', []))}"
 
         return "Could not parse routine command."
 
+
 __all__ = ["RoutineSkill"]
-
-

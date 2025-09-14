@@ -18,9 +18,7 @@ def test_deprecation_headers():
 
     # Test with successor version
     response = DeprecationRedirectResponse(
-        url="/v1/test",
-        successor_version="/v1/test",
-        sunset_date="2025-12-31"
+        url="/v1/test", successor_version="/v1/test", sunset_date="2025-12-31"
     )
 
     assert response.headers.get("Deprecation") == "true"
@@ -57,15 +55,26 @@ def test_compat_endpoints_headers():
         response = client.get(endpoint, allow_redirects=False)
 
         # Should return 308 redirect
-        assert response.status_code == 308, f"Expected 308 for {endpoint}, got {response.status_code}"
+        assert (
+            response.status_code == 308
+        ), f"Expected 308 for {endpoint}, got {response.status_code}"
 
         # Check deprecation headers
-        assert response.headers.get("Deprecation") == "true", f"Missing Deprecation header for {endpoint}"
-        assert response.headers.get("Sunset") == "2025-12-31", f"Wrong Sunset header for {endpoint}: {response.headers.get('Sunset')}"
-        assert response.headers.get("Link") == f'<{expected_redirect}>; rel="successor-version"', f"Wrong Link header for {endpoint}"
+        assert (
+            response.headers.get("Deprecation") == "true"
+        ), f"Missing Deprecation header for {endpoint}"
+        assert (
+            response.headers.get("Sunset") == "2025-12-31"
+        ), f"Wrong Sunset header for {endpoint}: {response.headers.get('Sunset')}"
+        assert (
+            response.headers.get("Link")
+            == f'<{expected_redirect}>; rel="successor-version"'
+        ), f"Wrong Link header for {endpoint}"
 
         # Check redirect location
-        assert response.headers.get("Location") == expected_redirect, f"Wrong redirect location for {endpoint}"
+        assert (
+            response.headers.get("Location") == expected_redirect
+        ), f"Wrong redirect location for {endpoint}"
 
         logger.info(f"✅ {endpoint} deprecation headers correct")
 
@@ -95,10 +104,18 @@ def test_post_endpoints():
 
         response = client.post(endpoint, allow_redirects=False)
 
-        assert response.status_code == 308, f"Expected 308 for POST {endpoint}, got {response.status_code}"
-        assert response.headers.get("Deprecation") == "true", f"Missing Deprecation header for POST {endpoint}"
-        assert response.headers.get("Sunset") == "2025-12-31", f"Wrong Sunset header for POST {endpoint}"
-        assert response.headers.get("Location") == expected_redirect, f"Wrong redirect location for POST {endpoint}"
+        assert (
+            response.status_code == 308
+        ), f"Expected 308 for POST {endpoint}, got {response.status_code}"
+        assert (
+            response.headers.get("Deprecation") == "true"
+        ), f"Missing Deprecation header for POST {endpoint}"
+        assert (
+            response.headers.get("Sunset") == "2025-12-31"
+        ), f"Wrong Sunset header for POST {endpoint}"
+        assert (
+            response.headers.get("Location") == expected_redirect
+        ), f"Wrong redirect location for POST {endpoint}"
 
         logger.info(f"✅ POST {endpoint} deprecation headers correct")
 
@@ -119,5 +136,6 @@ if __name__ == "__main__":
     except Exception as e:
         logger.error(f"💥 Test failed: {e}")
         import traceback
+
         traceback.print_exc()
         exit(1)

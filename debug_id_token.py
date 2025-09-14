@@ -27,9 +27,9 @@ def decode_id_token_locally(token: str) -> tuple[dict, dict]:
     """Decode ID token without signature verification and return header/payload."""
     try:
         # Decode header
-        header_b64 = token.split('.')[0]
+        header_b64 = token.split(".")[0]
         # Add padding if needed
-        header_b64 += '=' * ((4 - len(header_b64) % 4) % 4)
+        header_b64 += "=" * ((4 - len(header_b64) % 4) % 4)
         header_bytes = base64.urlsafe_b64decode(header_b64)
         header = json.loads(header_bytes.decode())
 
@@ -50,7 +50,7 @@ def validate_google_issuer(issuer: str | None) -> tuple[bool, str]:
     # Google uses these issuer values
     valid_issuers = [
         "https://accounts.google.com",
-        "accounts.google.com"  # Sometimes without scheme
+        "accounts.google.com",  # Sometimes without scheme
     ]
 
     if issuer in valid_issuers:
@@ -121,12 +121,15 @@ def main():
 
     # Check if this looks like a Google token
     has_google_indicators = (
-        issuer and ("google" in issuer.lower() or "accounts.google.com" in issuer) or
-        payload.get("email") or
-        payload.get("email_verified") is not None
+        issuer
+        and ("google" in issuer.lower() or "accounts.google.com" in issuer)
+        or payload.get("email")
+        or payload.get("email_verified") is not None
     )
 
-    print(f"Google token indicators: {'✓ Present' if has_google_indicators else '✗ Missing'}")
+    print(
+        f"Google token indicators: {'✓ Present' if has_google_indicators else '✗ Missing'}"
+    )
 
     if not is_valid:
         print()
@@ -135,7 +138,9 @@ def main():
         print("2. Check that you're requesting an ID token (not just access token)")
         print("3. Verify your client configuration in Google Cloud Console")
         print("4. Test with Google's tokeninfo endpoint:")
-        print(f"   curl -s 'https://oauth2.googleapis.com/tokeninfo?id_token={token[:50]}...' | jq .")
+        print(
+            f"   curl -s 'https://oauth2.googleapis.com/tokeninfo?id_token={token[:50]}...' | jq ."
+        )
 
 
 if __name__ == "__main__":

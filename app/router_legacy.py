@@ -24,8 +24,11 @@ try:  # pragma: no cover - optional
     from .token_budgeter import clamp_prompt
 except Exception:  # pragma: no cover - fallback when module missing
 
-    def clamp_prompt(prompt: str, intent: str | None, max_tokens: int | None = None) -> str:
+    def clamp_prompt(
+        prompt: str, intent: str | None, max_tokens: int | None = None
+    ) -> str:
         return prompt
+
 
 # Import router policy settings
 try:
@@ -115,7 +118,10 @@ def normalize_error(error: Exception) -> ErrorType:
     # Handle HTTPX specific errors
     if isinstance(
         error,
-        httpx.TimeoutException | httpx.ReadTimeout | httpx.WriteTimeout | httpx.PoolTimeout,
+        httpx.TimeoutException
+        | httpx.ReadTimeout
+        | httpx.WriteTimeout
+        | httpx.PoolTimeout,
     ):
         return ErrorType.NETWORK_TIMEOUT
 
@@ -260,7 +266,9 @@ def _get_fallback_model(vendor: str) -> str:
 def _dry(engine: str, model: str) -> str:
     """Dry run function for testing and safe development."""
     label = model.split(":")[0] if engine == "llama" else model
-    backend_type = "PROMPT_BACKEND=dryrun" if PROMPT_BACKEND == "dryrun" else "DEBUG_MODEL_ROUTING"
+    backend_type = (
+        "PROMPT_BACKEND=dryrun" if PROMPT_BACKEND == "dryrun" else "DEBUG_MODEL_ROUTING"
+    )
     msg = f"[dry-run] {backend_type}: would call {engine} {label}"
     logger.info(msg)
     return msg
@@ -538,7 +546,15 @@ async def _trigger_rag_post_processing(
     """
     try:
         # Example: Analyze response for follow-up questions that might need RAG
-        if rag_client and any(keyword in response.lower() for keyword in ["more information", "tell me more", "what about", "how does"]):
+        if rag_client and any(
+            keyword in response.lower()
+            for keyword in [
+                "more information",
+                "tell me more",
+                "what about",
+                "how does",
+            ]
+        ):
             logger.debug("RAG post-processing triggered by response keywords")
             # Could implement follow-up RAG queries here
             return {"triggered": True, "reason": "response_keywords"}
@@ -563,7 +579,16 @@ async def _trigger_skills_post_processing(
     """
     try:
         # Example: Look for action-oriented language in responses
-        if any(keyword in response.lower() for keyword in ["remind me", "set a timer", "turn on", "turn off", "play music"]):
+        if any(
+            keyword in response.lower()
+            for keyword in [
+                "remind me",
+                "set a timer",
+                "turn on",
+                "turn off",
+                "play music",
+            ]
+        ):
             logger.debug("Skills post-processing triggered by action keywords")
             # Could implement skills triggering logic here
             return {"triggered": True, "reason": "action_keywords"}
@@ -588,7 +613,10 @@ async def _trigger_memory_post_processing(
     """
     try:
         # Example: Check if response contains important information worth remembering
-        if len(response) > 100 and any(keyword in response.lower() for keyword in ["important", "remember", "note that", "key point"]):
+        if len(response) > 100 and any(
+            keyword in response.lower()
+            for keyword in ["important", "remember", "note that", "key point"]
+        ):
             logger.debug("Memory post-processing triggered by content analysis")
             # Could implement memory update logic here
             return {"triggered": True, "reason": "important_content"}
@@ -724,7 +752,7 @@ async def run_router_tests():
         "phase2_single_path": await _test_phase2_single_path(),
         "phase3_health_deadlines": await _test_phase3_health_deadlines(),
         "phase4_observability": await _test_phase4_observability(),
-        "phase5_diet": _test_phase5_diet()
+        "phase5_diet": _test_phase5_diet(),
     }
 
     end_time = datetime.now()
@@ -763,7 +791,7 @@ async def _test_phase1_correctness():
             keyword_hit=None,
             stream=False,
             allow_fallback=True,
-            request_id=None  # Should be allowed
+            request_id=None,  # Should be allowed
         )
         assert decision.request_id is None, "request_id should accept None"
 
@@ -780,9 +808,7 @@ async def _test_phase2_single_path():
 
         # Mock a simple prompt routing scenario
         result = await route_prompt(
-            prompt="Test prompt",
-            user_id="test_user",
-            model_override=None
+            prompt="Test prompt", user_id="test_user", model_override=None
         )
 
         # Verify result is a string (successful routing)
@@ -803,7 +829,9 @@ async def _test_phase3_health_deadlines():
         assert budget_ms > 0, "ROUTER_BUDGET_MS should be positive"
 
         # Test that OpenAI health loop is available
-        assert callable(start_openai_health_background_loop), "Health loop should be available"
+        assert callable(
+            start_openai_health_background_loop
+        ), "Health loop should be available"
 
         return True
     except Exception as e:
@@ -824,7 +852,7 @@ async def _test_phase4_observability():
             keyword_hit=None,
             stream=False,
             allow_fallback=True,
-            request_id="test123"
+            request_id="test123",
         )
 
         # This should not crash and should handle request_id properly
@@ -843,7 +871,7 @@ async def _test_phase4_observability():
             cb_global_open=False,
             cache_hit=False,
             ptoks=50,
-            prompt_len=200
+            prompt_len=200,
         )
 
         return True
@@ -855,21 +883,25 @@ async def _test_phase4_observability():
 def _test_phase5_diet():
     """Test Phase 5: Diet (unused code removal)."""
     try:
-
         # Get all functions in router module
-        router_functions = [name for name, obj in globals().items()
-                          if callable(obj) and not name.startswith('_')]
+        router_functions = [
+            name
+            for name, obj in globals().items()
+            if callable(obj) and not name.startswith("_")
+        ]
 
         # Check that unused functions are not present
         unused_functions = [
-            '_fact_from_qa',
-            '_needs_rag',
-            '_classify_profile_question',
-            '_maybe_update_profile_from_statement'
+            "_fact_from_qa",
+            "_needs_rag",
+            "_classify_profile_question",
+            "_maybe_update_profile_from_statement",
         ]
 
         for func_name in unused_functions:
-            assert func_name not in globals(), f"Unused function {func_name} should be removed"
+            assert (
+                func_name not in globals()
+            ), f"Unused function {func_name} should be removed"
 
         return True
     except Exception as e:
@@ -897,6 +929,7 @@ async def route_prompt(
 
     # Track start time for budget enforcement
     import time
+
     start_time = time.monotonic()
 
     # Note: original_messages removed - PromptBuilder handles all prompt formatting
@@ -1015,7 +1048,9 @@ async def route_prompt(
         rec.matched_skill = chosen.get("skill_name") if chosen else None
         rec.skill_why = chosen.get("why") if chosen else None
         # Attach top candidate scores/names for observability
-        rec.rag_doc_ids = [c.get("skill_name") for c in candidates]  # repurpose field for top-N
+        rec.rag_doc_ids = [
+            c.get("skill_name") for c in candidates
+        ]  # repurpose field for top-N
 
     if chosen is not None:
         logger.info(
@@ -1030,7 +1065,13 @@ async def route_prompt(
             if rec is not None:
                 await append_history(rec)
             else:
-                await append_history({"prompt": prompt, "engine_used": "skill", "response": chosen.get("text") if chosen else None})
+                await append_history(
+                    {
+                        "prompt": prompt,
+                        "engine_used": "skill",
+                        "response": chosen.get("text") if chosen else None,
+                    }
+                )
         except Exception:
             logger.exception("Failed to write skill history")
 
@@ -1044,10 +1085,17 @@ async def route_prompt(
 
     # Wire clamp (optional)
     if os.getenv("ENABLE_PROMPT_CLAMP", "1") == "1":
-        built_prompt = clamp_prompt(built_prompt, intent, max_tokens=int(os.getenv("MODEL_ROUTER_HEAVY_TOKENS", "4096")))
+        built_prompt = clamp_prompt(
+            built_prompt,
+            intent,
+            max_tokens=int(os.getenv("MODEL_ROUTER_HEAVY_TOKENS", "4096")),
+        )
 
     # Check for debug mode or dry run backend
-    debug_route = os.getenv("DEBUG_MODEL_ROUTING", "0").lower() in {"1", "true", "yes"} or PROMPT_BACKEND == "dryrun"
+    debug_route = (
+        os.getenv("DEBUG_MODEL_ROUTING", "0").lower() in {"1", "true", "yes"}
+        or PROMPT_BACKEND == "dryrun"
+    )
 
     # Early cache lookup short-circuit
     cached_answer = lookup_cached_answer(norm_prompt)
@@ -1330,7 +1378,11 @@ async def route_prompt(
     # (like ask()) can log the final chosen vendor/model without duplicating
     # router-level golden traces.
     try:
-        if isinstance(gen_opts, dict) and "_routing_out" in gen_opts and isinstance(gen_opts["_routing_out"], dict):
+        if (
+            isinstance(gen_opts, dict)
+            and "_routing_out" in gen_opts
+            and isinstance(gen_opts["_routing_out"], dict)
+        ):
             try:
                 gen_opts["_routing_out"].update(
                     {
@@ -1379,7 +1431,7 @@ async def route_prompt(
         if can_user_call_llm(user_id):
             try:
                 # Ask model to propose a single JSON tool invocation
-                system = "You are a tool-using assistant. Only respond with a JSON object like {\"tool\": \"tool.name\", \"slots\": {...}}. Do not include other text."
+                system = 'You are a tool-using assistant. Only respond with a JSON object like {"tool": "tool.name", "slots": {...}}. Do not include other text.'
                 parsed = None
                 if chosen_vendor == "openai":
                     try:
@@ -1415,8 +1467,16 @@ async def route_prompt(
                     except Exception:
                         parsed = None
 
-                if parsed and isinstance(parsed, dict) and "tool" in parsed and "slots" in parsed and validate_and_execute:
-                    executed, msg, confirm = await validate_and_execute(parsed["tool"], parsed["slots"], user_id=user_id)
+                if (
+                    parsed
+                    and isinstance(parsed, dict)
+                    and "tool" in parsed
+                    and "slots" in parsed
+                    and validate_and_execute
+                ):
+                    executed, msg, confirm = await validate_and_execute(
+                        parsed["tool"], parsed["slots"], user_id=user_id
+                    )
                     if executed:
                         # successful schema-first execution; record llm fallback metric
                         try:
@@ -1431,7 +1491,9 @@ async def route_prompt(
                             return "Action requires confirmation."
                         # fallthrough to normal model path if validation failed
             except Exception:
-                logger.debug("schema-first fallback attempt failed; continuing to normal model path")
+                logger.debug(
+                    "schema-first fallback attempt failed; continuing to normal model path"
+                )
     if debug_route:
         result = _dry(chosen_vendor, chosen_model)
         return result
@@ -1481,8 +1543,6 @@ async def route_prompt(
         except Exception:
             logger.exception("record() failed in OpenAI path")
 
-
-
         return text
 
     elif chosen_vendor == "ollama":
@@ -1531,15 +1591,10 @@ async def route_prompt(
         except Exception:
             logger.exception("record() failed in LLaMA path")
 
-
-
         return text
 
     else:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Unknown vendor: {chosen_vendor}"
-        )
+        raise HTTPException(status_code=500, detail=f"Unknown vendor: {chosen_vendor}")
 
 
 async def _call_gpt(
@@ -1601,7 +1656,7 @@ async def _call_gpt(
                 timeout=min(OPENAI_TIMEOUT_MS / 1000, remaining_budget),
                 routing_decision=routing_decision,
             ),
-            timeout=remaining_budget
+            timeout=remaining_budget,
         )
     except TypeError:
         # Enforce router budget with asyncio.wait_for
@@ -1614,7 +1669,7 @@ async def _call_gpt(
                 timeout=min(OPENAI_TIMEOUT_MS / 1000, remaining_budget),
                 routing_decision=routing_decision,
             ),
-            timeout=remaining_budget
+            timeout=remaining_budget,
         )
     except Exception as e:
         # Record failure for circuit breaker
@@ -1632,7 +1687,9 @@ async def _call_gpt(
                     "error_type": error_type,
                     "error_msg": error_msg,
                     "user_hash": hash_user_id(user_id) if user_id != "anon" else "anon",
-                    "request_id": routing_decision.request_id if routing_decision else None,
+                    "request_id": (
+                        routing_decision.request_id if routing_decision else None
+                    ),
                 }
             },
         )
@@ -1669,12 +1726,15 @@ async def _call_gpt(
 
     logger.debug("_call_gpt result model=%s result=%s", model, text)
     final_text = await _finalise(
-        "gpt", prompt, text, rec,
+        "gpt",
+        prompt,
+        text,
+        rec,
         fallback=fallback,
         vendor="openai",
         model=model,
         user_id=user_id,
-        session_id=session_id
+        session_id=session_id,
     )
     fallback_reason = "gpt_fallback" if fallback else None
     return final_text, fallback_reason
@@ -1743,7 +1803,7 @@ async def _call_llama(
                     routing_decision=routing_decision,
                     **(gen_opts or {}),
                 ),
-                timeout=remaining_budget
+                timeout=remaining_budget,
             )
         except TypeError:
             # Enforce router budget with asyncio.wait_for
@@ -1756,7 +1816,7 @@ async def _call_llama(
                     gen_opts=gen_opts,
                     routing_decision=routing_decision,
                 ),
-                timeout=remaining_budget
+                timeout=remaining_budget,
             )
 
         if inspect.isasyncgen(result):
@@ -1787,7 +1847,9 @@ async def _call_llama(
                     "error_type": error_type_name,
                     "error_msg": error_msg,
                     "user_hash": hash_user_id(user_id) if user_id != "anon" else "anon",
-                    "request_id": routing_decision.request_id if routing_decision else None,
+                    "request_id": (
+                        routing_decision.request_id if routing_decision else None
+                    ),
                 }
             },
         )
@@ -1915,12 +1977,15 @@ async def _call_llama(
     logger.debug("_call_llama result model=%s result=%s", model, result_text)
 
     final_text = await _finalise(
-        "llama", prompt, result_text, rec,
+        "llama",
+        prompt,
+        result_text,
+        rec,
         fallback=False,
         vendor="ollama",
         model=model,
         user_id=user_id,
-        session_id=session_id
+        session_id=session_id,
     )
     return final_text, None
 
@@ -1936,7 +2001,7 @@ async def _finalise(
     model: str | None = None,
     user_id: str | None = None,
     session_id: str | None = None,
-    trigger_hooks: bool = True
+    trigger_hooks: bool = True,
 ):
     logger.debug("_finalise start engine=%s prompt=%r", engine, prompt)
     try:
@@ -1953,7 +2018,9 @@ async def _finalise(
                     prompt, text, vendor, model, user_id, session_id, None
                 )
                 if hook_results:
-                    logger.debug("Downstream hooks triggered: %s", list(hook_results.keys()))
+                    logger.debug(
+                        "Downstream hooks triggered: %s", list(hook_results.keys())
+                    )
             except Exception:
                 logger.exception("Downstream hooks failed in _finalise")
 

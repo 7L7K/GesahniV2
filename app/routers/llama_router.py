@@ -1,13 +1,13 @@
-from typing import Dict, Any
-import asyncio
-import aiohttp
-import os
 import logging
+import os
+from typing import Any
+
+import aiohttp
 
 logger = logging.getLogger(__name__)
 
 
-async def llama_router(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def llama_router(payload: dict[str, Any]) -> dict[str, Any]:
     """Call LLaMA / Ollama backend with standardized response format.
 
     Frozen response contract:
@@ -29,20 +29,19 @@ async def llama_router(payload: Dict[str, Any]) -> Dict[str, Any]:
     prompt = payload.get("prompt", "")
 
     # Prepare Ollama API request
-    ollama_payload = {
-        "model": model,
-        "prompt": prompt,
-        "stream": False
-    }
+    ollama_payload = {"model": model, "prompt": prompt, "stream": False}
 
     try:
         # Chaos injection for vendor failures
-        from app.chaos import chaos_wrap_async, inject_exception
+        from app.chaos import chaos_wrap_async
+
         operation = f"llama_call_{model}"
 
         async def make_request():
             async with aiohttp.ClientSession() as session:
-                async with session.post(f"{url}/api/generate", json=ollama_payload) as response:
+                async with session.post(
+                    f"{url}/api/generate", json=ollama_payload
+                ) as response:
                     return response
 
         response = await chaos_wrap_async("vendor", operation, make_request)
@@ -57,8 +56,8 @@ async def llama_router(payload: Dict[str, Any]) -> Dict[str, Any]:
             "answer": result.get("response", ""),
             "usage": {
                 "input_tokens": result.get("prompt_eval_count", 0),
-                "output_tokens": result.get("eval_count", 0)
-            }
+                "output_tokens": result.get("eval_count", 0),
+            },
         }
 
     except aiohttp.ClientError as e:
@@ -67,5 +66,3 @@ async def llama_router(payload: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         logger.warning(f"Ollama unexpected error: {e}")
         raise RuntimeError(f"LLaMA backend error: {e}")
-
-

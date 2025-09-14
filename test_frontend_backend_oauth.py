@@ -13,7 +13,7 @@ from urllib.parse import parse_qs, urlparse
 import requests
 
 # Add the app directory to Python path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'app'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "app"))
 
 
 def test_backend_oauth_endpoints():
@@ -22,16 +22,18 @@ def test_backend_oauth_endpoints():
 
     try:
         # Test OAuth login URL generation
-        response = requests.get("http://127.0.0.1:8000/v1/auth/google/login_url", timeout=10)
+        response = requests.get(
+            "http://127.0.0.1:8000/v1/auth/google/login_url", timeout=10
+        )
         if response.status_code != 200:
             print(f"❌ OAuth login URL failed: {response.status_code}")
             return False
 
         data = response.json()
-        auth_url = data.get('auth_url', '')
+        auth_url = data.get("auth_url", "")
 
         # Verify the URL contains required OAuth parameters
-        required_params = ['client_id=', 'redirect_uri=', 'scope=', 'state=', 'openid']
+        required_params = ["client_id=", "redirect_uri=", "scope=", "state=", "openid"]
         missing_params = [param for param in required_params if param not in auth_url]
 
         if missing_params:
@@ -58,7 +60,7 @@ def test_frontend_api_integration():
         next_param = "/settings#google=connected"
         response = requests.get(
             f"http://127.0.0.1:8000/v1/auth/google/login_url?next={requests.utils.quote(next_param)}",
-            timeout=10
+            timeout=10,
         )
 
         if response.status_code != 200:
@@ -66,22 +68,22 @@ def test_frontend_api_integration():
             return False
 
         data = response.json()
-        auth_url = data.get('auth_url', '')
+        auth_url = data.get("auth_url", "")
 
         # Verify the auth URL is properly formatted
         parsed = urlparse(auth_url)
         params = parse_qs(parsed.query)
 
-        if 'state' not in params:
+        if "state" not in params:
             print("❌ Auth URL missing state parameter")
             return False
 
-        if 'scope' not in params:
+        if "scope" not in params:
             print("❌ Auth URL missing scope parameter")
             return False
 
-        scope = params['scope'][0] if params['scope'] else ''
-        if 'openid' not in scope:
+        scope = params["scope"][0] if params["scope"] else ""
+        if "openid" not in scope:
             print("❌ Auth URL missing openid scope")
             return False
 
@@ -102,18 +104,20 @@ def test_oauth_callback_simulation():
 
     try:
         # First get a valid state from the login URL
-        response = requests.get("http://127.0.0.1:8000/v1/auth/google/login_url", timeout=10)
+        response = requests.get(
+            "http://127.0.0.1:8000/v1/auth/google/login_url", timeout=10
+        )
         if response.status_code != 200:
             print("❌ Could not get state for callback test")
             return False
 
         data = response.json()
-        auth_url = data.get('auth_url', '')
+        auth_url = data.get("auth_url", "")
 
         # Extract state from URL
         state = None
-        if 'state=' in auth_url:
-            state = auth_url.split('state=')[1].split('&')[0]
+        if "state=" in auth_url:
+            state = auth_url.split("state=")[1].split("&")[0]
 
         if not state:
             print("❌ Could not extract state from auth URL")
@@ -144,14 +148,18 @@ def test_integration_endpoints():
 
     try:
         # Test the Google status endpoint (should return 200 with status data)
-        response = requests.get("http://127.0.0.1:8000/v1/integrations/google/status", timeout=10)
+        response = requests.get(
+            "http://127.0.0.1:8000/v1/integrations/google/status", timeout=10
+        )
         if response.status_code != 200:
-            print(f"❌ Google status endpoint unexpected response: {response.status_code}")
+            print(
+                f"❌ Google status endpoint unexpected response: {response.status_code}"
+            )
             return False
 
         try:
             data = response.json()
-            if 'connected' not in data:
+            if "connected" not in data:
                 print("❌ Google status endpoint missing connected field")
                 return False
         except:
@@ -159,9 +167,13 @@ def test_integration_endpoints():
             return False
 
         # Test the Google disconnect endpoint (should return 401 for unauthenticated)
-        response = requests.post("http://127.0.0.1:8000/v1/integrations/google/disconnect", timeout=10)
+        response = requests.post(
+            "http://127.0.0.1:8000/v1/integrations/google/disconnect", timeout=10
+        )
         if response.status_code != 401:
-            print(f"❌ Google disconnect endpoint unexpected response: {response.status_code}")
+            print(
+                f"❌ Google disconnect endpoint unexpected response: {response.status_code}"
+            )
             return False
 
         print("✅ Integration endpoints working")
@@ -186,7 +198,7 @@ def test_frontend_health_endpoints():
             return False
 
         data = response.json()
-        if 'status' not in data:
+        if "status" not in data:
             print("❌ Health endpoint missing status field")
             return False
 
@@ -208,13 +220,15 @@ def simulate_frontend_oauth_flow():
         print("   Step 2: Frontend calls getGoogleAuthUrl() ✅")
 
         # Get OAuth URL (simulates frontend API call)
-        response = requests.get("http://127.0.0.1:8000/v1/auth/google/login_url", timeout=10)
+        response = requests.get(
+            "http://127.0.0.1:8000/v1/auth/google/login_url", timeout=10
+        )
         if response.status_code != 200:
             print("❌ Failed to get OAuth URL")
             return False
 
         data = response.json()
-        auth_url = data.get('auth_url', '')
+        auth_url = data.get("auth_url", "")
 
         print("   Step 3: Backend returns OAuth URL ✅")
         print("   Step 4: Frontend redirects to Google ✅")
@@ -223,8 +237,8 @@ def simulate_frontend_oauth_flow():
 
         # Extract state for callback simulation
         state = None
-        if 'state=' in auth_url:
-            state = auth_url.split('state=')[1].split('&')[0]
+        if "state=" in auth_url:
+            state = auth_url.split("state=")[1].split("&")[0]
 
         print("   Step 7: Backend processes callback ✅")
         print("   Step 8: Tokens exchanged successfully ✅")
@@ -251,11 +265,15 @@ def main():
         response = requests.get("http://127.0.0.1:8000/health", timeout=5)
         if response.status_code != 200:
             print("❌ Backend server not running on port 8000")
-            print("   Start with: uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload")
+            print(
+                "   Start with: uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+            )
             return
     except:
         print("❌ Backend server not accessible")
-        print("   Start with: uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload")
+        print(
+            "   Start with: uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload"
+        )
         return
 
     print("✅ Backend server is running")
@@ -267,7 +285,7 @@ def main():
         test_oauth_callback_simulation,
         test_integration_endpoints,
         test_frontend_health_endpoints,
-        simulate_frontend_oauth_flow
+        simulate_frontend_oauth_flow,
     ]
 
     results = []

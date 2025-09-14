@@ -198,13 +198,16 @@ async def ask_gpt(
 
     # Chaos injection for vendor failures
     from .chaos import chaos_wrap_async, inject_exception
+
     if kwargs.pop("allow_test", False):
         # Skip chaos in test mode
         pass
     else:
         # Inject vendor latency or failure
         operation = f"gpt_call_{model}"
-        if not await chaos_wrap_async("vendor", operation, lambda: asyncio.sleep(0), inject_exceptions=False):
+        if not await chaos_wrap_async(
+            "vendor", operation, lambda: asyncio.sleep(0), inject_exceptions=False
+        ):
             inject_exception("vendor", operation)
 
     start = time.perf_counter()

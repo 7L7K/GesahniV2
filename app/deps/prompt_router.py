@@ -36,6 +36,3 @@ def get_prompt_router(request: Request) -> PromptRouter:
 
     # If configured for a real backend but not yet bound, raise to signal unavailability
     raise RuntimeError(f"Prompt router not bound and PROMPT_BACKEND={backend}")
-
-
-

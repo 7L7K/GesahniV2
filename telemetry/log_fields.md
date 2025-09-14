@@ -17,5 +17,3 @@ Notes:
 - `why` must be concise and should not contain PII. Use slot references
   instead of raw user text where possible.
 - `slots` should contain canonical types (datetimes ISO8601, ints, etc.)
-
-

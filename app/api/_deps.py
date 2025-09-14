@@ -15,12 +15,16 @@ except Exception:
 from app.security_ws import verify_ws
 
 if not callable(verify_token):
+
     async def verify_token(*args, **kwargs):
         return None
 
+
 if not callable(require_nonce):
+
     async def require_nonce(*args, **kwargs):
         return None
+
 
 # Public: no auth.
 

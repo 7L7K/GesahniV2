@@ -63,10 +63,14 @@ def test_allowlist_functionality():
     app = create_test_app_with_collisions()
 
     # Add the collision to the allowlist using the correct module:function patterns
-    add_to_allowlist("GET", "/api/test", {
-        "__main__.create_test_app_with_collisions.<locals>.handler1",
-        "__main__.create_test_app_with_collisions.<locals>.handler2"
-    })
+    add_to_allowlist(
+        "GET",
+        "/api/test",
+        {
+            "__main__.create_test_app_with_collisions.<locals>.handler1",
+            "__main__.create_test_app_with_collisions.<locals>.handler2",
+        },
+    )
 
     try:
         check_route_collisions(app, fail_on_collision=True)

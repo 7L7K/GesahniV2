@@ -1,11 +1,16 @@
 """Test CORS production features: allowlist enforcement and metrics."""
+
 import os
 from unittest.mock import patch
 
 from starlette.testclient import TestClient
 
 from app.main import create_app
-from app.middleware.cors import _get_allowed_origins, _is_production_mode, get_cors_metrics
+from app.middleware.cors import (
+    _get_allowed_origins,
+    _is_production_mode,
+    get_cors_metrics,
+)
 
 
 def test_cors_production_mode_detection():
@@ -26,21 +31,35 @@ def test_cors_production_mode_detection():
 def test_cors_allowlist_production_validation():
     """Test production CORS allowlist validation."""
     # Test production mode with explicit origins
-    with patch.dict(os.environ, {"ENV": "prod", "CORS_ALLOW_ORIGINS": "https://app.example.com,https://admin.example.com"}):
+    with patch.dict(
+        os.environ,
+        {
+            "ENV": "prod",
+            "CORS_ALLOW_ORIGINS": "https://app.example.com,https://admin.example.com",
+        },
+    ):
         origins = _get_allowed_origins()
         assert "https://app.example.com" in origins
         assert "https://admin.example.com" in origins
         assert len(origins) == 2
 
     # Test production mode rejects wildcards
-    with patch.dict(os.environ, {"ENV": "prod", "CORS_ALLOW_ORIGINS": "https://app.example.com,*"}):
+    with patch.dict(
+        os.environ, {"ENV": "prod", "CORS_ALLOW_ORIGINS": "https://app.example.com,*"}
+    ):
         origins = _get_allowed_origins()
         assert "https://app.example.com" in origins
         assert "*" not in origins
         assert len(origins) == 1
 
     # Test production mode rejects invalid schemes
-    with patch.dict(os.environ, {"ENV": "prod", "CORS_ALLOW_ORIGINS": "https://app.example.com,ftp://example.com"}):
+    with patch.dict(
+        os.environ,
+        {
+            "ENV": "prod",
+            "CORS_ALLOW_ORIGINS": "https://app.example.com,ftp://example.com",
+        },
+    ):
         origins = _get_allowed_origins()
         assert "https://app.example.com" in origins
         assert "ftp://example.com" not in origins
@@ -64,10 +83,9 @@ def test_cors_preflight_rejection_metrics():
     _cors_rejected_count = 0
 
     # Configure production mode with restricted origins BEFORE creating app
-    with patch.dict(os.environ, {
-        "ENV": "prod",
-        "CORS_ORIGINS": "https://allowed.example.com"
-    }):
+    with patch.dict(
+        os.environ, {"ENV": "prod", "CORS_ORIGINS": "https://allowed.example.com"}
+    ):
         # Test metrics collection
         app = create_app()
         client = TestClient(app)
@@ -77,8 +95,8 @@ def test_cors_preflight_rejection_metrics():
             "/v1/me",
             headers={
                 "Origin": "https://malicious.example.com",
-                "Access-Control-Request-Method": "GET"
-            }
+                "Access-Control-Request-Method": "GET",
+            },
         )
 
         assert response.status_code == 400
@@ -93,24 +111,24 @@ def test_cors_production_explicit_origins_only():
     """Test that production mode only allows explicit origins."""
     app = create_app()
 
-    with patch.dict(os.environ, {
-        "ENV": "prod",
-        "CORS_ALLOW_ORIGINS": "https://allowed.example.com"
-    }):
+    with patch.dict(
+        os.environ, {"ENV": "prod", "CORS_ALLOW_ORIGINS": "https://allowed.example.com"}
+    ):
         client = TestClient(app)
 
         # Test allowed origin
         response = client.get(
-            "/health",
-            headers={"Origin": "https://allowed.example.com"}
+            "/health", headers={"Origin": "https://allowed.example.com"}
         )
         assert response.status_code == 200
-        assert response.headers.get("Access-Control-Allow-Origin") == "https://allowed.example.com"
+        assert (
+            response.headers.get("Access-Control-Allow-Origin")
+            == "https://allowed.example.com"
+        )
 
         # Test rejected origin (should not get CORS headers)
         response = client.get(
-            "/health",
-            headers={"Origin": "https://rejected.example.com"}
+            "/health", headers={"Origin": "https://rejected.example.com"}
         )
         assert response.status_code == 200
         # Should not have CORS headers for rejected origin

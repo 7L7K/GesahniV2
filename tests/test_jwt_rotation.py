@@ -1,9 +1,14 @@
 """Test JWT key rotation and backward compatibility."""
+
 import json
 import os
 
 from app.security.jwt_config import get_jwt_config
-from app.tokens import decode_jwt_token, sign_access_token, test_jwt_backward_compatibility
+from app.tokens import (
+    decode_jwt_token,
+    sign_access_token,
+    test_jwt_backward_compatibility,
+)
 
 
 def test_jwt_rotation_backward_compat():
@@ -20,14 +25,18 @@ def test_jwt_rotation_backward_compat():
         old_token = sign_access_token("test_user", extra={"test": "rotation"})
 
         # Rotate to new key setup (keep old key for verification)
-        os.environ["JWT_PRIVATE_KEYS"] = json.dumps({
-            "key1": "new_secret_for_rotation_test_12345678901234567890",
-            "key2": "old_secret_for_rotation_test_12345678901234567890"  # Keep old key for verification
-        })
-        os.environ["JWT_PUBLIC_KEYS"] = json.dumps({
-            "key1": "new_secret_for_rotation_test_12345678901234567890",
-            "key2": "old_secret_for_rotation_test_12345678901234567890"
-        })
+        os.environ["JWT_PRIVATE_KEYS"] = json.dumps(
+            {
+                "key1": "new_secret_for_rotation_test_12345678901234567890",
+                "key2": "old_secret_for_rotation_test_12345678901234567890",  # Keep old key for verification
+            }
+        )
+        os.environ["JWT_PUBLIC_KEYS"] = json.dumps(
+            {
+                "key1": "new_secret_for_rotation_test_12345678901234567890",
+                "key2": "old_secret_for_rotation_test_12345678901234567890",
+            }
+        )
         os.environ.pop("JWT_SECRET", None)  # Remove old secret
 
         # Should still be able to decode old token (uses key2)
@@ -57,14 +66,18 @@ def test_jwt_rotation_hs256_to_hs256():
         old_token = sign_access_token("user1", extra={"version": "old"})
 
         # Rotate to key-based HS256 (keep old key for verification)
-        os.environ["JWT_PRIVATE_KEYS"] = json.dumps({
-            "key1": "new_secret_1234567890123456789012345678901234567890",
-            "legacy": "legacy_secret_12345678901234567890123456789012"  # Keep old key
-        })
-        os.environ["JWT_PUBLIC_KEYS"] = json.dumps({
-            "key1": "new_secret_1234567890123456789012345678901234567890",
-            "legacy": "legacy_secret_12345678901234567890123456789012"
-        })
+        os.environ["JWT_PRIVATE_KEYS"] = json.dumps(
+            {
+                "key1": "new_secret_1234567890123456789012345678901234567890",
+                "legacy": "legacy_secret_12345678901234567890123456789012",  # Keep old key
+            }
+        )
+        os.environ["JWT_PUBLIC_KEYS"] = json.dumps(
+            {
+                "key1": "new_secret_1234567890123456789012345678901234567890",
+                "legacy": "legacy_secret_12345678901234567890123456789012",
+            }
+        )
         os.environ.pop("JWT_SECRET", None)
 
         # Old token should still decode (uses legacy key)
@@ -90,14 +103,18 @@ def test_jwt_rotation_multiple_keys():
     try:
         # Configure multiple keys (simulating rotation) - remove any existing JWT_SECRET first
         os.environ.pop("JWT_SECRET", None)
-        os.environ["JWT_PRIVATE_KEYS"] = json.dumps({
-            "key1": "old_secret_1234567890123456789012345678901234567890",
-            "key2": "new_secret_1234567890123456789012345678901234567890"
-        })
-        os.environ["JWT_PUBLIC_KEYS"] = json.dumps({
-            "key1": "old_secret_1234567890123456789012345678901234567890",
-            "key2": "new_secret_1234567890123456789012345678901234567890"
-        })
+        os.environ["JWT_PRIVATE_KEYS"] = json.dumps(
+            {
+                "key1": "old_secret_1234567890123456789012345678901234567890",
+                "key2": "new_secret_1234567890123456789012345678901234567890",
+            }
+        )
+        os.environ["JWT_PUBLIC_KEYS"] = json.dumps(
+            {
+                "key1": "old_secret_1234567890123456789012345678901234567890",
+                "key2": "new_secret_1234567890123456789012345678901234567890",
+            }
+        )
 
         # Create token (uses first key for signing - key1)
         token = sign_access_token("test_user", extra={"key_test": True})

@@ -282,8 +282,6 @@ def test_generic_error_normalization(client):
     assert data["details"]["status_code"] == 500
 
 
-
-
 def test_forbidden_helper(client):
     """Test the forbidden helper function."""
     response = client.get("/test-errors/test/forbidden")

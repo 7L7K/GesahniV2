@@ -23,7 +23,7 @@ from .deps.user import require_user
 
 logger = logging.getLogger(__name__)
 
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 def public_route(endpoint_func: F) -> F:
@@ -32,7 +32,9 @@ def public_route(endpoint_func: F) -> F:
 
     Use for login, registration, OAuth callbacks, etc.
     """
-    endpoint_func.__doc__ = (endpoint_func.__doc__ or "") + "\n\n@public_route - No auth, no CSRF required"
+    endpoint_func.__doc__ = (
+        endpoint_func.__doc__ or ""
+    ) + "\n\n@public_route - No auth, no CSRF required"
     return endpoint_func
 
 
@@ -42,7 +44,9 @@ def auth_only_route(endpoint_func: F) -> F:
 
     Use for token exchange, logout, refresh operations.
     """
-    endpoint_func.__doc__ = (endpoint_func.__doc__ or "") + "\n\n@auth_only_route - Auth token required, CSRF not required"
+    endpoint_func.__doc__ = (
+        endpoint_func.__doc__ or ""
+    ) + "\n\n@auth_only_route - Auth token required, CSRF not required"
     return endpoint_func
 
 
@@ -52,7 +56,9 @@ def protected_route(endpoint_func: F) -> F:
 
     Use for user profile mutations, account settings changes.
     """
-    endpoint_func.__doc__ = (endpoint_func.__doc__ or "") + "\n\n@protected_route - Auth token + CSRF required"
+    endpoint_func.__doc__ = (
+        endpoint_func.__doc__ or ""
+    ) + "\n\n@protected_route - Auth token + CSRF required"
     return endpoint_func
 
 
@@ -87,6 +93,7 @@ async def require_auth_with_csrf(request: Request) -> str:
     # Then, require CSRF validation
     try:
         import os
+
         if os.getenv("CSRF_ENABLED", "0").strip().lower() in {"1", "true", "yes", "on"}:
             token_hdr, used_legacy, legacy_allowed = _extract_csrf_header(request)
 
@@ -109,6 +116,7 @@ async def require_auth_with_csrf(request: Request) -> str:
             else:
                 # Standard same-origin CSRF validation (double-submit pattern)
                 from .auth.constants import CSRF_COOKIE
+
                 token_cookie = request.cookies.get(CSRF_COOKIE) or ""
                 # Reject legacy header when grace disabled
                 if used_legacy and not legacy_allowed:
@@ -122,7 +130,9 @@ async def require_auth_with_csrf(request: Request) -> str:
                     logger.warning("protected_route: csrf_mismatch")
                     raise HTTPException(status_code=400, detail="csrf.invalid")
 
-        logger.debug("protected_route: authenticated user_id=%s with csrf validation", user_id)
+        logger.debug(
+            "protected_route: authenticated user_id=%s with csrf validation", user_id
+        )
         return user_id
     except HTTPException:
         raise
@@ -135,7 +145,7 @@ async def require_auth_with_csrf(request: Request) -> str:
 PROTECTION_MODES = {
     "public": "No auth, no CSRF required",
     "auth_only": "Token required, CSRF not required",
-    "protected": "Token + CSRF required"
+    "protected": "Token + CSRF required",
 }
 
 
@@ -145,5 +155,5 @@ __all__ = [
     "protected_route",
     "require_auth_no_csrf",
     "require_auth_with_csrf",
-    "PROTECTION_MODES"
+    "PROTECTION_MODES",
 ]

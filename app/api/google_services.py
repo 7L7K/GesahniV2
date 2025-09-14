@@ -27,26 +27,46 @@ async def verify_google_access(request: Request):
     services = {}
     try:
         unread = await gmail_unread_count(token.access_token)
-        services['gmail'] = {'status': 'enabled', 'last_ping': int(time.time()), 'unread': unread}
+        services["gmail"] = {
+            "status": "enabled",
+            "last_ping": int(time.time()),
+            "unread": unread,
+        }
     except Exception:
-        services['gmail'] = {'status': 'error'}
+        services["gmail"] = {"status": "error"}
 
     try:
         evt = await calendar_next_event(token.access_token)
-        services['calendar'] = {'status': 'enabled', 'last_ping': int(time.time()), 'next_event': evt}
+        services["calendar"] = {
+            "status": "enabled",
+            "last_ping": int(time.time()),
+            "next_event": evt,
+        }
     except Exception:
-        services['calendar'] = {'status': 'error'}
+        services["calendar"] = {"status": "error"}
 
     # Update token service_state (best-effort)
     try:
-        st = parse(getattr(token, 'service_state', None))
+        st = parse(getattr(token, "service_state", None))
         for svc, info in services.items():
-            if info.get('status') == 'enabled':
-                st[svc] = {'status': 'enabled', 'last_changed_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()), 'last_ping': info.get('last_ping')}
+            if info.get("status") == "enabled":
+                st[svc] = {
+                    "status": "enabled",
+                    "last_changed_at": time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
+                    ),
+                    "last_ping": info.get("last_ping"),
+                }
             else:
-                st[svc] = {'status': 'error', 'last_changed_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())}
+                st[svc] = {
+                    "status": "error",
+                    "last_changed_at": time.strftime(
+                        "%Y-%m-%dT%H:%M:%SZ", time.gmtime()
+                    ),
+                }
         from ..auth_store_tokens import upsert_token
-        token.service_state = __import__('json').dumps(st)
+
+        token.service_state = __import__("json").dumps(st)
         token.updated_at = int(time.time())
         await upsert_token(token)
     except Exception:

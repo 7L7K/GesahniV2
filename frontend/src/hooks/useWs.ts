@@ -14,4 +14,3 @@ export function useWsOpen(name: 'music' | 'care', intervalMs: number = 3000) {
   }, [name, intervalMs]);
   return open;
 }
-

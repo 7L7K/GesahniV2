@@ -29,10 +29,18 @@ CHAOS_SEED = int(os.getenv("CHAOS_SEED", "0")) or None
 CHAOS_PROBABILITIES = {
     "vendor_latency": float(os.getenv("CHAOS_VENDOR_LATENCY", "0.05")),  # 5% chance
     "vendor_failure": float(os.getenv("CHAOS_VENDOR_FAILURE", "0.02")),  # 2% chance
-    "vector_store_failure": float(os.getenv("CHAOS_VECTOR_STORE_FAILURE", "0.03")),  # 3% chance
-    "vector_store_latency": float(os.getenv("CHAOS_VECTOR_STORE_LATENCY", "0.04")),  # 4% chance
-    "scheduler_failure": float(os.getenv("CHAOS_SCHEDULER_FAILURE", "0.01")),  # 1% chance
-    "token_cleanup_failure": float(os.getenv("CHAOS_TOKEN_CLEANUP_FAILURE", "0.02")),  # 2% chance
+    "vector_store_failure": float(
+        os.getenv("CHAOS_VECTOR_STORE_FAILURE", "0.03")
+    ),  # 3% chance
+    "vector_store_latency": float(
+        os.getenv("CHAOS_VECTOR_STORE_LATENCY", "0.04")
+    ),  # 4% chance
+    "scheduler_failure": float(
+        os.getenv("CHAOS_SCHEDULER_FAILURE", "0.01")
+    ),  # 1% chance
+    "token_cleanup_failure": float(
+        os.getenv("CHAOS_TOKEN_CLEANUP_FAILURE", "0.02")
+    ),  # 2% chance
 }
 
 # Chaos latency ranges (in seconds)
@@ -72,44 +80,60 @@ async def inject_latency(event_type: str, operation: str) -> None:
         return
 
     latency = get_chaos_latency(event_type)
-    logger.warning("💥 CHAOS: Injecting latency", extra={
-        "meta": {
-            "chaos_event": f"{event_type}_latency",
-            "operation": operation,
-            "latency_seconds": latency,
-            "chaos_mode": True
-        }
-    })
+    logger.warning(
+        "💥 CHAOS: Injecting latency",
+        extra={
+            "meta": {
+                "chaos_event": f"{event_type}_latency",
+                "operation": operation,
+                "latency_seconds": latency,
+                "chaos_mode": True,
+            }
+        },
+    )
 
     # Record chaos latency metric
     try:
         from app.metrics import CHAOS_EVENTS_TOTAL, CHAOS_LATENCY_SECONDS
-        CHAOS_LATENCY_SECONDS.labels(event_type=event_type, operation=operation).observe(latency)
-        CHAOS_EVENTS_TOTAL.labels(event_type=f"{event_type}_latency", operation=operation, result="injected").inc()
+
+        CHAOS_LATENCY_SECONDS.labels(
+            event_type=event_type, operation=operation
+        ).observe(latency)
+        CHAOS_EVENTS_TOTAL.labels(
+            event_type=f"{event_type}_latency", operation=operation, result="injected"
+        ).inc()
     except Exception:
         pass  # Don't fail if metrics aren't available
 
     await asyncio.sleep(latency)
 
 
-def inject_exception(event_type: str, operation: str, exception_class: type = RuntimeError) -> None:
+def inject_exception(
+    event_type: str, operation: str, exception_class: type = RuntimeError
+) -> None:
     """Inject an artificial exception."""
     if not should_inject_chaos(event_type):
         return
 
-    logger.error("💥 CHAOS: Injecting exception", extra={
-        "meta": {
-            "chaos_event": event_type,
-            "operation": operation,
-            "exception_class": exception_class.__name__,
-            "chaos_mode": True
-        }
-    })
+    logger.error(
+        "💥 CHAOS: Injecting exception",
+        extra={
+            "meta": {
+                "chaos_event": event_type,
+                "operation": operation,
+                "exception_class": exception_class.__name__,
+                "chaos_mode": True,
+            }
+        },
+    )
 
     # Record chaos exception metric
     try:
         from app.metrics import CHAOS_EVENTS_TOTAL
-        CHAOS_EVENTS_TOTAL.labels(event_type=event_type, operation=operation, result="exception").inc()
+
+        CHAOS_EVENTS_TOTAL.labels(
+            event_type=event_type, operation=operation, result="exception"
+        ).inc()
     except Exception:
         pass  # Don't fail if metrics aren't available
 
@@ -120,7 +144,7 @@ async def chaos_wrap_async(
     event_type: str,
     operation: str,
     func: Callable[[], Awaitable[Any]],
-    inject_exceptions: bool = True
+    inject_exceptions: bool = True,
 ) -> Any:
     """Wrap an async function with chaos injection."""
     if not is_chaos_enabled():
@@ -141,7 +165,7 @@ def chaos_wrap_sync(
     event_type: str,
     operation: str,
     func: Callable[[], Any],
-    inject_exceptions: bool = True
+    inject_exceptions: bool = True,
 ) -> Any:
     """Wrap a sync function with chaos injection."""
     if not is_chaos_enabled():
@@ -150,14 +174,17 @@ def chaos_wrap_sync(
     # Inject latency (sync version)
     if should_inject_chaos(f"{event_type}_latency"):
         latency = get_chaos_latency(event_type)
-        logger.warning("💥 CHAOS: Injecting latency", extra={
-            "meta": {
-                "chaos_event": f"{event_type}_latency",
-                "operation": operation,
-                "latency_seconds": latency,
-                "chaos_mode": True
-            }
-        })
+        logger.warning(
+            "💥 CHAOS: Injecting latency",
+            extra={
+                "meta": {
+                    "chaos_event": f"{event_type}_latency",
+                    "operation": operation,
+                    "latency_seconds": latency,
+                    "chaos_mode": True,
+                }
+            },
+        )
         time.sleep(latency)
 
     # Inject exception if enabled
@@ -170,14 +197,13 @@ def chaos_wrap_sync(
 
 # Chaos-aware HTTP client wrapper
 async def chaos_http_request(
-    method: str,
-    url: str,
-    event_type: str = "vendor",
-    **kwargs
+    method: str, url: str, event_type: str = "vendor", **kwargs
 ) -> Any:
     """Make an HTTP request with chaos injection."""
+
     async def _make_request():
         import aiohttp
+
         async with aiohttp.ClientSession() as session:
             async with session.request(method, url, **kwargs) as response:
                 return await response.json()
@@ -187,25 +213,20 @@ async def chaos_http_request(
 
 # Chaos-aware vector store operations
 async def chaos_vector_operation(
-    operation: str,
-    func: Callable[[], Awaitable[Any]]
+    operation: str, func: Callable[[], Awaitable[Any]]
 ) -> Any:
     """Wrap vector store operations with chaos."""
     return await chaos_wrap_async("vector_store", operation, func)
 
 
-def chaos_vector_operation_sync(
-    operation: str,
-    func: Callable[[], Any]
-) -> Any:
+def chaos_vector_operation_sync(operation: str, func: Callable[[], Any]) -> Any:
     """Wrap sync vector store operations with chaos."""
     return chaos_wrap_sync("vector_store", operation, func)
 
 
 # Chaos-aware scheduler operations
 async def chaos_scheduler_operation(
-    operation: str,
-    func: Callable[[], Awaitable[Any]]
+    operation: str, func: Callable[[], Awaitable[Any]]
 ) -> Any:
     """Wrap scheduler operations with chaos."""
     return await chaos_wrap_async("scheduler", operation, func, inject_exceptions=True)
@@ -213,11 +234,12 @@ async def chaos_scheduler_operation(
 
 # Chaos-aware token cleanup operations
 async def chaos_token_cleanup_operation(
-    operation: str,
-    func: Callable[[], Awaitable[Any]]
+    operation: str, func: Callable[[], Awaitable[Any]]
 ) -> Any:
     """Wrap token cleanup operations with chaos."""
-    return await chaos_wrap_async("token_cleanup", operation, func, inject_exceptions=True)
+    return await chaos_wrap_async(
+        "token_cleanup", operation, func, inject_exceptions=True
+    )
 
 
 def log_chaos_status() -> None:
@@ -225,14 +247,17 @@ def log_chaos_status() -> None:
     if not is_chaos_enabled():
         return
 
-    logger.info("🎭 CHAOS MODE ENABLED", extra={
-        "meta": {
-            "chaos_mode": True,
-            "chaos_seed": CHAOS_SEED,
-            "probabilities": CHAOS_PROBABILITIES,
-            "latency_ranges": CHAOS_LATENCY_RANGES
-        }
-    })
+    logger.info(
+        "🎭 CHAOS MODE ENABLED",
+        extra={
+            "meta": {
+                "chaos_mode": True,
+                "chaos_seed": CHAOS_SEED,
+                "probabilities": CHAOS_PROBABILITIES,
+                "latency_ranges": CHAOS_LATENCY_RANGES,
+            }
+        },
+    )
 
 
 # Initialize chaos logging

@@ -70,7 +70,9 @@ def parse_when(when_str: str | None) -> Any | None:
             return now + timedelta(minutes=n)
         return now + timedelta(hours=n)
 
-    m = re.match(r"tomorrow(?: at )?(?P<h>\d{1,2})(?::(?P<m>\d{2}))?\s*(?P<ampm>am|pm)?", s)
+    m = re.match(
+        r"tomorrow(?: at )?(?P<h>\d{1,2})(?::(?P<m>\d{2}))?\s*(?P<ampm>am|pm)?", s
+    )
     if m:
         dt = now + timedelta(days=1)
         hr = int(m.group("h"))
@@ -83,7 +85,10 @@ def parse_when(when_str: str | None) -> Any | None:
                 hr = 0
         return datetime(dt.year, dt.month, dt.day, hr, mn, tzinfo=UTC)
 
-    m = re.match(r"every\s+(?P<period>day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)", s)
+    m = re.match(
+        r"every\s+(?P<period>day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)",
+        s,
+    )
     if m:
         return f"every {m.group('period')}"
 
@@ -135,6 +140,7 @@ async def resolve_entity(name: str, kind: str = "light") -> dict[str, Any]:
     b = best[0]
     # return conservative confidence
     return {"entity_id": choices[b], "friendly_name": b, "confidence": 0.85}
+
 
 """
 Shared parsers responsibilities (design doc)

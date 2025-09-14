@@ -34,7 +34,10 @@ class HomeAssistantRadioProvider:
     async def pause(self, device_id: str) -> None:
         url = f"{self.ha_url}/api/services/media_player/media_pause"
         payload = {"entity_id": device_id}
-        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, json=payload, headers=headers) as resp:
                 if resp.status >= 400:
@@ -46,7 +49,10 @@ class HomeAssistantRadioProvider:
         # HA may not support next for all players; best-effort via media_next_track
         url = f"{self.ha_url}/api/services/media_player/media_next_track"
         payload = {"entity_id": device_id}
-        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, json=payload, headers=headers) as resp:
                 if resp.status >= 400:
@@ -57,7 +63,10 @@ class HomeAssistantRadioProvider:
     async def previous(self, device_id: str) -> None:
         url = f"{self.ha_url}/api/services/media_player/media_previous_track"
         payload = {"entity_id": device_id}
-        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
         async with aiohttp.ClientSession() as sess:
             async with sess.post(url, json=payload, headers=headers) as resp:
                 if resp.status >= 400:
@@ -78,7 +87,9 @@ class HomeAssistantRadioProvider:
                 devices = [
                     Device(
                         id=s.get("entity_id", "media_player.unknown"),
-                        name=(s.get("attributes", {}) or {}).get("friendly_name", s.get("entity_id", "")),
+                        name=(s.get("attributes", {}) or {}).get(
+                            "friendly_name", s.get("entity_id", "")
+                        ),
                         type="media_player",
                         volume=(s.get("attributes", {}) or {}).get("volume_level"),
                         active=(s.get("state") == "playing"),
@@ -93,12 +104,22 @@ class HomeAssistantRadioProvider:
             url = os.getenv("HA_DEFAULT_RADIO_URL")
         if not url:
             raise RuntimeError("no_url_provided")
-        payload = {"entity_id": entity_id or "media_player.house", "media_content_id": url, "media_content_type": "music"}
-        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        payload = {
+            "entity_id": entity_id or "media_player.house",
+            "media_content_id": url,
+            "media_content_type": "music",
+        }
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+            "Content-Type": "application/json",
+        }
         async with aiohttp.ClientSession() as sess:
-            async with sess.post(f"{self.ha_url}/api/services/media_player/play_media", json=payload, headers=headers) as resp:
+            async with sess.post(
+                f"{self.ha_url}/api/services/media_player/play_media",
+                json=payload,
+                headers=headers,
+            ) as resp:
                 if resp.status >= 400:
                     text = await resp.text()
                     logger.error("HA play_url failed: %s %s", resp.status, text)
                     raise RuntimeError("Home Assistant play failed")
-

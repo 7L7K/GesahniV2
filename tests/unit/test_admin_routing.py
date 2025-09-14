@@ -6,6 +6,7 @@ This test verifies that:
 3. Only /v1/admin/* endpoints appear in OpenAPI schema
 4. Single canonical handlers exist for each admin endpoint
 """
+
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from fastapi.testclient import TestClient
@@ -41,12 +42,14 @@ def test_admin_routing_consolidation():
 
         # Mock compat router with admin redirects
         compat_router = APIRouter(include_in_schema=False)
+
         @compat_router.get("/admin/{path:path}")
         def admin_legacy_redirect(path: str):
             return RedirectResponse(url=f"/v1/admin/{path}", status_code=308)
 
         # Mock admin router with canonical endpoints
         admin_router = APIRouter()
+
         @admin_router.get("/ping")
         def mock_admin_ping():
             return {"status": "ok", "service": "admin"}
@@ -142,6 +145,7 @@ def test_admin_schema_inclusion():
         from fastapi import APIRouter
 
         admin_router = APIRouter()
+
         @admin_router.get("/ping")
         def mock_admin_ping():
             return {"status": "ok"}
@@ -195,7 +199,9 @@ def test_admin_schema_inclusion():
     # Verify that admin endpoints are properly prefixed
     admin_paths = [p for p in paths.keys() if p.startswith("/v1/admin/")]
     assert len(admin_paths) > 0, "Should have admin endpoints in schema"
-    assert all(p.startswith("/v1/admin/") for p in admin_paths), "All admin paths should be under /v1/admin/"
+    assert all(
+        p.startswith("/v1/admin/") for p in admin_paths
+    ), "All admin paths should be under /v1/admin/"
 
 
 def test_admin_single_handlers():
@@ -208,6 +214,7 @@ def test_admin_single_handlers():
 
     # Admin router with canonical endpoints
     admin_router = APIRouter()
+
     @admin_router.get("/ping")
     def admin_ping():
         return {"status": "ok"}
@@ -223,7 +230,11 @@ def test_admin_single_handlers():
     app.include_router(admin_router, prefix="/v1/admin")
 
     # Verify no route collisions by checking all routes exist
-    routes = {f"{list(r.methods)[0]} {r.path}" for r in app.routes if hasattr(r, 'methods') and hasattr(r, 'path')}
+    routes = {
+        f"{list(r.methods)[0]} {r.path}"
+        for r in app.routes
+        if hasattr(r, "methods") and hasattr(r, "path")
+    }
 
     # Should have admin endpoints
     assert "GET /v1/admin/ping" in routes
@@ -233,7 +244,7 @@ def test_admin_single_handlers():
     # Verify exactly the expected routes (no duplicates)
     route_counts = {}
     for route in app.routes:
-        if hasattr(route, 'methods') and hasattr(route, 'path'):
+        if hasattr(route, "methods") and hasattr(route, "path"):
             key = f"{list(route.methods)[0]} {route.path}"
             route_counts[key] = route_counts.get(key, 0) + 1
 
@@ -253,12 +264,14 @@ def test_admin_redirect_behavior():
 
     # Compat router with admin redirects
     compat_router = APIRouter(include_in_schema=False)
+
     @compat_router.get("/admin/{path:path}")
     def admin_legacy_redirect(path: str):
         return RedirectResponse(url=f"/v1/admin/{path}", status_code=308)
 
     # Admin router with canonical endpoints
     admin_router = APIRouter()
+
     @admin_router.get("/ping")
     def admin_ping():
         return {"status": "ok", "canonical": True}

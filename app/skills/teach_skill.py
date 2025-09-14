@@ -20,7 +20,11 @@ class TeachSkill(Skill):
         await alias_store.set(alias, entity)
         # Record alias training as idempotent
         idemp = f"alias:{alias}:{entity}"
-        await record_action("alias.set", idempotency_key=idemp, metadata={"alias": alias, "entity": entity})
+        await record_action(
+            "alias.set",
+            idempotency_key=idemp,
+            metadata={"alias": alias, "entity": entity},
+        )
         rec = log_record_var.get()
         if rec is not None:
             rec.route_reason = (rec.route_reason or "") + "|alias_saved"

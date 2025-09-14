@@ -40,5 +40,3 @@ def decrypt_token(blob: bytes) -> str:
     except InvalidToken:
         raise
     return pt.decode("utf-8")
-
-

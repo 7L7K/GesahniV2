@@ -23,7 +23,9 @@ class RateLimitSettings:
                 try:
                     self._cache[key] = int(env_value)
                 except ValueError:
-                    self._cache[key] = int(default) if isinstance(default, str) else default
+                    self._cache[key] = (
+                        int(default) if isinstance(default, str) else default
+                    )
             else:
                 self._cache[key] = int(default) if isinstance(default, str) else default
         return self._cache[key]
@@ -36,9 +38,13 @@ class RateLimitSettings:
                 try:
                     self._cache[key] = float(env_value)
                 except ValueError:
-                    self._cache[key] = float(default) if isinstance(default, str) else default
+                    self._cache[key] = (
+                        float(default) if isinstance(default, str) else default
+                    )
             else:
-                self._cache[key] = float(default) if isinstance(default, str) else default
+                self._cache[key] = (
+                    float(default) if isinstance(default, str) else default
+                )
         return self._cache[key]
 
     def _get_env_str(self, key: str, default: str) -> str:
@@ -53,7 +59,9 @@ class RateLimitSettings:
         if key not in self._cache:
             env_value = os.getenv(key, default)
             if env_value:
-                self._cache[key] = set(s.strip() for s in env_value.split(",") if s.strip())
+                self._cache[key] = set(
+                    s.strip() for s in env_value.split(",") if s.strip()
+                )
             else:
                 self._cache[key] = set()
         return self._cache[key]

@@ -19,8 +19,9 @@ async def jwks():
         for kid, pem in mapping.items():
             # For simplicity, return x5c-less RSA/EC public keys as opaque strings under 'n' placeholder
             # Proper JWKS generation requires parsing PEM; we expose minimal compatibility for now.
-            keys.append({"kid": kid, "kty": "RSA", "use": "sig", "alg": "RS256", "x5c": [pem]})
+            keys.append(
+                {"kid": kid, "kty": "RSA", "use": "sig", "alg": "RS256", "x5c": [pem]}
+            )
         return {"keys": keys}
     except Exception:
         return {"keys": []}
-

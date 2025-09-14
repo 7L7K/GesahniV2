@@ -50,7 +50,9 @@ for route in app.router.routes:
         continue
 
     # Get qualified name for the endpoint
-    qualname = f"{endpoint.__module__}.{getattr(endpoint, '__qualname__', endpoint.__name__)}"
+    qualname = (
+        f"{endpoint.__module__}.{getattr(endpoint, '__qualname__', endpoint.__name__)}"
+    )
 
     for method in filtered_methods:
         route_handlers[(path, method)].add(qualname)

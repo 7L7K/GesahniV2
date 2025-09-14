@@ -44,5 +44,7 @@ def get_oauth_monitor() -> OAuthCallbackMonitor:
         RuntimeError: If the OAuth monitor has not been initialized
     """
     if _oauth_monitor is None:
-        raise RuntimeError("OAuth monitor has not been initialized. Call init_oauth_monitor() first.")
+        raise RuntimeError(
+            "OAuth monitor has not been initialized. Call init_oauth_monitor() first."
+        )
     return _oauth_monitor

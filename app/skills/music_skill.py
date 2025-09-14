@@ -49,7 +49,9 @@ class MusicSkill(Skill):
             elif action == "pause":
                 await orch.pause("media_player.house")
             else:
-                await ha.call_service("media_player", "media_stop", {"entity_id": "media_player.house"})
+                await ha.call_service(
+                    "media_player", "media_stop", {"entity_id": "media_player.house"}
+                )
             return f"Music {action}ed"
         except Exception:
             # best-effort fallback to HA
@@ -58,5 +60,7 @@ class MusicSkill(Skill):
                 if action == "play"
                 else ("media_pause" if action == "pause" else "media_stop")
             )
-            await ha.call_service("media_player", service, {"entity_id": "media_player.house"})
+            await ha.call_service(
+                "media_player", service, {"entity_id": "media_player.house"}
+            )
             return f"Music {action}ed (via HA fallback)"

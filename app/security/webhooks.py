@@ -17,7 +17,9 @@ def sign_webhook(body: bytes, secret: str, timestamp: str | None = None) -> str:
     When ``timestamp`` is provided, sign over ``body || b'.' || timestamp`` to bind
     the signature to a freshness value. This matches the verification logic.
     """
-    payload = body if timestamp is None else (body + b"." + str(timestamp).encode("utf-8"))
+    payload = (
+        body if timestamp is None else (body + b"." + str(timestamp).encode("utf-8"))
+    )
     return hmac.new(secret.encode("utf-8"), payload, hashlib.sha256).hexdigest()
 
 
@@ -79,7 +81,10 @@ async def verify_webhook(
             x_signature = request.headers.get("X-Signature")
         except Exception:
             x_signature = None
-    if not isinstance(x_timestamp, str | bytes | int | float) or not str(x_timestamp).strip():
+    if (
+        not isinstance(x_timestamp, str | bytes | int | float)
+        or not str(x_timestamp).strip()
+    ):
         try:
             x_timestamp = request.headers.get("X-Timestamp")
         except Exception:
@@ -87,7 +92,12 @@ async def verify_webhook(
 
     sig = (x_signature or "").strip().lower()
     # Default is lenient in tests unless explicitly required via env
-    require_ts = os.getenv("REQUIRE_WEBHOOK_TS", "0").strip().lower() in {"1", "true", "yes", "on"}
+    require_ts = os.getenv("REQUIRE_WEBHOOK_TS", "0").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
 
     ts_val: float | None = None
     max_skew = float(os.getenv("WEBHOOK_MAX_SKEW_S", "300") or 300)
@@ -102,7 +112,11 @@ async def verify_webhook(
     if ts_val is not None:
         now = time.time()
         if abs(now - ts_val) > max_skew:
-            raise unauthorized(code="stale_timestamp", message="stale timestamp", hint="adjust sender clock or increase skew")
+            raise unauthorized(
+                code="stale_timestamp",
+                message="stale timestamp",
+                hint="adjust sender clock or increase skew",
+            )
         for s in secrets:
             calc = sign_webhook(body, s, str(int(ts_val)))
             if hmac.compare_digest(calc.lower(), sig):
@@ -122,7 +136,11 @@ async def verify_webhook(
         calc = sign_webhook(body, s)
         if hmac.compare_digest(calc.lower(), sig):
             return body
-    raise unauthorized(code="invalid_signature", message="invalid signature", hint="verify secret and signature format")
+    raise unauthorized(
+        code="invalid_signature",
+        message="invalid signature",
+        hint="verify secret and signature format",
+    )
 
 
 def rotate_webhook_secret() -> str:
@@ -134,8 +152,13 @@ def rotate_webhook_secret() -> str:
     path = Path(os.getenv("HA_WEBHOOK_SECRET_FILE", "data/ha_webhook_secret.txt"))
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
-        existing = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-        contents = "\n".join([new] + [line.strip() for line in existing if line.strip()]) + "\n"
+        existing = (
+            path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+        )
+        contents = (
+            "\n".join([new] + [line.strip() for line in existing if line.strip()])
+            + "\n"
+        )
         path.write_text(contents, encoding="utf-8")
     except Exception:
         pass

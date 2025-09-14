@@ -18,7 +18,9 @@ def test_middleware_order_dev(monkeypatch):
     # FastAPI executes middleware in user_middleware order (first to last)
     metrics_idx = names.index("MetricsMiddleware")
     deprecation_idx = names.index("DeprecationHeaderMiddleware")
-    assert metrics_idx < deprecation_idx, f"MetricsMiddleware ({metrics_idx}) should execute before DeprecationHeaderMiddleware ({deprecation_idx})"
+    assert (
+        metrics_idx < deprecation_idx
+    ), f"MetricsMiddleware ({metrics_idx}) should execute before DeprecationHeaderMiddleware ({deprecation_idx})"
     # Inner cluster present
     for n in ["CORSMiddleware", "TraceRequestMiddleware", "RedactHashMiddleware"]:
         assert n in names

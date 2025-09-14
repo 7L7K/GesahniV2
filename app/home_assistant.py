@@ -445,7 +445,9 @@ async def handle_command(prompt: str) -> CommandResult | None:
     """
     global _HANDLE_CMD_DEPRECATION_WARNED
     if not _HANDLE_CMD_DEPRECATION_WARNED:
-        logger.warning("home_assistant.handle_command is deprecated; use Skills instead")
+        logger.warning(
+            "home_assistant.handle_command is deprecated; use Skills instead"
+        )
         _HANDLE_CMD_DEPRECATION_WARNED = True
     text = prompt.strip()
     # toggle

@@ -73,5 +73,3 @@ async def whoami(request: Request):
 async def finish(request: Request, response: Response, user_id: str = Depends(_require_user_or_dev)):
     # Delegate to canonical implementation which handles dependencies and CSRF
     return await _finish_impl(request, response, user_id=user_id)
-
-

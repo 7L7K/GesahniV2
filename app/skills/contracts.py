@@ -16,6 +16,7 @@ class Candidate:
     score: float
     reasons: dict[str, str]
 
+
 """
 SkillResult shape (fields only) — design document
 

@@ -17,14 +17,24 @@ class DoorLockSkill(Skill):
             action, name = match.group(1), match.group(2)
             # resolve via parsers.resolve_entity to enforce alias-first and disambiguation
             from .parsers import resolve_entity
+
             res = await resolve_entity(name, kind="lock")
             if res.get("action") == "disambiguate":
                 return "Which door did you mean? I found multiple matches."
             entity = res.get("entity_id")
             # validate lock action
-            from .tools.validator import validate_entity_resolution, validate_lock_action
+            from .tools.validator import (
+                validate_entity_resolution,
+                validate_lock_action,
+            )
 
-            ok, expl, confirm = validate_entity_resolution({"entity_id": entity, "friendly_name": res.get("friendly_name"), "confidence": res.get("confidence")})
+            ok, expl, confirm = validate_entity_resolution(
+                {
+                    "entity_id": entity,
+                    "friendly_name": res.get("friendly_name"),
+                    "confidence": res.get("confidence"),
+                }
+            )
             if not ok:
                 return expl
             ok, expl, confirm = validate_lock_action(action)

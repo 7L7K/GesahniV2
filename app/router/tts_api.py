@@ -2,6 +2,7 @@
 
 These call into `app.api.tts` when available and return queued audio shapes.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -58,10 +59,9 @@ async def get_tts_audio(audio_id: str):
 
     return FileResponse(p, media_type="audio/wav")
 
+
 # Register read route under alias router so /v1/tts/{audio_id} is available
 try:
     router.get("/tts/{audio_id}")(get_tts_audio)
 except Exception:
     pass
-
-

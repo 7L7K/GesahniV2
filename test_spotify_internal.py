@@ -15,7 +15,7 @@ import jwt
 os.environ["SPOTIFY_TEST_MODE"] = "1"
 
 # Add the app directory to the path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '.'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "."))
 
 from starlette.requests import Request
 
@@ -26,15 +26,15 @@ async def test_callback_internal():
     """Test the Spotify callback internally."""
 
     # Create a simple JWT state
-    tx_id = 'internal_test_tx'
-    user_id = 'testuser'
-    secret = os.getenv('JWT_SECRET', 'dev_jwt_secret_key_for_testing_only')
+    tx_id = "internal_test_tx"
+    user_id = "testuser"
+    secret = os.getenv("JWT_SECRET", "dev_jwt_secret_key_for_testing_only")
 
     payload = {
-        'tx': tx_id,
-        'uid': user_id,
-        'exp': int(time.time()) + 600,
-        'iat': int(time.time()),
+        "tx": tx_id,
+        "uid": user_id,
+        "exp": int(time.time()) + 600,
+        "iat": int(time.time()),
     }
 
     state = jwt.encode(payload, secret, algorithm="HS256")
@@ -50,7 +50,7 @@ async def test_callback_internal():
     mock_request.headers = {
         "host": "127.0.0.1:8000",
         "user-agent": "test-script",
-        "accept": "*/*"
+        "accept": "*/*",
     }
     mock_request.client = Mock()
     mock_request.client.host = "127.0.0.1"
@@ -59,19 +59,16 @@ async def test_callback_internal():
 
     # Call the callback function directly
     print(f"Calling callback with code='fake', state='{state[:50]}...'")
-    response = await spotify_callback(
-        request=mock_request,
-        code="fake",
-        state=state
-    )
+    response = await spotify_callback(request=mock_request, code="fake", state=state)
 
     print(f"Response type: {type(response)}")
-    if hasattr(response, 'status_code'):
+    if hasattr(response, "status_code"):
         print(f"Response status: {response.status_code}")
-    if hasattr(response, 'body'):
+    if hasattr(response, "body"):
         print(f"Response body length: {len(response.body)}")
 
     return response
+
 
 if __name__ == "__main__":
     asyncio.run(test_callback_internal())

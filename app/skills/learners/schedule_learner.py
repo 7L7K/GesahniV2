@@ -18,7 +18,9 @@ from typing import Any
 from ..ledger import _inmem
 
 
-def find_repeating_actions(window_days: int = 14, min_occurrences: int = 3, tolerance_min: int = 30) -> list[dict[str, Any]]:
+def find_repeating_actions(
+    window_days: int = 14, min_occurrences: int = 3, tolerance_min: int = 30
+) -> list[dict[str, Any]]:
     now = datetime.now()
     start = now - timedelta(days=window_days)
     # group by action+metadata['drug'|'label'|'entity'] heuristically
@@ -45,13 +47,20 @@ def find_repeating_actions(window_days: int = 14, min_occurrences: int = 3, tole
             continue
         # compute if times are within tolerance (mean vs each)
         avg_minutes = sum(t.hour * 60 + t.minute for t in times) / len(times)
-        if all(abs((t.hour * 60 + t.minute) - avg_minutes) <= tolerance_min for t in times):
+        if all(
+            abs((t.hour * 60 + t.minute) - avg_minutes) <= tolerance_min for t in times
+        ):
             # propose at rounded minute
             hour = int(avg_minutes // 60)
             minute = int(avg_minutes % 60)
             proposal = f"Enable a daily reminder at {hour:02d}:{minute:02d}?"
-            suggestions.append({"type": "schedule", "proposal": proposal, "why": f"{len(times)} similar events in last {window_days} days", "candidate": {"key": key, "hour": hour, "minute": minute}})
+            suggestions.append(
+                {
+                    "type": "schedule",
+                    "proposal": proposal,
+                    "why": f"{len(times)} similar events in last {window_days} days",
+                    "candidate": {"key": key, "hour": hour, "minute": minute},
+                }
+            )
 
     return suggestions
-
-

@@ -17,7 +17,7 @@ def test_me_missing_token_is_401():
 def test_me_endpoint_exists():
     """Test that /v1/me endpoint exists and is properly registered."""
     app = create_app()
-    routes = [r.path for r in app.routes if hasattr(r, 'path')]
+    routes = [r.path for r in app.routes if hasattr(r, "path")]
 
     assert "/v1/me" in routes
 

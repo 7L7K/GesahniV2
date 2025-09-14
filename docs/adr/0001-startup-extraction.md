@@ -55,5 +55,3 @@ Consequences
 - Future work: Phase 2 will extract router and middleware composition from
   `app/main.py` into separate modules and add CI smoke steps to validate
   startup behavior automatically.
-
-

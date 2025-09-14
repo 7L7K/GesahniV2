@@ -27,7 +27,12 @@ def find_alias_candidates(min_occurrences: int = 3) -> list[dict[str, Any]]:
     for k, v in counts.items():
         if v >= min_occurrences:
             phrase, entity = k.split("|", 1)
-            suggestions.append({"type": "alias", "proposal": f"When you say '{phrase}', map to {entity}", "why": f"seen {v} times", "candidate": {"phrase": phrase, "entity": entity}})
+            suggestions.append(
+                {
+                    "type": "alias",
+                    "proposal": f"When you say '{phrase}', map to {entity}",
+                    "why": f"seen {v} times",
+                    "candidate": {"phrase": phrase, "entity": entity},
+                }
+            )
     return suggestions
-
-

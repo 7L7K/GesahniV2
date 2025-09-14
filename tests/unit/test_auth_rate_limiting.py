@@ -68,10 +68,10 @@ class TestRateLimitingHelpers:
         assert _throttled(key) is not None
 
         # Fast forward time past the window by manipulating the stored timestamp
-        import app.auth
+        import app.auth_legacy
 
-        count, ts = app.auth._attempts[key]
-        app.auth._attempts[key] = (count, ts - _ATTEMPT_WINDOW - 1)
+        count, ts = app.auth_legacy._attempts[key]
+        app.auth_legacy._attempts[key] = (count, ts - _ATTEMPT_WINDOW - 1)
 
         # Should no longer be throttled
         assert _throttled(key) is None
@@ -172,12 +172,12 @@ class TestRateLimitingIntegration:
     async def test_login_rate_limiting_user_and_ip(self, client: TestClient):
         """Test that both user and IP rate limiting work together."""
         # Mock authentication to always fail
-        with patch("app.auth.pwd_context.verify", return_value=False), patch(
-            "app.auth._fetch_password_hash", return_value="hashed_password"
-        ), patch("app.auth._ensure_table"), patch(
-            "app.auth._client_ip", return_value="192.168.1.1"
+        with (
+            patch("app.auth.pwd_context.verify", return_value=False),
+            patch("app.auth._fetch_password_hash", return_value="hashed_password"),
+            patch("app.auth._ensure_table"),
+            patch("app.auth._client_ip", return_value="192.168.1.1"),
         ):
-
             # Make multiple failed attempts for a user
             # Rate limiting is checked at the start, so we need one more attempt
             for i in range(_ATTEMPT_MAX + 1):
@@ -199,12 +199,12 @@ class TestRateLimitingIntegration:
     async def test_login_rate_limiting_ip_bypass_prevention(self, client: TestClient):
         """Test that IP-based rate limiting prevents bypassing user limits."""
         # Mock authentication to always fail
-        with patch("app.auth.pwd_context.verify", return_value=False), patch(
-            "app.auth._fetch_password_hash", return_value="hashed_password"
-        ), patch("app.auth._ensure_table"), patch(
-            "app.auth._client_ip", return_value="192.168.1.1"
+        with (
+            patch("app.auth.pwd_context.verify", return_value=False),
+            patch("app.auth._fetch_password_hash", return_value="hashed_password"),
+            patch("app.auth._ensure_table"),
+            patch("app.auth._client_ip", return_value="192.168.1.1"),
         ):
-
             # Make multiple failed attempts from the same IP
             # Rate limiting is checked at the start, so we need one more attempt
             for i in range(_ATTEMPT_MAX + 1):
@@ -228,14 +228,13 @@ class TestRateLimitingIntegration:
     async def test_login_exponential_backoff(self, client: TestClient):
         """Test that exponential backoff is applied correctly."""
         # Mock authentication to always fail
-        with patch("app.auth.pwd_context.verify", return_value=False), patch(
-            "app.auth._fetch_password_hash", return_value="hashed_password"
-        ), patch("app.auth._ensure_table"), patch(
-            "app.auth._client_ip", return_value="192.168.1.1"
-        ), patch(
-            "asyncio.sleep"
-        ) as mock_sleep:
-
+        with (
+            patch("app.auth.pwd_context.verify", return_value=False),
+            patch("app.auth._fetch_password_hash", return_value="hashed_password"),
+            patch("app.auth._ensure_table"),
+            patch("app.auth._client_ip", return_value="192.168.1.1"),
+            patch("asyncio.sleep") as mock_sleep,
+        ):
             # Make attempts up to backoff threshold
             for i in range(_EXPONENTIAL_BACKOFF_THRESHOLD):
                 response = client.post(
@@ -258,12 +257,12 @@ class TestRateLimitingIntegration:
     async def test_login_hard_lockout(self, client: TestClient):
         """Test that hard lockout is applied after threshold."""
         # Mock authentication to always fail
-        with patch("app.auth.pwd_context.verify", return_value=False), patch(
-            "app.auth._fetch_password_hash", return_value="hashed_password"
-        ), patch("app.auth._ensure_table"), patch(
-            "app.auth._client_ip", return_value="192.168.1.1"
+        with (
+            patch("app.auth.pwd_context.verify", return_value=False),
+            patch("app.auth._fetch_password_hash", return_value="hashed_password"),
+            patch("app.auth._ensure_table"),
+            patch("app.auth._client_ip", return_value="192.168.1.1"),
         ):
-
             # Since _ATTEMPT_MAX (5) < _HARD_LOCKOUT_THRESHOLD (6),
             # regular rate limiting will be triggered first
             # Make attempts up to regular rate limit threshold
@@ -286,17 +285,15 @@ class TestRateLimitingIntegration:
     async def test_login_success_clears_rate_limits(self, client: TestClient):
         """Test that successful login clears rate limiting."""
         # Mock authentication to fail first, then succeed
-        with patch(
-            "app.auth.pwd_context.verify",
-            side_effect=[False, False, False, True, False],
-        ), patch(
-            "app.auth._fetch_password_hash", return_value="hashed_password"
-        ), patch(
-            "app.auth._ensure_table"
-        ), patch(
-            "app.auth._client_ip", return_value="192.168.1.1"
+        with (
+            patch(
+                "app.auth.pwd_context.verify",
+                side_effect=[False, False, False, True, False],
+            ),
+            patch("app.auth._fetch_password_hash", return_value="hashed_password"),
+            patch("app.auth._ensure_table"),
+            patch("app.auth._client_ip", return_value="192.168.1.1"),
         ):
-
             # Make some failed attempts
             for _ in range(3):
                 response = client.post(
@@ -322,22 +319,22 @@ class TestRateLimitingIntegration:
     async def test_login_most_restrictive_throttling(self, client: TestClient):
         """Test that the most restrictive throttling is applied."""
         # Mock authentication to always fail
-        with patch("app.auth.pwd_context.verify", return_value=False), patch(
-            "app.auth._fetch_password_hash", return_value="hashed_password"
-        ), patch("app.auth._ensure_table"), patch(
-            "app.auth._client_ip", return_value="192.168.1.1"
+        with (
+            patch("app.auth.pwd_context.verify", return_value=False),
+            patch("app.auth._fetch_password_hash", return_value="hashed_password"),
+            patch("app.auth._ensure_table"),
+            patch("app.auth._client_ip", return_value="192.168.1.1"),
         ):
-
             # Set up user throttling with 30s remaining
             user_key = "user:test_user"
             for _ in range(_ATTEMPT_MAX):
                 _record_attempt(user_key, success=False)
 
             # Manipulate the timestamp to simulate 30s remaining
-            import app.auth
+            import app.auth_legacy
 
-            count, ts = app.auth._attempts[user_key]
-            app.auth._attempts[user_key] = (count, ts - _LOCKOUT_SECONDS + 30)
+            count, ts = app.auth_legacy._attempts[user_key]
+            app.auth_legacy._attempts[user_key] = (count, ts - _LOCKOUT_SECONDS + 30)
 
             response = client.post(
                 "/login", json={"username": "test_user", "password": "wrong_password"}
@@ -380,20 +377,20 @@ class TestRateLimitingEdgeCases:
         assert _throttled(key) is not None
 
         # Test exactly at window boundary by manipulating timestamp
-        import app.auth
+        import app.auth_legacy
 
-        count, ts = app.auth._attempts[key]
+        count, ts = app.auth_legacy._attempts[key]
 
         # Test just before window boundary (should still be throttled)
-        app.auth._attempts[key] = (count, ts - _ATTEMPT_WINDOW + 0.1)
+        app.auth_legacy._attempts[key] = (count, ts - _ATTEMPT_WINDOW + 0.1)
         assert _throttled(key) is not None
 
         # Test exactly at window boundary (should be expired)
-        app.auth._attempts[key] = (count, ts - _ATTEMPT_WINDOW)
+        app.auth_legacy._attempts[key] = (count, ts - _ATTEMPT_WINDOW)
         assert _throttled(key) is None
 
         # Test just past window boundary
-        app.auth._attempts[key] = (count, ts - _ATTEMPT_WINDOW - 0.1)
+        app.auth_legacy._attempts[key] = (count, ts - _ATTEMPT_WINDOW - 0.1)
 
         # Should no longer be throttled
         assert _throttled(key) is None
@@ -407,10 +404,10 @@ class TestRateLimitingEdgeCases:
             _record_attempt(key, success=False)
 
         # Manipulate timestamp to exactly when lockout should expire
-        import app.auth
+        import app.auth_legacy
 
-        count, ts = app.auth._attempts[key]
-        app.auth._attempts[key] = (count, ts - _LOCKOUT_SECONDS)
+        count, ts = app.auth_legacy._attempts[key]
+        app.auth_legacy._attempts[key] = (count, ts - _LOCKOUT_SECONDS)
 
         # Should return at least 1 second
         wait_time = _throttled(key)
@@ -422,9 +419,9 @@ class TestRateLimitingEdgeCases:
         key = "test_user"
 
         # Manually insert malformed data
-        import app.auth
+        import app.auth_legacy
 
-        app.auth._attempts[key] = ("invalid", "data")
+        app.auth_legacy._attempts[key] = ("invalid", "data")
 
         # Should handle gracefully
         result = _throttled(key)
@@ -435,9 +432,9 @@ class TestRateLimitingEdgeCases:
         key = "test_user"
 
         # Manually insert large count
-        import app.auth
+        import app.auth_legacy
 
-        app.auth._attempts[key] = (999999, time.time())
+        app.auth_legacy._attempts[key] = (999999, time.time())
 
         # Should be throttled
         assert _throttled(key) is not None

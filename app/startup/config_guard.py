@@ -1,6 +1,7 @@
 """
 Production configuration guardrails - refuses risky configs in prod environment.
 """
+
 import logging
 import os
 
@@ -14,6 +15,7 @@ def _is_truthy(v):
 
 class ConfigError(RuntimeError):
     """Configuration error that should prevent application startup."""
+
     pass
 
 
@@ -69,6 +71,8 @@ def assert_strict_prod():
     debug_flags = ["DEBUG", "DEBUG_MODEL_ROUTING"]
     for flag in debug_flags:
         if _is_truthy(os.getenv(flag)):
-            log.warning("Debug flag enabled in prod: %s - consider disabling for security", flag)
+            log.warning(
+                "Debug flag enabled in prod: %s - consider disabling for security", flag
+            )
 
     log.info("✅ All production configuration guardrails passed")

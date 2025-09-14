@@ -2,12 +2,14 @@
 """
 Debug script to test frontend-to-backend Spotify communication
 """
+
 import asyncio
 import json
 import sys
 
 # Add current directory to path
-sys.path.append('.')
+sys.path.append(".")
+
 
 async def test_frontend_api_call():
     """Test the frontend API call simulation"""
@@ -15,7 +17,7 @@ async def test_frontend_api_call():
 
     try:
         # Import the API fetch function
-        sys.path.append('frontend/src/lib')
+        sys.path.append("frontend/src/lib")
         from app.lib.api import apiFetch
 
         print("✅ API module imported successfully")
@@ -39,10 +41,7 @@ async def test_frontend_api_call():
         print("\n2. Testing backend directly...")
         import requests
 
-        response = requests.get(
-            full_url,
-            cookies={"GSNH_AT": "test_token"}
-        )
+        response = requests.get(full_url, cookies={"GSNH_AT": "test_token"})
 
         print(f"   Backend Status: {response.status_code}")
         if response.status_code == 200:
@@ -66,6 +65,7 @@ async def test_frontend_api_call():
     print("3. Verify frontend is running on correct port (3000)")
     print("4. Check if cookies are being sent properly")
     print("5. Verify CORS settings between frontend and backend")
+
 
 if __name__ == "__main__":
     asyncio.run(test_frontend_api_call())

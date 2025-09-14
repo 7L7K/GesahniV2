@@ -8,7 +8,6 @@ Tests complete user journeys involving redirects, including:
 - Cookie-based redirect persistence
 """
 
-
 import pytest
 from playwright.async_api import BrowserContext, Page
 
@@ -91,15 +90,21 @@ class TestRedirectScenarios:
         assert page.url.count("/login") <= 1
 
     @pytest.mark.asyncio
-    async def test_gs_next_cookie_persistence(self, page: Page, context: BrowserContext):
+    async def test_gs_next_cookie_persistence(
+        self, page: Page, context: BrowserContext
+    ):
         """Test gs_next cookie persistence across page reloads."""
         # Set gs_next cookie
-        await context.add_cookies([{
-            "name": "gs_next",
-            "value": "/settings",
-            "path": "/",
-            "domain": "localhost"
-        }])
+        await context.add_cookies(
+            [
+                {
+                    "name": "gs_next",
+                    "value": "/settings",
+                    "path": "/",
+                    "domain": "localhost",
+                }
+            ]
+        )
 
         # Navigate to login page without next parameter
         await page.goto("/login")
@@ -115,15 +120,21 @@ class TestRedirectScenarios:
         await page.wait_for_url("**/settings")
 
     @pytest.mark.asyncio
-    async def test_explicit_next_overrides_cookie(self, page: Page, context: BrowserContext):
+    async def test_explicit_next_overrides_cookie(
+        self, page: Page, context: BrowserContext
+    ):
         """Test that explicit next parameter overrides gs_next cookie."""
         # Set gs_next cookie
-        await context.add_cookies([{
-            "name": "gs_next",
-            "value": "/settings",
-            "path": "/",
-            "domain": "localhost"
-        }])
+        await context.add_cookies(
+            [
+                {
+                    "name": "gs_next",
+                    "value": "/settings",
+                    "path": "/",
+                    "domain": "localhost",
+                }
+            ]
+        )
 
         # Navigate to login with different next parameter
         await page.goto("/login?next=/dashboard")
@@ -139,15 +150,21 @@ class TestRedirectScenarios:
         await page.wait_for_url("**/dashboard")
 
     @pytest.mark.asyncio
-    async def test_logout_clears_redirect_state(self, page: Page, context: BrowserContext):
+    async def test_logout_clears_redirect_state(
+        self, page: Page, context: BrowserContext
+    ):
         """Test that logout clears redirect-related cookies."""
         # First login and set gs_next
-        await context.add_cookies([{
-            "name": "gs_next",
-            "value": "/settings",
-            "path": "/",
-            "domain": "localhost"
-        }])
+        await context.add_cookies(
+            [
+                {
+                    "name": "gs_next",
+                    "value": "/settings",
+                    "path": "/",
+                    "domain": "localhost",
+                }
+            ]
+        )
 
         # Navigate to logout
         await page.goto("/logout")
@@ -237,7 +254,9 @@ class TestRedirectScenarios:
         assert "evil.com" not in page.url
 
     @pytest.mark.asyncio
-    async def test_redirect_session_persistence(self, page: Page, context: BrowserContext):
+    async def test_redirect_session_persistence(
+        self, page: Page, context: BrowserContext
+    ):
         """Test that redirect preferences persist across browser sessions."""
         # This would test localStorage/sessionStorage persistence
         # For now, just ensure basic functionality works

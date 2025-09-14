@@ -64,16 +64,21 @@ def log_ask_observability_summary():
         latency_p95 = get_ask_latency_p95_by_backend()
         error_rates = get_ask_error_rate_by_backend()
 
-        logger.info("ask.observability_summary", extra={
-            "latency_p95_by_backend": latency_p95,
-            "error_rates_by_backend": error_rates,
-            "alerts": _generate_alerts(latency_p95, error_rates),
-        })
+        logger.info(
+            "ask.observability_summary",
+            extra={
+                "latency_p95_by_backend": latency_p95,
+                "error_rates_by_backend": error_rates,
+                "alerts": _generate_alerts(latency_p95, error_rates),
+            },
+        )
     except Exception as e:
         logger.error(f"Failed to generate observability summary: {e}")
 
 
-def _generate_alerts(latency_p95: dict[str, float], error_rates: dict[str, dict[str, float]]) -> list[str]:
+def _generate_alerts(
+    latency_p95: dict[str, float], error_rates: dict[str, dict[str, float]]
+) -> list[str]:
     """Generate alerts based on latency and error rate thresholds."""
     alerts = []
 
@@ -103,12 +108,10 @@ GOLDEN_QUERIES = {
     "p95_latency_by_backend": """
         histogram_quantile(0.95, sum(rate(ask_latency_ms_bucket[5m])) by (le, backend))
     """,
-
     "error_rate_by_backend": """
         sum(rate(ask_errors_total[5m])) by (backend) /
         sum(rate(prompt_router_calls_total[5m])) by (backend)
     """,
-
     "error_rate_by_backend_and_type": """
         sum(rate(ask_errors_total[5m])) by (backend, error_type) /
         sum(rate(prompt_router_calls_total[5m])) by (backend)

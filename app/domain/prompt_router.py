@@ -10,7 +10,7 @@ class PromptRouter(Protocol):
     concrete implementations and enables typing for DI.
     """
 
-    def __call__(self, payload: dict[str, Any]) -> Awaitable[dict[str, Any]]:  # pragma: no cover - typing-only
+    def __call__(
+        self, payload: dict[str, Any]
+    ) -> Awaitable[dict[str, Any]]:  # pragma: no cover - typing-only
         ...
-
-

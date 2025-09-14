@@ -9,4 +9,3 @@ export async function parseEnvelope(resp: Response) {
     return { code: 'error', message: resp.statusText || 'error', details: { status: resp.status } };
   }
 }
-

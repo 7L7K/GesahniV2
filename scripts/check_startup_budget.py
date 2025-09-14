@@ -33,7 +33,7 @@ class ImportTiming:
 def parse_import_timings(lines: List[str]) -> List[ImportTiming]:
     """Parse PYTHONPROFILEIMPORTTIME output into structured data."""
     timings = []
-    pattern = re.compile(r'import time:\s+(\d+)\s*\|\s*(\d+)\s*\|\s*(.+)')
+    pattern = re.compile(r"import time:\s+(\d+)\s*\|\s*(\d+)\s*\|\s*(.+)")
 
     for line in lines:
         match = pattern.search(line.strip())
@@ -55,9 +55,9 @@ def get_budget_thresholds() -> Dict[str, int]:
 
     # Default thresholds (ms)
     defaults = {
-        "dev": 1200,    # 1.2s
-        "prod": 800,    # 0.8s
-        "ci": 1000,     # 1.0s
+        "dev": 1200,  # 1.2s
+        "prod": 800,  # 0.8s
+        "ci": 1000,  # 1.0s
     }
 
     # Allow override via environment variables
@@ -83,7 +83,9 @@ def analyze_timings(timings: List[ImportTiming]) -> Dict:
     top_offenders = sorted_by_self[:10]
 
     # Calculate total startup time (last cumulative timing)
-    total_startup_ms = sorted_by_cumulative[0].cumulative_ms if sorted_by_cumulative else 0
+    total_startup_ms = (
+        sorted_by_cumulative[0].cumulative_ms if sorted_by_cumulative else 0
+    )
 
     # Find imports exceeding threshold
     thresholds = get_budget_thresholds()
@@ -93,8 +95,12 @@ def analyze_timings(timings: List[ImportTiming]) -> Dict:
 
     return {
         "total_startup_ms": total_startup_ms,
-        "top_offenders": [{"module": t.module, "self_ms": t.self_ms} for t in top_offenders],
-        "slow_imports": [{"module": t.module, "self_ms": t.self_ms} for t in slow_imports],
+        "top_offenders": [
+            {"module": t.module, "self_ms": t.self_ms} for t in top_offenders
+        ],
+        "slow_imports": [
+            {"module": t.module, "self_ms": t.self_ms} for t in slow_imports
+        ],
         "thresholds": thresholds,
     }
 
@@ -105,7 +111,9 @@ def main():
     lines = sys.stdin.readlines()
 
     if not lines:
-        print("❌ ERROR: No input received. Pipe PYTHONPROFILEIMPORTTIME output to this script.")
+        print(
+            "❌ ERROR: No input received. Pipe PYTHONPROFILEIMPORTTIME output to this script."
+        )
         sys.exit(1)
 
     # Parse timings
@@ -143,11 +151,15 @@ def main():
         for imp in slow_imports:
             print("6d")
     else:
-        print(f"\n✅ No imports exceeded {thresholds['import_threshold_ms']}ms threshold")
+        print(
+            f"\n✅ No imports exceeded {thresholds['import_threshold_ms']}ms threshold"
+        )
 
     # Exit with failure if budget exceeded
     if not budget_passed:
-        print(f"\n❌ BUDGET VIOLATION: Startup time {total_ms}ms exceeds budget of {budget_ms}ms")
+        print(
+            f"\n❌ BUDGET VIOLATION: Startup time {total_ms}ms exceeds budget of {budget_ms}ms"
+        )
         sys.exit(1)
 
     print("\n🎉 Startup budget check passed!")

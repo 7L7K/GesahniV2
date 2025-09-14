@@ -22,7 +22,7 @@ class RefreshHelper:
         user_id: str,
         operation: Callable[[], Awaitable[Any]],
         refresh_func: Callable[[], Awaitable[None]],
-        max_retries: int = 1
+        max_retries: int = 1,
     ) -> Any:
         """
         Generic refresh helper that handles 401 errors by refreshing tokens.
@@ -52,16 +52,24 @@ class RefreshHelper:
                 except SpotifyAuthError as e:
                     if "401" in str(e) or "auth" in str(e).lower():
                         if attempt < max_retries:
-                            logger.info(f"Token expired for user {user_id}, refreshing...")
+                            logger.info(
+                                f"Token expired for user {user_id}, refreshing..."
+                            )
                             try:
                                 await refresh_func()
                                 continue  # Retry the operation with new token
                             except Exception as refresh_error:
-                                logger.error(f"Token refresh failed for user {user_id}: {refresh_error}")
-                                raise SpotifyAuthError(f"Token refresh failed: {refresh_error}")
+                                logger.error(
+                                    f"Token refresh failed for user {user_id}: {refresh_error}"
+                                )
+                                raise SpotifyAuthError(
+                                    f"Token refresh failed: {refresh_error}"
+                                )
                         else:
                             logger.error(f"Max retries exceeded for user {user_id}")
-                            raise SpotifyAuthError("Authentication failed after refresh attempts")
+                            raise SpotifyAuthError(
+                                "Authentication failed after refresh attempts"
+                            )
                     else:
                         # Non-401 error, re-raise immediately
                         raise
@@ -106,9 +114,7 @@ class SpotifyRefreshHelper:
             raise SpotifyAuthError(f"Token refresh failed: {e}")
 
     async def execute_with_refresh(
-        self,
-        user_id: str,
-        operation: Callable[[], Awaitable[Any]]
+        self, user_id: str, operation: Callable[[], Awaitable[Any]]
     ) -> Any:
         """
         Execute a Spotify operation with automatic token refresh on 401 errors.
@@ -123,7 +129,7 @@ class SpotifyRefreshHelper:
         return await self.generic_helper.refresh_if_401(
             user_id=user_id,
             operation=operation,
-            refresh_func=lambda: self.refresh_spotify_token(user_id)
+            refresh_func=lambda: self.refresh_spotify_token(user_id),
         )
 
 
@@ -133,8 +139,7 @@ spotify_refresh_helper = SpotifyRefreshHelper()
 
 # Convenience function for easy use
 async def refresh_if_401_spotify(
-    user_id: str,
-    operation: Callable[[], Awaitable[Any]]
+    user_id: str, operation: Callable[[], Awaitable[Any]]
 ) -> Any:
     """
     Convenience function to execute Spotify operations with automatic refresh.

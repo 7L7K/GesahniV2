@@ -14,6 +14,8 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+)
+from sqlalchemy import (
     text as sqltext,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -211,7 +213,11 @@ class DeviceSession(Base):
     __tablename__ = "device_sessions"
     __table_args__ = (
         sa.Index("idx_auth_device_sessions_user_id", "user_id"),
-        sa.Index("idx_auth_device_sessions_last_seen", sa.desc("last_seen_at"), postgresql_using="btree"),
+        sa.Index(
+            "idx_auth_device_sessions_last_seen",
+            sa.desc("last_seen_at"),
+            postgresql_using="btree",
+        ),
         sa.Index("idx_device_sessions_last_seen", "last_seen_at"),
         sa.Index("idx_device_sessions_user_id", "user_id"),
         UniqueConstraint(
@@ -488,9 +494,7 @@ class ChatMessage(Base):
         ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False,
     )
-    rid: Mapped[str] = mapped_column(
-        String(32), nullable=False
-    )  # Request ID
+    rid: Mapped[str] = mapped_column(String(32), nullable=False)  # Request ID
     role: Mapped[str] = mapped_column(
         String(20), nullable=False
     )  # system|user|assistant
@@ -701,7 +705,9 @@ class UserNote(Base):
 class Ledger(Base):
     __tablename__ = "ledger"
     __table_args__ = (
-        sa.UniqueConstraint("user_id", "idempotency_key", name="ledger_user_id_idempotency_key_key"),
+        sa.UniqueConstraint(
+            "user_id", "idempotency_key", name="ledger_user_id_idempotency_key_key"
+        ),
         sa.Index("idx_ledger_idempotency", "idempotency_key"),
         sa.Index("idx_ledger_user_created", "user_id", "created_at"),
         sa.Index("idx_storage_ledger_user_id", "user_id"),
@@ -777,13 +783,30 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
     __table_args__ = (
         sa.Index("idx_audit_log_user_id", "user_id"),
-        sa.Index("idx_audit_log_created_at", sa.desc("created_at"), postgresql_using="btree"),
-        sa.Index("idx_audit_log_created_at_brin", "created_at", postgresql_using="brin"),
-        sa.Index("idx_audit_log_event_type", "event_type", sa.desc("created_at"), postgresql_using="btree"),
+        sa.Index(
+            "idx_audit_log_created_at", sa.desc("created_at"), postgresql_using="btree"
+        ),
+        sa.Index(
+            "idx_audit_log_created_at_brin", "created_at", postgresql_using="brin"
+        ),
+        sa.Index(
+            "idx_audit_log_event_type",
+            "event_type",
+            sa.desc("created_at"),
+            postgresql_using="btree",
+        ),
         sa.Index("idx_audit_log_meta_gin", "meta", postgresql_using="gin"),
-        sa.Index("idx_audit_log_recent", sa.desc("created_at"), postgresql_using="btree"),
+        sa.Index(
+            "idx_audit_log_recent", sa.desc("created_at"), postgresql_using="btree"
+        ),
         sa.Index("idx_audit_log_session_id", "session_id"),
-        sa.Index("idx_audit_log_user_session", "user_id", "session_id", sa.desc("created_at"), postgresql_using="btree"),
+        sa.Index(
+            "idx_audit_log_user_session",
+            "user_id",
+            "session_id",
+            sa.desc("created_at"),
+            postgresql_using="btree",
+        ),
         {"schema": "audit"},
     )
 

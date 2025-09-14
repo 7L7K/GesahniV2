@@ -12,4 +12,3 @@ fi
 
 echo "🚀 Launching Gesahni development environment (via ./scripts/dev.sh)"
 exec ./scripts/dev.sh
-

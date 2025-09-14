@@ -157,11 +157,14 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             # INFO sampling
             import os
             import random
+
             info_sampling = float(os.getenv("INFO_SAMPLING", "1.0"))
-            if info_sampling >= 1.0 or random.random() < max(0.0, min(1.0, info_sampling)):
+            if info_sampling >= 1.0 or random.random() < max(
+                0.0, min(1.0, info_sampling)
+            ):
                 logger.info(
-                f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)",
-                extra={"meta": log_extra},
+                    f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)",
+                    extra={"meta": log_extra},
                 )
             return response
 
@@ -170,6 +173,7 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
 
             # Handle HTTPException specially - preserve its status code
             from fastapi import HTTPException
+
             if isinstance(e, HTTPException):
                 # Re-raise HTTPException to preserve its status code
                 raise e
@@ -177,18 +181,33 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             # Use the new error translator for consistent error handling
             try:
                 from ..http_errors import translate_common_exception
+
                 translated_exc = translate_common_exception(e)
 
                 # Extract details from the translated exception
                 status_code = translated_exc.status_code
                 detail = getattr(translated_exc, "detail", {})
-                code = detail.get("code", "internal_error") if isinstance(detail, dict) else "internal_error"
-                message = detail.get("message", "Internal error") if isinstance(detail, dict) else "Internal error"
-                hint = detail.get("hint") if isinstance(detail, dict) else "try again shortly"
+                code = (
+                    detail.get("code", "internal_error")
+                    if isinstance(detail, dict)
+                    else "internal_error"
+                )
+                message = (
+                    detail.get("message", "Internal error")
+                    if isinstance(detail, dict)
+                    else "Internal error"
+                )
+                hint = (
+                    detail.get("hint")
+                    if isinstance(detail, dict)
+                    else "try again shortly"
+                )
 
             except Exception as translation_error:
                 # Fallback if translation fails
-                logger.warning(f"Error translation failed: {translation_error}, falling back to generic error")
+                logger.warning(
+                    f"Error translation failed: {translation_error}, falling back to generic error"
+                )
                 status_code = 500
                 code = "internal_error"
                 message = "Internal server error"
@@ -200,22 +219,25 @@ class EnhancedErrorHandlingMiddleware(BaseHTTPMiddleware):
             # ERROR sampling
             import os
             import random
+
             err_sampling = float(os.getenv("ERROR_SAMPLING", "1.0"))
-            if err_sampling >= 1.0 or random.random() < max(0.0, min(1.0, err_sampling)):
+            if err_sampling >= 1.0 or random.random() < max(
+                0.0, min(1.0, err_sampling)
+            ):
                 logger.error(
-                f"Request failed: {request.method} {request.url.path} -> {type(e).__name__}: {e}",
-                exc_info=True,
-                extra={
-                    "meta": {
-                        "req_id": req_id,
-                        "route": route_name,
-                        "user_anon": user_anon,
-                        "latency_ms": duration * 1000,
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "error_code": error_code,
-                    }
-                },
+                    f"Request failed: {request.method} {request.url.path} -> {type(e).__name__}: {e}",
+                    exc_info=True,
+                    extra={
+                        "meta": {
+                            "req_id": req_id,
+                            "route": route_name,
+                            "user_anon": user_anon,
+                            "latency_ms": duration * 1000,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                            "error_code": error_code,
+                        }
+                    },
                 )
             # unify error shape
             from fastapi.responses import JSONResponse

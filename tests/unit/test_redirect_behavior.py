@@ -6,6 +6,7 @@ Tests ensure:
 - HTTP method is preserved on redirect
 - allow_redirects=False prevents automatic following
 """
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -47,7 +48,9 @@ class TestAuthRedirects:
         # Should not have Location header since redirect never happens
         assert "Location" not in response.headers
 
-    @pytest.mark.parametrize("method", ["DELETE"])  # Only DELETE is supported for specific PAT
+    @pytest.mark.parametrize(
+        "method", ["DELETE"]
+    )  # Only DELETE is supported for specific PAT
     def test_legacy_pats_with_id_redirect_preserves_method(self, client, method):
         """Test that legacy /v1/pats/{id} endpoint redirects with 308 and preserves method."""
         pat_id = "test_pat_123"
@@ -58,7 +61,9 @@ class TestAuthRedirects:
         # 308 redirects should preserve the method
         assert "Allow" not in response.headers
 
-    @pytest.mark.parametrize("method", ["GET", "POST"])  # Only GET and POST are supported
+    @pytest.mark.parametrize(
+        "method", ["GET", "POST"]
+    )  # Only GET and POST are supported
     def test_legacy_finish_redirect_preserves_method(self, client, method):
         """Test that legacy /v1/finish endpoint redirects with 308 and preserves method."""
         response = client.request(method, "/v1/finish")
@@ -101,14 +106,24 @@ class TestAuthRedirects:
         # Should not contain the actual endpoint response
         assert "application/json" not in response.headers.get("content-type", "")
 
-    @pytest.mark.parametrize("method,legacy_path,canonical_path,expected_status", [
-        ("GET", "/v1/pats", "/v1/auth/pats", 308),
-        ("POST", "/v1/pats", "/v1/auth/pats", 401),  # Requires auth, returns 401 before redirect
-        ("DELETE", "/v1/pats/test_pat", "/v1/auth/pats/test_pat", 308),
-        ("GET", "/v1/finish", "/v1/auth/finish", 308),
-        ("POST", "/v1/finish", "/v1/auth/finish", 308),
-    ])
-    def test_redirect_status_and_location_headers(self, client, method, legacy_path, canonical_path, expected_status):
+    @pytest.mark.parametrize(
+        "method,legacy_path,canonical_path,expected_status",
+        [
+            ("GET", "/v1/pats", "/v1/auth/pats", 308),
+            (
+                "POST",
+                "/v1/pats",
+                "/v1/auth/pats",
+                401,
+            ),  # Requires auth, returns 401 before redirect
+            ("DELETE", "/v1/pats/test_pat", "/v1/auth/pats/test_pat", 308),
+            ("GET", "/v1/finish", "/v1/auth/finish", 308),
+            ("POST", "/v1/finish", "/v1/auth/finish", 308),
+        ],
+    )
+    def test_redirect_status_and_location_headers(
+        self, client, method, legacy_path, canonical_path, expected_status
+    ):
         """Test comprehensive redirect behavior for all legacy auth endpoints."""
         response = client.request(method, legacy_path, allow_redirects=False)
 
@@ -121,7 +136,9 @@ class TestAuthRedirects:
             # Assert method preservation (no Allow header for 308)
             assert "Allow" not in response.headers
             # Assert no auto-follow occurred
-            assert response.status_code == 308  # Still redirect status, not final status
+            assert (
+                response.status_code == 308
+            )  # Still redirect status, not final status
 
     def test_redirect_with_query_params(self, client):
         """Test that redirects work with query parameters (current implementation doesn't preserve them)."""
@@ -267,7 +284,9 @@ class TestEndToEndRedirectFollowing:
         # Verify we're actually at the redirected path (even though endpoint doesn't exist)
         assert "/v1/auth/pats" in str(response.url)
 
-    def test_legacy_pats_post_requires_auth_before_redirect(self, client_with_redirects):
+    def test_legacy_pats_post_requires_auth_before_redirect(
+        self, client_with_redirects
+    ):
         """Test that POST /v1/pats requires authentication and doesn't redirect."""
         test_data = {"name": "test_pat", "scopes": ["read"]}
 
@@ -305,7 +324,9 @@ class TestEndToEndRedirectFollowing:
         # Should follow redirect and hit the canonical endpoint
         assert response.url.path == "/v1/auth/finish"
 
-    def test_legacy_pats_with_query_params_follows_to_canonical(self, client_with_redirects):
+    def test_legacy_pats_with_query_params_follows_to_canonical(
+        self, client_with_redirects
+    ):
         """Test that query parameters are handled when following redirects."""
         response = client_with_redirects.get("/v1/pats?page=1&limit=10")
 
@@ -338,7 +359,9 @@ class TestEndToEndRedirectFollowing:
         # when follow_redirects=True
 
         # Direct access to canonical endpoint
-        canonical_response = client_with_redirects.post("/v1/auth/pats", json={"name": "test"})
+        canonical_response = client_with_redirects.post(
+            "/v1/auth/pats", json={"name": "test"}
+        )
 
         # Access via legacy redirect endpoint
         legacy_response = client_with_redirects.post("/v1/pats", json={"name": "test"})
@@ -349,7 +372,9 @@ class TestEndToEndRedirectFollowing:
         # Legacy response stays at original path since auth fails before redirect
         assert "/v1/pats" in str(legacy_response.url)
 
-    def test_redirect_following_with_json_body_preservation(self, client_with_redirects):
+    def test_redirect_following_with_json_body_preservation(
+        self, client_with_redirects
+    ):
         """Test that JSON request bodies are handled correctly for auth-required endpoints."""
         test_data = {"name": "my_test_pat", "scopes": ["read", "write"]}
 
@@ -393,12 +418,18 @@ class TestVerbParity:
         for verb in supported_verbs:
             # Test legacy endpoint
             legacy_response = client.request(verb, "/v1/finish", allow_redirects=False)
-            assert legacy_response.status_code == 308, f"Legacy {verb} /v1/finish should redirect"
+            assert (
+                legacy_response.status_code == 308
+            ), f"Legacy {verb} /v1/finish should redirect"
 
             # Test canonical endpoint directly (should work without redirect)
-            canonical_response = client.request(verb, "/v1/auth/finish", allow_redirects=False)
+            canonical_response = client.request(
+                verb, "/v1/auth/finish", allow_redirects=False
+            )
             # Canonical endpoint should exist and handle the verb
-            assert canonical_response.status_code != 404, f"Canonical {verb} /v1/auth/finish should exist"
+            assert (
+                canonical_response.status_code != 404
+            ), f"Canonical {verb} /v1/auth/finish should exist"
 
     def test_legacy_pats_supports_same_verbs_as_canonical(self, client):
         """Test that /v1/pats supports the same HTTP verbs as /v1/auth/pats."""
@@ -408,12 +439,18 @@ class TestVerbParity:
         test_cases = [
             ("GET", "/v1/pats", 308),  # Legacy GET redirects to canonical
             ("POST", "/v1/pats", 401),  # Legacy POST requires auth before redirect
-            ("POST", "/v1/auth/pats", 405),  # Canonical POST not directly supported (405)
+            (
+                "POST",
+                "/v1/auth/pats",
+                405,
+            ),  # Canonical POST not directly supported (405)
         ]
 
         for verb, path, expected_status in test_cases:
             response = client.request(verb, path, allow_redirects=False)
-            assert response.status_code == expected_status, f"{verb} {path} should return {expected_status}"
+            assert (
+                response.status_code == expected_status
+            ), f"{verb} {path} should return {expected_status}"
 
     def test_legacy_pats_id_supports_same_verbs_as_canonical(self, client):
         """Test that /v1/pats/{id} supports the same HTTP verbs as /v1/auth/pats/{id}."""
@@ -421,24 +458,40 @@ class TestVerbParity:
 
         # Legacy supports DELETE, canonical should too
         legacy_response = client.delete(f"/v1/pats/{pat_id}", allow_redirects=False)
-        assert legacy_response.status_code == 308, f"Legacy DELETE /v1/pats/{pat_id} should redirect"
+        assert (
+            legacy_response.status_code == 308
+        ), f"Legacy DELETE /v1/pats/{pat_id} should redirect"
 
         # Canonical endpoint should exist for DELETE
-        canonical_response = client.delete(f"/v1/auth/pats/{pat_id}", allow_redirects=False)
-        assert canonical_response.status_code != 404, f"Canonical DELETE /v1/auth/pats/{pat_id} should exist"
+        canonical_response = client.delete(
+            f"/v1/auth/pats/{pat_id}", allow_redirects=False
+        )
+        assert (
+            canonical_response.status_code != 404
+        ), f"Canonical DELETE /v1/auth/pats/{pat_id} should exist"
 
     def test_unsupported_verbs_return_405_for_both_legacy_and_canonical(self, client):
         """Test that unsupported HTTP verbs return 405 for both legacy and canonical endpoints."""
-        unsupported_verbs = ["PUT", "PATCH", "DELETE"]  # DELETE is supported for pats/{id} but not pats
+        unsupported_verbs = [
+            "PUT",
+            "PATCH",
+            "DELETE",
+        ]  # DELETE is supported for pats/{id} but not pats
 
         for verb in unsupported_verbs:
             # Test legacy endpoint
             legacy_response = client.request(verb, "/v1/pats", allow_redirects=False)
-            assert legacy_response.status_code == 405, f"Legacy {verb} /v1/pats should return 405"
+            assert (
+                legacy_response.status_code == 405
+            ), f"Legacy {verb} /v1/pats should return 405"
 
             # Test canonical endpoint
-            canonical_response = client.request(verb, "/v1/auth/pats", allow_redirects=False)
-            assert canonical_response.status_code == 405, f"Canonical {verb} /v1/auth/pats should return 405"
+            canonical_response = client.request(
+                verb, "/v1/auth/pats", allow_redirects=False
+            )
+            assert (
+                canonical_response.status_code == 405
+            ), f"Canonical {verb} /v1/auth/pats should return 405"
 
 
 class TestNoDuplicateRoutes:
@@ -453,11 +506,11 @@ class TestNoDuplicateRoutes:
 
         for route in app.routes:
             # Skip routes without methods or path (like mounted apps)
-            if not hasattr(route, 'methods') or not hasattr(route, 'path'):
+            if not hasattr(route, "methods") or not hasattr(route, "path"):
                 continue
 
-            methods = getattr(route, 'methods', None)
-            path = getattr(route, 'path', None)
+            methods = getattr(route, "methods", None)
+            path = getattr(route, "path", None)
 
             if not methods or not path:
                 continue
@@ -472,7 +525,9 @@ class TestNoDuplicateRoutes:
                 route_counts[key].append(route)
 
         # Find duplicates
-        duplicates = {key: routes for key, routes in route_counts.items() if len(routes) > 1}
+        duplicates = {
+            key: routes for key, routes in route_counts.items() if len(routes) > 1
+        }
 
         # Assert no duplicates
         assert not duplicates, f"Found duplicate route registrations: {duplicates}"
@@ -480,4 +535,6 @@ class TestNoDuplicateRoutes:
         # Log some stats for debugging
         total_routes = sum(len(routes) for routes in route_counts.values())
         unique_combinations = len(route_counts)
-        print(f"Route analysis: {total_routes} total routes, {unique_combinations} unique (method,path) combinations")
+        print(
+            f"Route analysis: {total_routes} total routes, {unique_combinations} unique (method,path) combinations"
+        )

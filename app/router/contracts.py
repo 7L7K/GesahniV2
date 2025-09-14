@@ -3,6 +3,7 @@
 This module defines a minimal Protocol that other parts of the
 application can import without pulling heavy dependencies.
 """
+
 from typing import Protocol, runtime_checkable
 
 
@@ -17,5 +18,3 @@ class Router(Protocol):
     async def route_prompt(self, payload: dict) -> dict:
         """Route the given prompt payload and return a response dict."""
         ...
-
-
