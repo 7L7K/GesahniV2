@@ -88,9 +88,9 @@ def require_admin_scope():
         if "admin" in user_scopes or "admin:write" in user_scopes:
             return getattr(request.state, "user_id", None)
 
-        from fastapi import HTTPException
+        from app.http_errors import forbidden
 
-        raise HTTPException(status_code=403, detail="Admin scope required")
+        raise forbidden(code="admin_scope_required", message="admin scope required")
 
     return Depends(check_admin)
 

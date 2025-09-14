@@ -86,21 +86,58 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
         pass
     headers["X-Error-Code"] = code
     return JSONResponse(
-        build_error(code=code, message=msg, hint=hint, details=details),
+        build_error(code=code, message=msg, hint=hint, meta=details),
         status_code=status,
         headers=headers,
     )
 
 
+def _serialize_validation_errors(errors: list) -> list:
+    """Convert Pydantic validation errors to JSON-serializable format."""
+    import json
+
+    def make_serializable(obj: Any) -> Any:
+        """Convert non-serializable objects to strings."""
+        try:
+            json.dumps(obj)
+            return obj
+        except (TypeError, ValueError):
+            return str(obj)
+
+    def serialize_error(error: dict) -> dict:
+        """Recursively serialize a single error dict."""
+        result = {}
+        for key, value in error.items():
+            if isinstance(value, dict):
+                result[key] = serialize_error(value)
+            elif isinstance(value, list):
+                result[key] = [
+                    (
+                        serialize_error(item)
+                        if isinstance(item, dict)
+                        else make_serializable(item)
+                    )
+                    for item in value
+                ]
+            else:
+                result[key] = make_serializable(value)
+        return result
+
+    return [serialize_error(error) for error in errors]
+
+
 async def handle_validation_error(request: Request, exc: RequestValidationError):
     # Keep FastAPI-compatible shape *and* your envelope in one response.
     details_block = _trace_details(request, 422)
+    # Serialize errors to ensure JSON compatibility
+    serialized_errors = _serialize_validation_errors(exc.errors())
+
     # Use the canonical validation_error envelope so tests and clients
     # receive a consistent `validation_error` code and human-friendly message.
     envelope = build_error(
         code="validation_error",
         message="Validation Error",
-        details={**details_block, "errors": exc.errors()},
+        meta={**details_block, "errors": serialized_errors},
     )
     headers = {"X-Error-Code": "validation_error"}
     try:
@@ -117,7 +154,7 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
     combined = {
         **envelope,
         "detail": "Validation Error",
-        "errors": exc.errors(),
+        "errors": serialized_errors,
         "path": request.url.path,
         "method": request.method,
     }
@@ -135,7 +172,7 @@ async def handle_unexpected_error(request: Request, exc: Exception):
         code="internal",
         message="internal error",
         hint="try again shortly",
-        details=details,
+        meta=details,
     )
     headers = {"X-Error-Code": "internal"}
     try:

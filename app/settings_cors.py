@@ -17,21 +17,20 @@ logger = logging.getLogger(__name__)
 
 def get_cors_origins() -> list[str]:
     """Get the configured CORS allowed origins."""
-    # In dev environment, disable CORS for same-origin requests (non-negotiable)
     env = os.getenv("ENV", "dev").strip().lower()
-    if env == "dev":
-        return []
 
-    # In dev proxy mode, disable CORS for same-origin requests
-    if os.getenv("NEXT_PUBLIC_USE_DEV_PROXY", "").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }:
-        return []
+    # Respect explicit configuration first
+    explicit = os.getenv("CORS_ALLOW_ORIGINS", "")
 
-    cors_origins = os.getenv("CORS_ALLOW_ORIGINS", "http://localhost:3000")
+    if explicit.strip():
+        cors_origins = explicit
+    else:
+        # Default behavior: in dev, allow the frontend origin by default
+        # to support cross-site cookies and local Next.js dev server.
+        if env == "dev":
+            cors_origins = "http://localhost:3000"
+        else:
+            cors_origins = "http://localhost:3000"
 
     # If the Next dev proxy is enabled, be explicit and allow both localhost
     # variants so local tooling (127.0.0.1 vs localhost) can work reliably.

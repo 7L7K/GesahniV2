@@ -407,7 +407,9 @@ async def spotify_connect(request: Request) -> Response:
             and ref_origin
             and ref_origin not in allowed
         ):
-            raise HTTPException(status_code=403, detail="origin_not_allowed")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="origin_not_allowed", message="origin not allowed")
     except HTTPException:
         raise
     except Exception:

@@ -152,7 +152,7 @@ def setup_middleware_stack(
         add_mw(app, RateLimitMiddleware, name="RateLimitMiddleware")
 
     # Session and auth
-    session_attach_enabled = _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "0"))
+    session_attach_enabled = _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "1"))
     if session_attach_enabled:
         add_mw(app, SessionAttachMiddleware, name="SessionAttachMiddleware")
     add_mw(app, SilentRefreshMiddleware, name="SilentRefreshMiddleware")

@@ -43,13 +43,19 @@ def init_db() -> None:
 @asynccontextmanager
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     """Yield an async database session from app.db.core."""
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         yield session
+    finally:
+        await session.close()
 
 
 async def create_user_async(username: str, hashed_password: str) -> User:
     """Create a new user asynchronously using PostgreSQL."""
-    async for session in get_async_db():
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         # Create user using SQLAlchemy model
         user = AuthUser(
             username=username,
@@ -62,35 +68,48 @@ async def create_user_async(username: str, hashed_password: str) -> User:
         await session.commit()
         await session.refresh(user)
 
-        return User(
+        result = User(
             id=user.id,
             username=user.username,
             hashed_password=user.password_hash,
             login_count=0,
             last_login=None,
         )
+    finally:
+        await session.close()
+
+    return result
 
 
 async def get_user_async(username: str) -> User | None:
     """Get a user by username asynchronously using PostgreSQL."""
-    async for session in get_async_db():
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = select(AuthUser).where(AuthUser.username == username)
         result = await session.execute(stmt)
         user = result.scalar_one_or_none()
         if user:
-            return User(
+            result = User(
                 id=user.id,
                 username=user.username,
                 hashed_password=user.password_hash,
                 login_count=0,
                 last_login=None,
             )
-        return None
+        else:
+            result = None
+    finally:
+        await session.close()
+
+    return result
 
 
 async def list_users_async() -> Iterable[User]:
     """List all users asynchronously using PostgreSQL."""
-    async for session in get_async_db():
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         result = await session.execute(
             text(
                 """
@@ -111,7 +130,11 @@ async def list_users_async() -> Iterable[User]:
                     last_login=None,
                 )
             )
-        return users
+        result_users = users
+    finally:
+        await session.close()
+
+    return result_users
 
 
 async def update_login_async(user: User) -> User:

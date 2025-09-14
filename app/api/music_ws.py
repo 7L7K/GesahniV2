@@ -4,6 +4,7 @@ import asyncio
 import logging
 import os
 import time as _t
+from dataclasses import fields
 from typing import Any
 
 from fastapi import APIRouter, Request, Response, WebSocket
@@ -16,6 +17,30 @@ from app.utils.lru_cache import ws_idempotency_cache
 from app.ws_manager import WSConnectionManager, get_ws_manager
 
 router = APIRouter(tags=["Music"])  # mounted under /v1
+
+
+def prune_to_model(d: dict, model_cls) -> dict:
+    """Prune dictionary to only include fields that exist in the model class.
+
+    This prevents WebSocket crashes when unexpected fields are present in device data.
+    Falls back to allowing all fields if model introspection fails.
+    """
+    try:
+        # Try Pydantic v2 style first
+        if hasattr(model_cls, "model_fields"):
+            allowed = set(model_cls.model_fields.keys())
+        # Try dataclass style
+        elif hasattr(model_cls, "__dataclass_fields__"):
+            allowed = set(model_cls.__dataclass_fields__.keys())
+        # Try dataclass fields() function
+        else:
+            allowed = {f.name for f in fields(model_cls)}
+    except Exception:
+        # If introspection fails, allow all fields as safety net
+        logger.warning("prune_to_model: introspection failed, allowing all fields")
+        return d
+
+    return {k: v for k, v in d.items() if k in allowed}
 
 
 def _client_ip(ws: WebSocket) -> str:
@@ -125,6 +150,9 @@ async def _dispatch_command(
     user_id: str,
     manager: WSConnectionManager | None,
     logger: logging.Logger,
+    provider,
+    current_state,
+    _update_current_state,
 ) -> None:
     """Dispatch WebSocket command with idempotency and ack/error handling."""
     req_id = payload.get("req_id")
@@ -581,7 +609,16 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
                 conn_state.update_activity()
 
             # Dispatch command with idempotency
-            await _dispatch_command(ws, payload, uid, manager, logger)
+            await _dispatch_command(
+                ws,
+                payload,
+                uid,
+                manager,
+                logger,
+                provider,
+                current_state,
+                _update_current_state,
+            )
 
     finally:
         # Clean up delta builder

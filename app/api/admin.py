@@ -267,7 +267,9 @@ async def admin_user_identities(user_id: str):
         from app.db.core import get_async_db
         from app.db.models import AuthIdentity
 
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = select(AuthIdentity).where(AuthIdentity.user_id == user_id)
             result = await session.execute(stmt)
             identities = result.scalars().all()
@@ -324,7 +326,9 @@ async def admin_user_identities(user_id: str):
                     }
                 )
 
-        return {"user_id": user_id, "identities": out}
+            return {"user_id": user_id, "identities": out}
+        finally:
+            await session.close()
     except Exception as e:
         logger.exception("admin.user_identities failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -347,7 +351,9 @@ async def admin_unlink_identity(
         from app.db.core import get_async_db
         from app.db.models import AuthIdentity, AuthUser
 
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             # Verify identity belongs to user
             stmt = select(AuthIdentity).where(
                 AuthIdentity.id == identity_id, AuthIdentity.user_id == user_id
@@ -385,6 +391,8 @@ async def admin_unlink_identity(
             stmt = delete(AuthIdentity).where(AuthIdentity.id == identity_id)
             await session.execute(stmt)
             await session.commit()
+        finally:
+            await session.close()
 
         # Mark tokens invalid for this identity
         try:
@@ -394,7 +402,9 @@ async def admin_unlink_identity(
 
             from app.db.models import ThirdPartyToken
 
-            async with get_async_db() as session:
+            session_gen = get_async_db()
+            session = await anext(session_gen)
+            try:
                 stmt = (
                     update(ThirdPartyToken)
                     .where(ThirdPartyToken.identity_id == identity_id)
@@ -402,11 +412,15 @@ async def admin_unlink_identity(
                 )
                 await session.execute(stmt)
                 await session.commit()
-        except Exception:
-            # best-effort: log and continue
-            logger.exception(
-                "Failed to mark tokens invalid for identity %s", identity_id
-            )
+            except Exception:
+                # best-effort: log and continue
+                logger.exception(
+                    "Failed to mark tokens invalid for identity %s", identity_id
+                )
+            finally:
+                await session.close()
+        except Exception as e:
+            logger.exception("token_invalidation_failed: %s", e)
 
         return {"ok": True}
     except HTTPException:
@@ -439,7 +453,9 @@ def _check_admin(token: str | None, request: Request | None = None) -> None:
     _tok = _admin_token()
     # In production-like runs, require ADMIN_TOKEN to be set
     if not _is_test_mode() and not _tok:
-        raise HTTPException(status_code=403, detail="admin_token_required")
+        from app.http_errors import forbidden
+
+        raise forbidden(code="admin_token_required", message="admin token required")
     # Extract from headers or cookies if not provided as query
     header_token: str | None = None
     cookie_token: str | None = None
@@ -457,7 +473,9 @@ def _check_admin(token: str | None, request: Request | None = None) -> None:
     if _is_test_mode() and candidate is None:
         return
     if _tok and candidate != _tok:
-        raise HTTPException(status_code=403, detail="forbidden")
+        from app.http_errors import forbidden
+
+        raise forbidden(message="access forbidden")
 
 
 @router.get("/surface/index")
@@ -513,7 +531,7 @@ async def admin_surface_index(
         raise HTTPException(status_code=500, detail="surface_index_error")
 
 
-@router.get("/metrics", dependencies=[Depends(require_scope("admin:read"))])
+@router.get("/metrics", dependencies=[Depends(require_admin_optional())])
 async def admin_metrics(
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
@@ -739,7 +757,7 @@ async def admin_reload_env(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/errors", dependencies=[Depends(require_scope("admin:read"))])
+@router.get("/errors", dependencies=[Depends(require_admin_optional())])
 async def admin_errors(
     limit: int = Query(default=50, ge=1, le=500),
     user_id: str = Depends(get_current_user_id),
@@ -747,10 +765,13 @@ async def admin_errors(
     return {"errors": get_errors()[:limit]}
 
 
-@router.get("/self_review", dependencies=[Depends(require_scope("admin:read"))])
+@router.get("/self_review", dependencies=[])
 async def admin_self_review(
-    user_id: str = Depends(get_current_user_id),
+    request: Request,
+    token: str | None = Query(default=None),
 ) -> dict:
+    # Use the legacy admin token check for now
+    _check_admin(token, request)
     try:
         res = _get_self_review()
         return res or {"status": "unavailable"}

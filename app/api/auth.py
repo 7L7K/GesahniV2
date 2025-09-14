@@ -30,6 +30,7 @@ from ..auth_store import create_pat as _create_pat
 from ..auth_store import get_pat_by_hash as _get_pat_by_hash
 from ..logging_config import req_id_var
 from ..metrics import WHOAMI_FAIL, WHOAMI_OK
+from ..models.user import get_user_async
 from ..token_store import (
     allow_refresh,
 )
@@ -1332,6 +1333,22 @@ async def register_v1(request: Request, response: Response):
     - Issues access and refresh tokens
     - Sets HttpOnly cookies via centralized cookie helpers
     """
+    # Import required modules
+    from datetime import datetime
+
+    from sqlalchemy.exc import IntegrityError
+
+    from app.db.core import get_async_db
+    from app.db.models import AuthUser
+
+    from ..auth import _create_session_id
+    from ..auth_refresh import _get_or_create_device_id
+    from ..cookie_config import get_token_ttls
+    from ..tokens import make_access, make_refresh
+    from ..web.cookies import set_auth_cookies
+    from .auth import _jwt_secret as _secret_fn
+    from .auth_password import _pwd
+
     # Parse body
     try:
         body = await request.json()
@@ -1346,16 +1363,7 @@ async def register_v1(request: Request, response: Response):
 
     # Register user using PostgreSQL via auth_password module
     try:
-        from .auth_password import _pwd
-
         h = _pwd.hash(password)
-
-        from datetime import datetime
-
-        from sqlalchemy.exc import IntegrityError
-
-        from app.db.core import get_async_db
-        from app.db.models import AuthUser
 
         user = AuthUser(
             username=username,
@@ -1365,24 +1373,27 @@ async def register_v1(request: Request, response: Response):
             created_at=datetime.now(UTC),
         )
 
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             session.add(user)
             await session.commit()
-    except IntegrityError:
-        raise HTTPException(status_code=400, detail="username_taken")
-    except HTTPException:
-        raise
+        except IntegrityError:
+            raise HTTPException(status_code=400, detail="username_taken")
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(f"registration_error: {e}")
+            raise HTTPException(status_code=500, detail="registration_error")
+        finally:
+            await session.close()
     except Exception as e:
-        logger.error(f"registration_error: {e}")
-        raise HTTPException(status_code=500, detail="registration_error")
+        logger.error(f"database_error: {e}")
+        raise HTTPException(status_code=500, detail="database_error")
 
     # Issue tokens and set cookies (mirror /v1/login behavior)
-    from ..cookie_config import get_token_ttls
-    from ..tokens import make_access, make_refresh
-
     access_ttl, refresh_ttl = get_token_ttls()
     # Get or create device_id for token binding
-    from ..auth_refresh import _get_or_create_device_id
 
     device_id = _get_or_create_device_id(request, response)
 
@@ -1410,10 +1421,6 @@ async def register_v1(request: Request, response: Response):
 
     # Map session id and set cookies
     try:
-        from ..auth import _create_session_id
-        from ..web.cookies import set_auth_cookies
-        from .auth import _jwt_secret as _secret_fn  # dynamic secret
-
         payload = jwt_decode(
             access_token, _secret_fn(), algorithms=["HSHS256" if False else "HS256"]
         )  # ensure HS256
@@ -1450,8 +1457,10 @@ async def register_v1(request: Request, response: Response):
 
     # Update user metrics
     try:
-        await user_store.ensure_user(username)
-        await user_store.increment_login(username)
+        user = await get_user_async(username)
+        if user:
+            await user_store.ensure_user(user.id)
+            await user_store.update_login_stats(user.id)
     except Exception:
         pass
 
@@ -1634,8 +1643,11 @@ async def login(
     except Exception as e:
         # Best-effort; login still succeeds with access token alone
         logger.error(f"Exception in login cookie setting: {e}")
-    await user_store.ensure_user(username)
-    await user_store.increment_login(username)
+    # Get the user's UUID for user_store operations
+    user = await get_user_async(username)
+    if user:
+        await user_store.ensure_user(user.id)
+        await user_store.update_login_stats(user.id)
     # Debug: print Set-Cookie headers sent
     try:
         if os.getenv("AUTH_DEBUG") == "1":
@@ -1675,7 +1687,9 @@ async def dev_token(
         "yes",
         "on",
     }:
-        raise HTTPException(status_code=403, detail="dev_token_disabled")
+        from app.http_errors import forbidden
+
+        raise forbidden(code="dev_token_disabled", message="dev token disabled")
 
     sec = _os.getenv("JWT_SECRET")
     if not sec or not str(sec).strip():
@@ -1886,7 +1900,11 @@ async def refresh(
                     logger.info(
                         "refresh_flow: csrf_failed=true, reason=invalid_csrf_format"
                     )
-                    raise HTTPException(status_code=403, detail="invalid_csrf_format")
+                    from app.http_errors import forbidden
+
+                    raise forbidden(
+                        code="invalid_csrf_format", message="invalid CSRF token format"
+                    )
 
                 # TODO: Consider implementing server-side CSRF token validation for cross-site requests
                 # This could involve storing valid tokens in Redis/session and validating against that
@@ -1994,7 +2012,9 @@ async def refresh(
         if current_user_id == "anon" or not current_user_id:
             from fastapi import HTTPException
 
-            raise HTTPException(status_code=401, detail="invalid_refresh")
+            from app.http_errors import unauthorized
+
+            raise unauthorized(code="invalid_refresh", message="invalid refresh token")
 
         # Perform rotation with replay protection - use shim for test compatibility
         tokens = await rotate_refresh_cookies(request, response, current_user_id)
@@ -2292,7 +2312,9 @@ async def _ensure_auth(user_id: str) -> None:
     try:
         # Basic auth validation - could be extended with actual validation logic
         if not user_id:
-            raise HTTPException(status_code=401, detail="invalid_user_id")
+            from app.http_errors import unauthorized
+
+            raise unauthorized(code="invalid_user_id", message="invalid user ID")
 
         # Could add additional auth checks here if needed
         # For now, just ensure the user exists in the user store

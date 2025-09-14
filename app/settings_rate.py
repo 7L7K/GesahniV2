@@ -107,7 +107,7 @@ class RateLimitSettings:
     @property
     def key_scope(self) -> str:
         """Scope for rate limit keys (global, user, ip, route)."""
-        return self._get_env_str("RATE_LIMIT_KEY_SCOPE", "global").lower()
+        return self._get_env_str("RATE_LIMIT_KEY", "user").lower()
 
     @property
     def backend(self) -> str:

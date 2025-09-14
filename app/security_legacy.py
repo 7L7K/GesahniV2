@@ -120,7 +120,9 @@ def scope_required(*required_scopes: str):
         payload = getattr(request.state, "jwt_payload", None)
         scopes = _payload_scopes(payload)
         if not set(required_scopes) <= scopes:
-            raise HTTPException(status_code=403, detail="insufficient_scope")
+            from .http_errors import forbidden
+
+            raise forbidden(code="insufficient_scope", message="insufficient scope")
 
     return _dep
 

@@ -26,9 +26,7 @@ def unauthorized(
     hdrs = {"WWW-Authenticate": "Bearer", "X-Error-Code": code, "Deprecation": "true"}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(
-        code=code, message=message, hint=hint, details={"status_code": 401}
-    )
+    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 401})
     return HTTPException(status_code=401, detail=env, headers=hdrs)
 
 
@@ -43,9 +41,7 @@ def forbidden(
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(
-        code=code, message=message, hint=hint, details={"status_code": 403}
-    )
+    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 403})
     return HTTPException(status_code=403, detail=env, headers=hdrs)
 
 
@@ -60,9 +56,7 @@ def not_found(
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(
-        code=code, message=message, hint=hint, details={"status_code": 404}
-    )
+    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 404})
     return HTTPException(status_code=404, detail=env, headers=hdrs)
 
 
@@ -77,9 +71,7 @@ def method_not_allowed(
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(
-        code=code, message=message, hint=hint, details={"status_code": 405}
-    )
+    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 405})
     return HTTPException(status_code=405, detail=env, headers=hdrs)
 
 
@@ -94,9 +86,7 @@ def payload_too_large(
     hdrs = {"X-Error-Code": code}
     if headers:
         hdrs.update(dict(headers))
-    env = build_error(
-        code=code, message=message, hint=hint, details={"status_code": 413}
-    )
+    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 413})
     return HTTPException(status_code=413, detail=env, headers=hdrs)
 
 
@@ -113,11 +103,11 @@ def validation_error(
     if headers:
         hdrs.update(dict(headers))
 
-    details = {"status_code": 422}
+    meta = {"status_code": 422}
     if errors:
-        details["errors"] = errors
+        meta["errors"] = errors
 
-    env = build_error(code=code, message=message, hint=hint, details=details)
+    env = build_error(code=code, message=message, hint=hint, meta=meta)
     return HTTPException(status_code=422, detail=env, headers=hdrs)
 
 
@@ -134,11 +124,11 @@ def internal_error(
     if headers:
         hdrs.update(dict(headers))
 
-    details = {"status_code": 500}
+    meta = {"status_code": 500}
     if req_id:
-        details["req_id"] = req_id
+        meta["req_id"] = req_id
 
-    env = build_error(code=code, message=message, hint=hint, details=details)
+    env = build_error(code=code, message=message, hint=hint, meta=meta)
     return HTTPException(status_code=500, detail=env, headers=hdrs)
 
 
@@ -154,7 +144,7 @@ def http_error(
     if headers:
         hdrs.update(dict(headers))
     env = build_error(
-        code=code, message=message, hint=hint, details={"status_code": status}
+        code=code, message=message, hint=hint, meta={"status_code": status}
     )
     return HTTPException(status_code=status, detail=env, headers=hdrs)
 

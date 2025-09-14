@@ -113,7 +113,7 @@ async def ask_compat(request: Request):
 
 
 @router.get("/ask/replay/{rid}", deprecated=True)
-async def ask_replay_compat(rid: str, request: Request):
+async def ask_replay_compat(rid: str):
     """Legacy /ask/replay/{rid} endpoint - redirects to canonical /v1/ask/replay/{rid}.
 
     Only enabled when LEGACY_CHAT=1 environment variable is set.

@@ -1,6 +1,6 @@
 import os
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, Response
 from pydantic import BaseModel
 
 router = APIRouter(tags=["Dev"])
@@ -21,7 +21,9 @@ class MintAccessRequest(BaseModel):
 async def mint_access(request: MintAccessRequest, response: Response):
     """Mint a short-lived access token for dev testing."""
     if not _is_dev():
-        raise HTTPException(status_code=403, detail="forbidden")
+        from app.http_errors import forbidden
+
+        raise forbidden(message="dev access forbidden")
 
     from ..sessions_store import sessions_store
     from ..tokens import sign_access_token

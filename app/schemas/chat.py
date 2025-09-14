@@ -61,18 +61,17 @@ class AskRequest(BaseModel):
         ],
     )
 
-    # Modern field name with backward compatibility
+    # Modern field name
     model: str | None = Field(
         None,
         description="Preferred model id (e.g., gpt-4o, llama3)",
         examples=["gpt-4o", "llama3"],
     )
 
-    # Legacy field for backward compatibility (mapped to model)
+    # Legacy field for backward compatibility (will be normalized to model)
     model_override: str | None = Field(
         None,
-        description="Legacy alias for model (auto-mapped)",
-        alias="model",  # Pydantic v2 alias allows both field names
+        description="Legacy alias for model (normalized to model field)",
     )
 
     stream: bool | None = Field(
@@ -111,8 +110,8 @@ class AskRequest(BaseModel):
     @model_validator(mode="after")
     def normalize_model_fields(self) -> AskRequest:
         """Normalize model_override to model for backward compatibility."""
-        # If model_override was provided, use it as the model value
-        if hasattr(self, "model_override") and self.model_override is not None:
+        # model_override takes precedence over model for backward compatibility
+        if self.model_override is not None:
             self.model = self.model_override
 
         return self

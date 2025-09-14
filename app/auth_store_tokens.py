@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, delete, desc, func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -111,12 +111,40 @@ class TokenDAO:
                     existing = result.scalar_one_or_none()
 
                     # Normalize scopes
-                    def _normalize_scope(s: str | None) -> str | None:
+                    def _normalize_scope(s: str | list | None) -> str | None:
                         if not s:
                             return None
-                        items = [
-                            x.strip().lower() for x in s.split() if x and x.strip()
-                        ]
+                        if isinstance(s, list):
+                            # Convert list to normalized scopes
+                            items = [
+                                str(x).strip().lower()
+                                for x in s
+                                if x and str(x).strip()
+                            ]
+                        elif isinstance(s, str):
+                            # Handle comma-separated or space-separated strings
+                            # First try splitting by commas, then by spaces if no commas found
+                            if "," in s:
+                                items = [
+                                    x.strip().lower()
+                                    for x in s.split(",")
+                                    if x and x.strip()
+                                ]
+                            else:
+                                items = [
+                                    x.strip().lower()
+                                    for x in s.split()
+                                    if x and x.strip()
+                                ]
+                        else:
+                            # Convert other types to string then split
+                            items = [
+                                x.strip().lower()
+                                for x in str(s).split()
+                                if x and x.strip()
+                            ]
+
+                        # Remove duplicates and sort
                         items = sorted(set(items))
                         return " ".join(items) if items else None
 
@@ -124,11 +152,21 @@ class TokenDAO:
 
                     # Merge scopes if existing token found
                     if existing and existing.scopes:
-                        existing_scopes = set(
-                            existing.scopes.decode().split()
+                        # Decode bytes if necessary
+                        existing_scopes_str = (
+                            existing.scopes.decode()
                             if isinstance(existing.scopes, bytes)
-                            else existing.scopes.split()
+                            else existing.scopes
                         )
+                        # Handle comma-separated or space-separated existing scopes
+                        if "," in existing_scopes_str:
+                            existing_scopes = set(
+                                x.strip().lower()
+                                for x in existing_scopes_str.split(",")
+                                if x.strip()
+                            )
+                        else:
+                            existing_scopes = set(existing_scopes_str.split())
                         new_scopes = (
                             set(token.scopes.split()) if token.scopes else set()
                         )
@@ -190,7 +228,8 @@ class TokenDAO:
                             None if refresh_token_enc else token.refresh_token
                         )
                         existing.refresh_token_enc = refresh_token_enc
-                        existing.scopes = token.scopes
+                        # Ensure scopes are in canonical format before persisting
+                        existing.scopes = _normalize_scope(token.scopes)
                         existing.service_state = token.service_state
                         existing.expires_at = token.expires_at
                         existing.updated_at = now
@@ -219,6 +258,9 @@ class TokenDAO:
                         )
                     else:
                         # Insert new token
+                        # Ensure scopes are in canonical format before creating new token
+                        normalized_scopes = _normalize_scope(token.scopes)
+
                         new_token = ThirdPartyTokenModel(
                             id=token.id,
                             user_id=token.user_id,
@@ -237,11 +279,12 @@ class TokenDAO:
                                 int(time.time()) if refresh_token_enc else 0
                             ),
                             refresh_error_count=0,
-                            scopes=token.scopes,
+                            scopes=normalized_scopes,
                             service_state=token.service_state,
                             scope_union_since=token.scope_union_since
                             or token.created_at,
-                            scope_last_added_from=token.scope_last_added_from,
+                            scope_last_added_from=token.scope_last_added_from
+                            or token.id,
                             replaced_by_id=token.replaced_by_id,
                             expires_at=token.expires_at,
                             created_at=(
@@ -273,7 +316,9 @@ class TokenDAO:
                             },
                         )
 
-                    return True
+                    result_success = True
+
+            return result_success
 
         except IntegrityError as e:
             logger.error(
@@ -321,8 +366,8 @@ class TokenDAO:
         Returns:
             Token if found and valid, None otherwise
         """
-        try:
-            async with get_async_db() as session:
+        async with get_async_db() as session:
+            try:
                 if provider_sub is None:
                     stmt = (
                         select(ThirdPartyTokenModel)
@@ -430,21 +475,21 @@ class TokenDAO:
                     },
                 )
 
-                return token
-
-        except Exception as e:
-            logger.error(
-                "🔐 TOKEN STORE: get_token failed",
-                extra={
-                    "meta": {
-                        "user_id": user_id,
-                        "provider": provider,
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                    }
-                },
-            )
-            return None
+                result_token = token
+                return result_token
+            except Exception as e:
+                logger.error(
+                    "🔐 TOKEN STORE: get_token failed",
+                    extra={
+                        "meta": {
+                            "user_id": user_id,
+                            "provider": provider,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                        }
+                    },
+                )
+                return None
 
     async def get_all_user_tokens(self, user_id: str) -> list[ThirdPartyToken]:
         """
@@ -539,7 +584,6 @@ class TokenDAO:
                     tokens.append(token)
 
                 return tokens
-
         except Exception as e:
             logger.error(f"Failed to get tokens for user {user_id}: {e}")
             return []
@@ -573,7 +617,12 @@ class TokenDAO:
                     result = await session.execute(stmt)
                     await session.commit()
 
-                    return result.rowcount > 0
+                    # Handle unreliable rowcount (-1 with some drivers)
+                    rowcount = getattr(result, "rowcount", None)
+                    if rowcount is None or rowcount < 0:
+                        # If rowcount is unreliable, assume success if no exception occurred
+                        return True
+                    return rowcount > 0
 
         except Exception as e:
             logger.error(f"Failed to mark token invalid for {user_id}@{provider}: {e}")
@@ -594,35 +643,29 @@ class TokenDAO:
         try:
             async with self._lock:
                 async with get_async_db() as session:
-                    # Find the most recent valid token
-                    if provider_sub is None and provider_iss is None:
-                        stmt = (
-                            select(ThirdPartyTokenModel)
-                            .where(
-                                and_(
-                                    ThirdPartyTokenModel.user_id == user_id,
-                                    ThirdPartyTokenModel.provider == provider,
-                                    ThirdPartyTokenModel.is_valid == True,
-                                )
-                            )
-                            .order_by(desc(ThirdPartyTokenModel.created_at))
-                            .limit(1)
+                    # Find the most recent valid token with appropriate constraints
+                    base_conditions = [
+                        ThirdPartyTokenModel.user_id == user_id,
+                        ThirdPartyTokenModel.provider == provider,
+                        ThirdPartyTokenModel.is_valid == True,
+                    ]
+
+                    # Add provider-specific constraints
+                    if provider_sub is not None:
+                        base_conditions.append(
+                            ThirdPartyTokenModel.provider_sub == provider_sub
                         )
-                    else:
-                        stmt = (
-                            select(ThirdPartyTokenModel)
-                            .where(
-                                and_(
-                                    ThirdPartyTokenModel.user_id == user_id,
-                                    ThirdPartyTokenModel.provider == provider,
-                                    ThirdPartyTokenModel.provider_sub == provider_sub,
-                                    ThirdPartyTokenModel.provider_iss == provider_iss,
-                                    ThirdPartyTokenModel.is_valid == True,
-                                )
-                            )
-                            .order_by(desc(ThirdPartyTokenModel.created_at))
-                            .limit(1)
+                    if provider_iss is not None:
+                        base_conditions.append(
+                            ThirdPartyTokenModel.provider_iss == provider_iss
                         )
+
+                    stmt = (
+                        select(ThirdPartyTokenModel)
+                        .where(and_(*base_conditions))
+                        .order_by(desc(ThirdPartyTokenModel.created_at))
+                        .limit(1)
+                    )
 
                     result = await session.execute(stmt)
                     token_model = result.scalar_one_or_none()
@@ -671,10 +714,7 @@ class TokenDAO:
         try:
             async with self._lock:
                 async with get_async_db() as session:
-                    cutoff_time = datetime.now(UTC)
-                    cutoff_time = cutoff_time.replace(
-                        second=cutoff_time.second - max_age_seconds
-                    )
+                    cutoff_time = datetime.now(UTC) - timedelta(seconds=max_age_seconds)
 
                     stmt = delete(ThirdPartyTokenModel).where(
                         and_(
@@ -686,25 +726,16 @@ class TokenDAO:
                     result = await session.execute(stmt)
                     await session.commit()
 
-                    return result.rowcount
+                    # Handle unreliable rowcount (-1 with some drivers)
+                    rowcount = getattr(result, "rowcount", None)
+                    if rowcount is None or rowcount < 0:
+                        # If rowcount is unreliable, return 0 (conservative approach)
+                        return 0
+                    return rowcount
 
         except Exception as e:
             logger.error(f"Failed to cleanup expired tokens: {e}")
             return 0
-
-    def _validate_token_structure(self, token: ThirdPartyToken) -> bool:
-        """Validate basic token structure and required fields."""
-        try:
-            if not token.id or not token.user_id or not token.provider:
-                return False
-
-            # Access token is required
-            if not token.access_token and not token.access_token_enc:
-                return False
-
-            return True
-        except Exception:
-            return False
 
     def _validate_token_for_storage(self, token: ThirdPartyToken) -> bool:
         """Validate token before storage."""
@@ -743,7 +774,84 @@ class TokenDAO:
     def _validate_decrypted_tokens(self, token: ThirdPartyToken) -> bool:
         """Validate decrypted tokens are properly formatted."""
         try:
-            if token.access_token and not token.access_token.startswith(("B", "e")):
+            # Basic validation: tokens should exist and have reasonable length
+            if token.access_token and len(token.access_token) < 10:
+                return False
+
+            if token.refresh_token and len(token.refresh_token) < 10:
+                return False
+
+            # For strict mode, perform provider-specific validation
+            if settings.STRICT_CONTRACTS and not settings.TEST_MODE:
+                return self._validate_token_by_provider(token)
+
+            return True
+        except Exception:
+            return False
+
+    def _validate_token_by_provider(self, token: ThirdPartyToken) -> bool:
+        """Validate token format based on provider-specific rules."""
+        try:
+            # Basic sanity checks for all providers
+            if not token.provider:
+                return False
+
+            # Provider-specific validation
+            if token.provider == "spotify":
+                return self._validate_spotify_token_format(token)
+            elif token.provider == "google":
+                return self._validate_google_token_format(token)
+            else:
+                # For unknown providers, use generic validation
+                return self._validate_generic_token_format(token)
+
+        except Exception:
+            return False
+
+    def _validate_spotify_token_format(self, token: ThirdPartyToken) -> bool:
+        """Validate Spotify token format - more flexible than hardcoded patterns."""
+        try:
+            # Check access token basic properties
+            if token.access_token:
+                # Allow various OAuth token formats - just check it's not obviously wrong
+                if len(token.access_token) < 20:  # Reasonable minimum for OAuth tokens
+                    return False
+                # Check for common token characteristics (base64-like, JWT-like, etc.)
+                if not any(
+                    char in token.access_token
+                    for char in [".", "-", "_", "+", "/", "="]
+                ):
+                    # If it doesn't contain common token characters, it might be malformed
+                    return False
+
+            # Check refresh token basic properties
+            if token.refresh_token:
+                if len(token.refresh_token) < 20:
+                    return False
+
+            return True
+        except Exception:
+            return False
+
+    def _validate_google_token_format(self, token: ThirdPartyToken) -> bool:
+        """Validate Google token format."""
+        try:
+            # Similar flexible validation for Google tokens
+            if token.access_token and len(token.access_token) < 20:
+                return False
+
+            if token.refresh_token and len(token.refresh_token) < 20:
+                return False
+
+            return True
+        except Exception:
+            return False
+
+    def _validate_generic_token_format(self, token: ThirdPartyToken) -> bool:
+        """Validate tokens for unknown providers with basic checks."""
+        try:
+            # Basic validation for any OAuth provider
+            if token.access_token and len(token.access_token) < 10:
                 return False
 
             if token.refresh_token and len(token.refresh_token) < 10:
@@ -758,7 +866,6 @@ class TokenDAO:
         Test-mode contract validation for Spotify tokens.
         Performs comprehensive validation and logs all failures.
         """
-        import re
         import time
 
         validation_passed = True
@@ -835,7 +942,7 @@ class TokenDAO:
             )
             validation_passed = False
 
-        # 4. access_token matches ^B[A-Za-z0-9] and length ≥ 16+2
+        # 4. access_token flexible validation (no hardcoded format requirements)
         if not token.access_token:
             logger.error(
                 "🔒 CONTRACT VALIDATION: FAILED - access_token is required",
@@ -843,25 +950,8 @@ class TokenDAO:
             )
             validation_passed = False
         else:
-            if not re.match(r"^B[A-Za-z0-9]+$", token.access_token):
-                logger.error(
-                    "🔒 CONTRACT VALIDATION: FAILED - access_token format invalid",
-                    extra={
-                        "meta": {
-                            "req_id": req_id,
-                            "token_id": token.id,
-                            "access_token_prefix": (
-                                token.access_token[:2]
-                                if len(token.access_token) >= 2
-                                else token.access_token
-                            ),
-                            "expected_pattern": "^B[A-Za-z0-9]+$",
-                        }
-                    },
-                )
-                validation_passed = False
-
-            if len(token.access_token) < 18:  # 16 + 2 prefix
+            # Flexible validation - check for reasonable OAuth token characteristics
+            if len(token.access_token) < 20:
                 logger.error(
                     "🔒 CONTRACT VALIDATION: FAILED - access_token too short",
                     extra={
@@ -869,33 +959,34 @@ class TokenDAO:
                             "req_id": req_id,
                             "token_id": token.id,
                             "access_token_length": len(token.access_token),
-                            "minimum_length": 18,
+                            "minimum_length": 20,
                         }
                     },
                 )
                 validation_passed = False
-
-        # 5. refresh_token either None or matches ^A[A-Za-z0-9] (length ≥ 16+2)
-        if token.refresh_token is not None:
-            if not re.match(r"^A[A-Za-z0-9]+$", token.refresh_token):
-                logger.error(
-                    "🔒 CONTRACT VALIDATION: FAILED - refresh_token format invalid",
+            elif not any(
+                char in token.access_token for char in [".", "-", "_", "+", "/", "="]
+            ):
+                # OAuth tokens typically contain these characters
+                logger.warning(
+                    "🔒 CONTRACT VALIDATION: WARNING - access_token lacks common OAuth characters",
                     extra={
                         "meta": {
                             "req_id": req_id,
                             "token_id": token.id,
-                            "refresh_token_prefix": (
-                                token.refresh_token[:2]
-                                if len(token.refresh_token) >= 2
-                                else token.refresh_token
+                            "access_token_prefix": (
+                                token.access_token[:10] + "..."
+                                if len(token.access_token) > 10
+                                else token.access_token
                             ),
-                            "expected_pattern": "^A[A-Za-z0-9]+$",
                         }
                     },
                 )
-                validation_passed = False
+                # Don't fail validation for this - just warn
 
-            if len(token.refresh_token) < 18:  # 16 + 2 prefix
+        # 5. refresh_token flexible validation (no hardcoded format requirements)
+        if token.refresh_token is not None:
+            if len(token.refresh_token) < 20:
                 logger.error(
                     "🔒 CONTRACT VALIDATION: FAILED - refresh_token too short",
                     extra={
@@ -903,11 +994,30 @@ class TokenDAO:
                             "req_id": req_id,
                             "token_id": token.id,
                             "refresh_token_length": len(token.refresh_token),
-                            "minimum_length": 18,
+                            "minimum_length": 20,
                         }
                     },
                 )
                 validation_passed = False
+            elif not any(
+                char in token.refresh_token for char in [".", "-", "_", "+", "/", "="]
+            ):
+                # OAuth tokens typically contain these characters
+                logger.warning(
+                    "🔒 CONTRACT VALIDATION: WARNING - refresh_token lacks common OAuth characters",
+                    extra={
+                        "meta": {
+                            "req_id": req_id,
+                            "token_id": token.id,
+                            "refresh_token_prefix": (
+                                token.refresh_token[:10] + "..."
+                                if len(token.refresh_token) > 10
+                                else token.refresh_token
+                            ),
+                        }
+                    },
+                )
+                # Don't fail validation for this - just warn
 
         # 6. expires_at is int and expires_at - now >= 300
         if not isinstance(token.expires_at, int):
@@ -941,7 +1051,7 @@ class TokenDAO:
                 )
                 validation_passed = False
 
-        # 7. scopes non-empty (store as joined string like user-read-email,user-read-private)
+        # 7. scopes non-empty (store as space-separated string like user-read-email user-read-private)
         scopes = getattr(token, "scopes", None)
         if not scopes:
             logger.error(
@@ -952,31 +1062,53 @@ class TokenDAO:
             )
             validation_passed = False
         else:
-            # Convert scopes to string format if it's a list
-            if isinstance(scopes, list):
-                scopes_str = ",".join(scopes)
-            elif isinstance(scopes, str):
-                scopes_str = scopes
-            else:
-                scopes_str = str(scopes)
+            # Normalize scopes to space-separated string format (consistent with upsert logic)
+            def _normalize_scopes_for_contract(s: str | list | None) -> str | None:
+                if not s:
+                    return None
+                if isinstance(s, list):
+                    # Convert list to normalized scopes
+                    items = [str(x).strip().lower() for x in s if x and str(x).strip()]
+                elif isinstance(s, str):
+                    # Handle comma-separated or space-separated strings
+                    # First try splitting by commas, then by spaces if no commas found
+                    if "," in s:
+                        items = [
+                            x.strip().lower() for x in s.split(",") if x and x.strip()
+                        ]
+                    else:
+                        items = [
+                            x.strip().lower() for x in s.split() if x and x.strip()
+                        ]
+                else:
+                    # Convert other types to string then split
+                    items = [
+                        x.strip().lower() for x in str(s).split() if x and x.strip()
+                    ]
 
-            if not scopes_str.strip():
+                # Remove duplicates and sort
+                items = sorted(set(items))
+                return " ".join(items) if items else None
+
+            normalized_scopes = _normalize_scopes_for_contract(scopes)
+
+            if not normalized_scopes:
                 logger.error(
-                    "🔒 CONTRACT VALIDATION: FAILED - scopes cannot be empty after string conversion",
+                    "🔒 CONTRACT VALIDATION: FAILED - scopes cannot be empty after normalization",
                     extra={
                         "meta": {
                             "req_id": req_id,
                             "token_id": token.id,
                             "scopes": scopes,
                             "scopes_type": type(scopes).__name__,
-                            "scopes_str": scopes_str,
+                            "normalized_scopes": normalized_scopes,
                         }
                     },
                 )
                 validation_passed = False
             else:
-                # Update token.scopes to normalized string format
-                token.scopes = scopes_str
+                # Update token.scopes to normalized space-separated string format
+                token.scopes = normalized_scopes
 
         if validation_passed:
             logger.info(
@@ -1042,13 +1174,31 @@ class TokenRefreshService:
     """Service for handling automatic token refresh with retry logic."""
 
     def __init__(self):
-        self._refresh_lock = asyncio.Lock()
+        # Per-key locks to prevent concurrent refresh for same user/provider
+        self._locks: dict[str, asyncio.Lock] = {}
+        self._locks_lock = asyncio.Lock()  # Protects the _locks dictionary
         self._refresh_attempts = {}
         self._max_refresh_attempts = 3
         self._refresh_backoff_seconds = [1, 2, 4]  # Exponential backoff
         # In-memory backoff map to avoid aggressive refresh retries after failures
         # keyed by '{user_id}:{provider}' -> unix timestamp when next refresh allowed
         self._next_refresh_after: dict[str, float] = {}
+
+    async def _get_lock_for_key(self, key: str) -> asyncio.Lock:
+        """Get or create a lock for the given key."""
+        async with self._locks_lock:
+            if key not in self._locks:
+                self._locks[key] = asyncio.Lock()
+            return self._locks[key]
+
+    async def _cleanup_lock_if_unused(self, key: str):
+        """Clean up lock if it's no longer needed (optional optimization)."""
+        async with self._locks_lock:
+            lock = self._locks.get(key)
+            if lock and not lock.locked():
+                # Only remove if not currently locked and not waiting
+                # This is a simple heuristic - in practice, locks could be reused
+                pass  # For now, keep locks to avoid race conditions
 
     async def get_valid_token_with_refresh(
         self,
@@ -1072,7 +1222,10 @@ class TokenRefreshService:
         # Prevent concurrent refresh for same user/provider
         lock_key = f"{user_id}:{provider}:{provider_sub or ''}"
 
-        async with self._refresh_lock:
+        # Get per-key lock to allow concurrent refreshes for different identities
+        refresh_lock = await self._get_lock_for_key(lock_key)
+
+        async with refresh_lock:
             # Get current token
             token = await get_token(user_id, provider, provider_sub)
 
@@ -1360,6 +1513,16 @@ class TokenRefreshService:
         """Reset refresh attempt counter for a user/provider."""
         attempt_key = f"{user_id}:{provider}"
         self._refresh_attempts.pop(attempt_key, None)
+        self._next_refresh_after.pop(attempt_key, None)
+
+    async def cleanup_old_locks(self, max_age_seconds: int = 3600):
+        """
+        Clean up locks for keys that haven't been used recently.
+        This prevents the locks dictionary from growing indefinitely.
+        """
+        # Note: This is a simple cleanup that removes locks that aren't currently locked
+        # In practice, you might want more sophisticated cleanup based on last access time
+        pass  # For now, let locks persist to avoid race conditions
 
 
 # Global instance
@@ -1395,9 +1558,8 @@ async def get_token_system_health() -> dict:
     Returns:
         Health status dictionary with various metrics
     """
-    try:
-        # Get database stats
-        async with get_async_db() as session:
+    async with get_async_db() as session:
+        try:
             # Total tokens
             stmt = select(func.count()).select_from(ThirdPartyTokenModel)
             result = await session.execute(stmt)
@@ -1439,38 +1601,40 @@ async def get_token_system_health() -> dict:
             result = await session.execute(stmt)
             expired_tokens = result.scalar() or 0
 
-        # Get refresh service stats
-        refresh_stats = {
-            "active_refresh_attempts": len(token_refresh_service._refresh_attempts),
-            "max_refresh_attempts": token_refresh_service._max_refresh_attempts,
-        }
+            # Get refresh service stats
+            refresh_stats = {
+                "active_refresh_attempts": len(token_refresh_service._refresh_attempts),
+                "max_refresh_attempts": token_refresh_service._max_refresh_attempts,
+            }
 
-        return {
-            "status": "healthy",
-            "timestamp": time.time(),
-            "database": {
-                "total_tokens": total_tokens,
-                "valid_tokens": valid_tokens,
-                "expired_tokens": expired_tokens,
-                "providers": provider_stats,
-            },
-            "refresh_service": refresh_stats,
-            "metrics": {
-                "token_validation_enabled": True,
-                "automatic_refresh_enabled": True,
-                "monitoring_enabled": True,
-            },
-        }
+            return {
+                "status": "healthy",
+                "timestamp": time.time(),
+                "database": {
+                    "total_tokens": total_tokens,
+                    "valid_tokens": valid_tokens,
+                    "expired_tokens": expired_tokens,
+                    "providers": provider_stats,
+                },
+                "refresh_service": refresh_stats,
+                "metrics": {
+                    "token_validation_enabled": True,
+                    "automatic_refresh_enabled": True,
+                    "monitoring_enabled": True,
+                },
+            }
 
-    except Exception as e:
-        logger.error(
-            "Token system health check failed",
-            extra={"meta": {"error_type": type(e).__name__, "error_message": str(e)}},
-        )
-        return {
-            "status": "unhealthy",
-            "timestamp": time.time(),
-            "error": str(e),
-            "database": {"status": "unknown"},
-            "refresh_service": {"status": "unknown"},
-        }
+        except Exception as e:
+            logger.error(
+                "Token system health check failed",
+                extra={
+                    "meta": {"error_type": type(e).__name__, "error_message": str(e)}
+                },
+            )
+            return {
+                "status": "unhealthy",
+                "timestamp": time.time(),
+                "error": str(e),
+                "database": {"status": "unknown"},
+                "refresh_service": {"status": "unknown"},
+            }

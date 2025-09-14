@@ -73,3 +73,5 @@ frontend/venv/
 _qdrant_data/collections/*
 venv311/*
 migrations/*
+*.sh
+*.txt

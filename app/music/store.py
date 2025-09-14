@@ -39,7 +39,9 @@ async def _ensure_tables() -> None:
 
 async def get_music_token(user_id: str, provider: str) -> dict[str, Any] | None:
     """Get music token for user/provider."""
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = select(MusicToken).where(
             MusicToken.user_id == user_id, MusicToken.provider == provider
         )
@@ -66,7 +68,7 @@ async def get_music_token(user_id: str, provider: str) -> dict[str, Any] | None:
             except InvalidToken:
                 pass
 
-        return {
+        result = {
             "user_id": token.user_id,
             "provider": token.provider,
             "access_token": access_token,
@@ -77,6 +79,10 @@ async def get_music_token(user_id: str, provider: str) -> dict[str, Any] | None:
             "expires_at": token.expires_at,
             "updated_at": token.updated_at,
         }
+    finally:
+        await session.close()
+
+    return result
 
 
 async def set_music_token(
@@ -88,7 +94,9 @@ async def set_music_token(
     expires_at: int | None = None,
 ) -> None:
     """Set music token for user/provider."""
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         # Encrypt tokens
         access_token_enc = None
         refresh_token_enc = None
@@ -129,16 +137,20 @@ async def set_music_token(
             session.add(token)
 
         await session.commit()
+    finally:
+        await session.close()
 
 
 async def get_music_devices(provider: str) -> list[dict[str, Any]]:
     """Get all devices for a provider."""
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = select(MusicDevice).where(MusicDevice.provider == provider)
         result = await session.execute(stmt)
         devices = result.scalars().all()
 
-        return [
+        result = [
             {
                 "provider": device.provider,
                 "device_id": device.device_id,
@@ -149,6 +161,10 @@ async def get_music_devices(provider: str) -> list[dict[str, Any]]:
             }
             for device in devices
         ]
+    finally:
+        await session.close()
+
+    return result
 
 
 async def set_music_device(
@@ -159,7 +175,9 @@ async def set_music_device(
     capabilities: str | None = None,
 ) -> None:
     """Set music device info."""
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = select(MusicDevice).where(
             MusicDevice.provider == provider, MusicDevice.device_id == device_id
         )
@@ -188,11 +206,15 @@ async def set_music_device(
             session.add(device)
 
         await session.commit()
+    finally:
+        await session.close()
 
 
 async def update_device_last_seen(provider: str, device_id: str) -> None:
     """Update device last seen time."""
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = (
             update(MusicDevice)
             .where(MusicDevice.provider == provider, MusicDevice.device_id == device_id)
@@ -200,11 +222,15 @@ async def update_device_last_seen(provider: str, device_id: str) -> None:
         )
         await session.execute(stmt)
         await session.commit()
+    finally:
+        await session.close()
 
 
 async def get_music_preferences(user_id: str) -> dict[str, Any] | None:
     """Get music preferences for user."""
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = select(MusicPreferences).where(MusicPreferences.user_id == user_id)
         result = await session.execute(stmt)
         prefs = result.scalar_one_or_none()
@@ -212,7 +238,7 @@ async def get_music_preferences(user_id: str) -> dict[str, Any] | None:
         if not prefs:
             return None
 
-        return {
+        result = {
             "user_id": prefs.user_id,
             "default_provider": prefs.default_provider,
             "quiet_start": prefs.quiet_start,
@@ -220,6 +246,10 @@ async def get_music_preferences(user_id: str) -> dict[str, Any] | None:
             "quiet_max_volume": prefs.quiet_max_volume,
             "allow_explicit": prefs.allow_explicit,
         }
+    finally:
+        await session.close()
+
+    return result
 
 
 async def set_music_preferences(
@@ -231,7 +261,9 @@ async def set_music_preferences(
     allow_explicit: bool | None = None,
 ) -> None:
     """Set music preferences for user."""
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = select(MusicPreferences).where(MusicPreferences.user_id == user_id)
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
@@ -259,6 +291,8 @@ async def set_music_preferences(
             session.add(prefs)
 
         await session.commit()
+    finally:
+        await session.close()
 
 
 # =====================================================================
@@ -268,7 +302,9 @@ async def set_music_preferences(
 
 async def get_music_session(user_id: str) -> str | None:
     """Get the current music session ID for a user."""
-    async for session in get_async_db():
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = (
             select(MusicSession.session_id)
             .where(
@@ -281,7 +317,12 @@ async def get_music_session(user_id: str) -> str | None:
 
         result = await session.execute(stmt)
         session_id = result.scalar_one_or_none()
-        return session_id
+
+        result_value = session_id
+    finally:
+        await session.close()
+
+    return result_value
 
 
 async def save_music_state(user_id: str, session_id: str, state_data: dict) -> None:

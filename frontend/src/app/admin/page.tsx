@@ -138,8 +138,8 @@ export default function AdminPage() {
 function TileCache({ token }: { token: string }) {
     const [rate, setRate] = useState<number>(0)
     useEffect(() => {
-        const headers: HeadersInit | undefined = undefined
-        apiFetch(`/v1/admin/metrics`, { headers }).then(r => r.json()).then(b => setRate(Number(b?.cache_hit_rate || 0))).catch(() => setRate(0))
+        // Ensure credentials are included for admin API calls
+        apiFetch(`/v1/admin/metrics`, { credentials: 'include' }).then(r => r.json()).then(b => setRate(Number(b?.cache_hit_rate || 0))).catch(() => setRate(0))
     }, [token])
     return <div className="rounded border p-3 bg-white/50 dark:bg-zinc-900/50"><div className="text-xs text-muted-foreground">Cache hit-rate</div><div className="font-medium">{rate.toFixed(2)}%</div></div>
 }
@@ -147,13 +147,13 @@ function TileCache({ token }: { token: string }) {
 function TileBudget() {
     const [spent, setSpent] = useState<number>(0)
     const [cap, setCap] = useState<number>(0)
-    useEffect(() => { apiFetch('/v1/budget').then(r => r.json()).then(b => { const t = b?.tts; setSpent(Number(t?.spent_usd || 0)); setCap(Number(t?.cap_usd || 0)); }).catch(() => { setSpent(0); setCap(0); }) }, [])
+    useEffect(() => { apiFetch('/v1/budget', { credentials: 'include' }).then(r => r.json()).then(b => { const t = b?.tts; setSpent(Number(t?.spent_usd || 0)); setCap(Number(t?.cap_usd || 0)); }).catch(() => { setSpent(0); setCap(0); }) }, [])
     return <div className="rounded border p-3 bg-white/50 dark:bg-zinc-900/50"><div className="text-xs text-muted-foreground">TTS spend today</div><div className="font-medium">${spent.toFixed(2)} / ${cap.toFixed(2)}</div></div>
 }
 
 function TileHA() {
     const [ok, setOk] = useState<boolean | null>(null)
-    useEffect(() => { apiFetch('/v1/ha_status').then(r => r.json()).then(() => setOk(true)).catch(() => setOk(false)) }, [])
+    useEffect(() => { apiFetch('/v1/ha_status', { credentials: 'include' }).then(r => r.json()).then(() => setOk(true)).catch(() => setOk(false)) }, [])
     return <div className="rounded border p-3 bg-white/50 dark:bg-zinc-900/50"><div className="text-xs text-muted-foreground">Home Assistant</div><div className="font-medium">{ok === null ? '—' : ok ? 'healthy' : 'error'}</div></div>
 }
 
@@ -170,10 +170,10 @@ function SelfReview() {
             setLoading(true)
             setErr(null)
             try {
-                const headers: HeadersInit | undefined = undefined
+                // Ensure credentials are included and CSRF token is sent
                 const [eRes, rRes] = await Promise.all([
-                    apiFetch(`/v1/admin/errors`, { headers }),
-                    apiFetch(`/v1/admin/self_review`, { headers }),
+                    apiFetch(`/v1/admin/errors`, { credentials: 'include' }),
+                    apiFetch(`/v1/admin/self_review`, { credentials: 'include' }),
                 ])
                 const eBody = (await eRes.json()) as unknown
                 const rBody = (await rRes.json()) as unknown

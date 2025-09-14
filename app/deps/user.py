@@ -469,7 +469,9 @@ def get_current_user_id(
                 # Clear auth cookies and return clean 401 on HTTP JWT failure
                 if response is not None:
                     clear_all_auth(response)
-                raise HTTPException(status_code=401, detail="unauthorized")
+                from app.http_errors import unauthorized
+
+                raise unauthorized(message="invalid token")
             elif websocket is not None:
                 # Log WebSocket auth failures but allow anonymous access
                 ua = websocket.headers.get("user-agent", "-")
@@ -484,7 +486,9 @@ def get_current_user_id(
         # Clear auth cookies and return clean 401 when token is missing
         if response is not None:
             clear_all_auth(response)
-        raise HTTPException(status_code=401, detail="unauthorized")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(message="missing token")
     elif not token and websocket is not None:
         # Log missing token for WebSocket connections
         ua = websocket.headers.get("user-agent", "-")

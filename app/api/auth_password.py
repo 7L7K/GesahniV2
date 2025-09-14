@@ -36,9 +36,13 @@ async def register_pw(body: dict[str, str]):
     )
 
     try:
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             session.add(user)
             await session.commit()
+        finally:
+            await session.close()
     except IntegrityError:
         raise HTTPException(status_code=400, detail="username_taken")
 
@@ -51,10 +55,14 @@ async def login_pw(body: dict[str, str]):
     p = body.get("password") or ""
 
     # Find user by username
-    async with get_async_db() as session:
+    session_gen = get_async_db()
+    session = await anext(session_gen)
+    try:
         stmt = select(AuthUser.password_hash).where(AuthUser.username == u)
         result = await session.execute(stmt)
         row = result.scalar_one_or_none()
+    finally:
+        await session.close()
 
     if not row:
         from ..http_errors import unauthorized

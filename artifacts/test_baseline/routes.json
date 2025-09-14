@@ -8,6 +8,38 @@
     "endpoint": "root"
   },
   {
+    "path": "/__diag/events",
+    "methods": [
+      "GET"
+    ],
+    "name": "__diag_events",
+    "endpoint": "__diag_events"
+  },
+  {
+    "path": "/__diag/fingerprint",
+    "methods": [
+      "GET"
+    ],
+    "name": "__diag_fingerprint",
+    "endpoint": "__diag_fingerprint"
+  },
+  {
+    "path": "/__diag/startup",
+    "methods": [
+      "GET"
+    ],
+    "name": "__diag_startup",
+    "endpoint": "__diag_startup"
+  },
+  {
+    "path": "/__diag/verify",
+    "methods": [
+      "GET"
+    ],
+    "name": "__diag_verify",
+    "endpoint": "__diag_verify"
+  },
+  {
     "path": "/api",
     "methods": [
       "GET"
@@ -20,32 +52,80 @@
     "methods": [
       "POST"
     ],
-    "name": "ask_endpoint",
-    "endpoint": "ask_endpoint"
+    "name": "ask_compat",
+    "endpoint": "ask_compat"
   },
   {
     "path": "/ask/replay/{rid}",
     "methods": [
       "GET"
     ],
-    "name": "ask_replay",
-    "endpoint": "ask_replay"
+    "name": "ask_replay_compat",
+    "endpoint": "ask_replay_compat"
   },
   {
-    "path": "/budget",
+    "path": "/auth/apple/callback",
+    "methods": [
+      "OPTIONS"
+    ],
+    "name": "apple_auth_callback_options",
+    "endpoint": "apple_auth_callback_options"
+  },
+  {
+    "path": "/auth/apple/start",
+    "methods": [
+      "OPTIONS"
+    ],
+    "name": "apple_auth_start_options",
+    "endpoint": "apple_auth_start_options"
+  },
+  {
+    "path": "/auth/callback",
     "methods": [
       "GET"
     ],
-    "name": "budget_status",
-    "endpoint": "budget_status"
+    "name": "google_callback",
+    "endpoint": "google_callback"
   },
   {
-    "path": "/config",
+    "path": "/auth/login_url",
     "methods": [
       "GET"
     ],
-    "name": "config",
-    "endpoint": "config"
+    "name": "google_login_url",
+    "endpoint": "google_login_url"
+  },
+  {
+    "path": "/auth/token",
+    "methods": [
+      "OPTIONS"
+    ],
+    "name": "auth_token_options",
+    "endpoint": "auth_token_options"
+  },
+  {
+    "path": "/csrf",
+    "methods": [
+      "OPTIONS"
+    ],
+    "name": "csrf_options",
+    "endpoint": "csrf_options"
+  },
+  {
+    "path": "/csrf",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_csrf",
+    "endpoint": "get_csrf"
+  },
+  {
+    "path": "/dev/mint_access",
+    "methods": [
+      "POST"
+    ],
+    "name": "mint_access",
+    "endpoint": "mint_access"
   },
   {
     "path": "/docs",
@@ -70,24 +150,16 @@
     "methods": [
       "GET"
     ],
-    "name": "_legacy_google_oauth_callback_root",
-    "endpoint": "_legacy_google_oauth_callback_root"
+    "name": "google_callback_root",
+    "endpoint": "google_callback_root"
   },
   {
-    "path": "/ha_status",
+    "path": "/google/status",
     "methods": [
       "GET"
     ],
-    "name": "ha_status",
-    "endpoint": "ha_status"
-  },
-  {
-    "path": "/health",
-    "methods": [
-      "GET"
-    ],
-    "name": "health",
-    "endpoint": "health"
+    "name": "google_status_compat",
+    "endpoint": "google_status_compat"
   },
   {
     "path": "/health",
@@ -98,20 +170,20 @@
     "endpoint": "health_simple"
   },
   {
+    "path": "/health",
+    "methods": [
+      "OPTIONS"
+    ],
+    "name": "health_options",
+    "endpoint": "health_options"
+  },
+  {
     "path": "/health/vector_store",
     "methods": [
       "GET"
     ],
     "name": "health_vector_store",
     "endpoint": "health_vector_store"
-  },
-  {
-    "path": "/healthz",
-    "methods": [
-      "GET"
-    ],
-    "name": "healthz",
-    "endpoint": "healthz"
   },
   {
     "path": "/healthz",
@@ -146,12 +218,20 @@
     "endpoint": "health_ready"
   },
   {
-    "path": "/llama_status",
+    "path": "/metrics",
+    "methods": [
+      "OPTIONS"
+    ],
+    "name": "metrics_options",
+    "endpoint": "metrics_options"
+  },
+  {
+    "path": "/metrics",
     "methods": [
       "GET"
     ],
-    "name": "llama_status",
-    "endpoint": "llama_status"
+    "name": "_metrics_route",
+    "endpoint": "_metrics_route"
   },
   {
     "path": "/openapi.json",
@@ -163,12 +243,12 @@
     "endpoint": "openapi"
   },
   {
-    "path": "/rate_limit_status",
+    "path": "/ping",
     "methods": [
       "GET"
     ],
-    "name": "rate_limit_status",
-    "endpoint": "rate_limit_status"
+    "name": "ping",
+    "endpoint": "ping"
   },
   {
     "path": "/redoc",
@@ -180,20 +260,156 @@
     "endpoint": "redoc_html"
   },
   {
-    "path": "/status",
+    "path": "/spotify/status",
     "methods": [
       "GET"
     ],
-    "name": "full_status",
-    "endpoint": "full_status"
+    "name": "spotify_status_compat",
+    "endpoint": "spotify_status_compat"
   },
   {
-    "path": "/status/budget",
+    "path": "/test-errors/test/connection-error",
     "methods": [
       "GET"
     ],
-    "name": "budget_status_alias",
-    "endpoint": "budget_status_alias"
+    "name": "test_connection_error",
+    "endpoint": "test_connection_error"
+  },
+  {
+    "path": "/test-errors/test/file-too-large",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_file_too_large",
+    "endpoint": "test_file_too_large"
+  },
+  {
+    "path": "/test-errors/test/forbidden",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_forbidden",
+    "endpoint": "test_forbidden"
+  },
+  {
+    "path": "/test-errors/test/internal-error",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_internal_error",
+    "endpoint": "test_internal_error"
+  },
+  {
+    "path": "/test-errors/test/internal-error-helper",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_internal_error_helper",
+    "endpoint": "test_internal_error_helper"
+  },
+  {
+    "path": "/test-errors/test/key-error",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_key_error",
+    "endpoint": "test_key_error"
+  },
+  {
+    "path": "/test-errors/test/method-not-allowed",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_method_not_allowed",
+    "endpoint": "test_method_not_allowed"
+  },
+  {
+    "path": "/test-errors/test/not-found",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_not_found",
+    "endpoint": "test_not_found"
+  },
+  {
+    "path": "/test-errors/test/payload-too-large",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_payload_too_large",
+    "endpoint": "test_payload_too_large"
+  },
+  {
+    "path": "/test-errors/test/permission-error",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_permission_error",
+    "endpoint": "test_permission_error"
+  },
+  {
+    "path": "/test-errors/test/timeout-error",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_timeout_error",
+    "endpoint": "test_timeout_error"
+  },
+  {
+    "path": "/test-errors/test/translate-common-exception",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_translate_common_exception",
+    "endpoint": "test_translate_common_exception"
+  },
+  {
+    "path": "/test-errors/test/type-error",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_type_error",
+    "endpoint": "test_type_error"
+  },
+  {
+    "path": "/test-errors/test/unauthorized",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_unauthorized",
+    "endpoint": "test_unauthorized"
+  },
+  {
+    "path": "/test-errors/test/validation-error",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_validation_error",
+    "endpoint": "test_validation_error"
+  },
+  {
+    "path": "/test-errors/test/validation-error-helper",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_validation_error_helper",
+    "endpoint": "test_validation_error_helper"
+  },
+  {
+    "path": "/test-errors/test/value-error",
+    "methods": [
+      "GET"
+    ],
+    "name": "test_value_error",
+    "endpoint": "test_value_error"
+  },
+  {
+    "path": "/v1/_diag/auth",
+    "methods": [
+      "GET"
+    ],
+    "name": "diag_auth",
+    "endpoint": "diag_auth"
   },
   {
     "path": "/v1/_schema/error-envelope.json",
@@ -204,12 +420,68 @@
     "endpoint": "error_envelope_schema"
   },
   {
+    "path": "/v1/admin/admin/flags",
+    "methods": [
+      "POST"
+    ],
+    "name": "admin_flags",
+    "endpoint": "admin_flags"
+  },
+  {
+    "path": "/v1/admin/backup",
+    "methods": [
+      "POST"
+    ],
+    "name": "admin_backup",
+    "endpoint": "admin_backup"
+  },
+  {
     "path": "/v1/admin/config",
     "methods": [
       "GET"
     ],
     "name": "admin_config",
     "endpoint": "admin_config"
+  },
+  {
+    "path": "/v1/admin/config",
+    "methods": [
+      "POST"
+    ],
+    "name": "admin_config_post",
+    "endpoint": "admin_config_post"
+  },
+  {
+    "path": "/v1/admin/config-check",
+    "methods": [
+      "GET"
+    ],
+    "name": "config_check",
+    "endpoint": "config_check"
+  },
+  {
+    "path": "/v1/admin/config/test",
+    "methods": [
+      "POST"
+    ],
+    "name": "admin_config_test",
+    "endpoint": "admin_config_test"
+  },
+  {
+    "path": "/v1/admin/decisions/explain",
+    "methods": [
+      "GET"
+    ],
+    "name": "explain_decision",
+    "endpoint": "explain_decision"
+  },
+  {
+    "path": "/v1/admin/diagnostics/requests",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_diagnostics_requests",
+    "endpoint": "admin_diagnostics_requests"
   },
   {
     "path": "/v1/admin/errors",
@@ -224,8 +496,16 @@
     "methods": [
       "GET"
     ],
-    "name": "admin_flags",
-    "endpoint": "admin_flags"
+    "name": "admin_list_flags",
+    "endpoint": "admin_list_flags"
+  },
+  {
+    "path": "/v1/admin/health/router_retrieval",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_health_router_retrieval",
+    "endpoint": "admin_health_router_retrieval"
   },
   {
     "path": "/v1/admin/metrics",
@@ -244,20 +524,20 @@
     "endpoint": "admin_ping"
   },
   {
-    "path": "/v1/admin/rate-limits/{key}",
+    "path": "/v1/admin/qdrant/collections",
     "methods": [
       "GET"
     ],
-    "name": "get_rate_limit_stats",
-    "endpoint": "get_rate_limit_stats"
+    "name": "admin_qdrant_collections",
+    "endpoint": "admin_qdrant_collections"
   },
   {
     "path": "/v1/admin/rate-limits/{key}",
     "methods": [
-      "DELETE"
+      "GET"
     ],
-    "name": "clear_rate_limit_data",
-    "endpoint": "clear_rate_limit_data"
+    "name": "handler",
+    "endpoint": "handler"
   },
   {
     "path": "/v1/admin/rbac/info",
@@ -268,12 +548,60 @@
     "endpoint": "admin_rbac_info"
   },
   {
+    "path": "/v1/admin/reload_env",
+    "methods": [
+      "POST"
+    ],
+    "name": "admin_reload_env",
+    "endpoint": "admin_reload_env"
+  },
+  {
+    "path": "/v1/admin/retrieval/last",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_retrieval_last",
+    "endpoint": "admin_retrieval_last"
+  },
+  {
     "path": "/v1/admin/router/decisions",
     "methods": [
       "GET"
     ],
     "name": "admin_router_decisions",
     "endpoint": "admin_router_decisions"
+  },
+  {
+    "path": "/v1/admin/router/decisions.ndjson",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_router_decisions_ndjson",
+    "endpoint": "admin_router_decisions_ndjson"
+  },
+  {
+    "path": "/v1/admin/self_review",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_self_review",
+    "endpoint": "admin_self_review"
+  },
+  {
+    "path": "/v1/admin/self_review",
+    "methods": [
+      "POST"
+    ],
+    "name": "admin_self_review_post",
+    "endpoint": "admin_self_review_post"
+  },
+  {
+    "path": "/v1/admin/surface/index",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_surface_index",
+    "endpoint": "admin_surface_index"
   },
   {
     "path": "/v1/admin/system/status",
@@ -284,55 +612,215 @@
     "endpoint": "admin_system_status"
   },
   {
+    "path": "/v1/admin/token_store/stats",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_token_store_stats",
+    "endpoint": "admin_token_store_stats"
+  },
+  {
     "path": "/v1/admin/tokens/google",
     "methods": [
       "GET"
     ],
-    "name": "admin_google_tokens",
-    "endpoint": "admin_google_tokens"
+    "name": "admin_tokens_google",
+    "endpoint": "admin_tokens_google"
   },
   {
-    "path": "/v1/auth/apple/callback",
+    "path": "/v1/admin/tv/config",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_tv_get_config",
+    "endpoint": "admin_tv_get_config"
+  },
+  {
+    "path": "/v1/admin/tv/config",
+    "methods": [
+      "PUT"
+    ],
+    "name": "admin_tv_put_config",
+    "endpoint": "admin_tv_put_config"
+  },
+  {
+    "path": "/v1/admin/users/me",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_user_profile",
+    "endpoint": "admin_user_profile"
+  },
+  {
+    "path": "/v1/admin/users/{user_id}/identities",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_user_identities",
+    "endpoint": "admin_user_identities"
+  },
+  {
+    "path": "/v1/admin/users/{user_id}/identities/{identity_id}/unlink",
     "methods": [
       "POST"
     ],
-    "name": "apple_callback",
-    "endpoint": "apple_callback"
+    "name": "admin_unlink_identity",
+    "endpoint": "admin_unlink_identity"
   },
   {
-    "path": "/v1/auth/apple/start",
-    "methods": [
-      "GET"
-    ],
-    "name": "apple_start",
-    "endpoint": "apple_start"
-  },
-  {
-    "path": "/v1/auth/auth/examples",
-    "methods": [
-      "GET"
-    ],
-    "name": "auth_examples",
-    "endpoint": "auth_examples"
-  },
-  {
-    "path": "/v1/auth/auth/finish",
-    "methods": [
-      "GET"
-    ],
-    "name": "auth_finish_get",
-    "endpoint": "auth_finish_get"
-  },
-  {
-    "path": "/v1/auth/auth/finish",
+    "path": "/v1/admin/vector_store/bootstrap",
     "methods": [
       "POST"
     ],
-    "name": "auth_finish_post",
-    "endpoint": "auth_finish_post"
+    "name": "admin_vs_bootstrap",
+    "endpoint": "admin_vs_bootstrap"
   },
   {
-    "path": "/v1/auth/auth/logout",
+    "path": "/v1/admin/vector_store/bootstrap/stream",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_vs_bootstrap_stream",
+    "endpoint": "admin_vs_bootstrap_stream"
+  },
+  {
+    "path": "/v1/admin/vector_store/migrate",
+    "methods": [
+      "POST"
+    ],
+    "name": "admin_vs_migrate",
+    "endpoint": "admin_vs_migrate"
+  },
+  {
+    "path": "/v1/admin/vector_store/migrate/stream",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_vs_migrate_stream",
+    "endpoint": "admin_vs_migrate_stream"
+  },
+  {
+    "path": "/v1/admin/vector_store/stats",
+    "methods": [
+      "GET"
+    ],
+    "name": "admin_vs_stats",
+    "endpoint": "admin_vs_stats"
+  },
+  {
+    "path": "/v1/ask",
+    "methods": [
+      "POST"
+    ],
+    "name": "_ask",
+    "endpoint": "_ask"
+  },
+  {
+    "path": "/v1/ask/dry-explain",
+    "methods": [
+      "POST"
+    ],
+    "name": "ask_dry_explain",
+    "endpoint": "ask_dry_explain"
+  },
+  {
+    "path": "/v1/ask/replay/{rid}",
+    "methods": [
+      "GET"
+    ],
+    "name": "ask_replay",
+    "endpoint": "ask_replay"
+  },
+  {
+    "path": "/v1/ask/stream",
+    "methods": [
+      "POST"
+    ],
+    "name": "ask_stream",
+    "endpoint": "ask_stream"
+  },
+  {
+    "path": "/v1/auth-state",
+    "methods": [
+      "GET"
+    ],
+    "name": "auth_state",
+    "endpoint": "auth_state"
+  },
+  {
+    "path": "/v1/auth/clerk/finish",
+    "methods": [
+      "POST"
+    ],
+    "name": "clerk_finish",
+    "endpoint": "clerk_finish"
+  },
+  {
+    "path": "/v1/auth/clerk/finish",
+    "methods": [
+      "GET"
+    ],
+    "name": "clerk_finish",
+    "endpoint": "clerk_finish"
+  },
+  {
+    "path": "/v1/auth/dev/login",
+    "methods": [
+      "POST"
+    ],
+    "name": "dev_login_route",
+    "endpoint": "dev_login_route"
+  },
+  {
+    "path": "/v1/auth/dev/token",
+    "methods": [
+      "POST"
+    ],
+    "name": "dev_token_route",
+    "endpoint": "dev_token_route"
+  },
+  {
+    "path": "/v1/auth/examples",
+    "methods": [
+      "GET"
+    ],
+    "name": "token_examples",
+    "endpoint": "token_examples"
+  },
+  {
+    "path": "/v1/auth/finish",
+    "methods": [
+      "GET"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/auth/google/callback",
+    "methods": [
+      "GET"
+    ],
+    "name": "legacy_google_callback",
+    "endpoint": "legacy_google_callback"
+  },
+  {
+    "path": "/v1/auth/google/callback",
+    "methods": [
+      "POST"
+    ],
+    "name": "legacy_google_callback_post",
+    "endpoint": "legacy_google_callback_post"
+  },
+  {
+    "path": "/v1/auth/login",
+    "methods": [
+      "POST"
+    ],
+    "name": "login",
+    "endpoint": "login"
+  },
+  {
+    "path": "/v1/auth/logout",
     "methods": [
       "POST"
     ],
@@ -340,20 +828,28 @@
     "endpoint": "logout"
   },
   {
-    "path": "/v1/auth/auth/refresh",
+    "path": "/v1/auth/logout_all",
     "methods": [
       "POST"
     ],
-    "name": "refresh_token",
-    "endpoint": "refresh_token"
+    "name": "logout_all",
+    "endpoint": "logout_all"
   },
   {
-    "path": "/v1/auth/auth/whoami",
+    "path": "/v1/auth/refresh",
     "methods": [
-      "GET"
+      "POST"
     ],
-    "name": "whoami",
-    "endpoint": "whoami"
+    "name": "refresh",
+    "endpoint": "refresh"
+  },
+  {
+    "path": "/v1/auth/token",
+    "methods": [
+      "POST"
+    ],
+    "name": "dev_token",
+    "endpoint": "dev_token"
   },
   {
     "path": "/v1/budget",
@@ -364,6 +860,102 @@
     "endpoint": "budget_status"
   },
   {
+    "path": "/v1/calendar/list",
+    "methods": [
+      "GET"
+    ],
+    "name": "list_all",
+    "endpoint": "list_all"
+  },
+  {
+    "path": "/v1/calendar/next",
+    "methods": [
+      "GET"
+    ],
+    "name": "next_three",
+    "endpoint": "next_three"
+  },
+  {
+    "path": "/v1/calendar/today",
+    "methods": [
+      "GET"
+    ],
+    "name": "list_today",
+    "endpoint": "list_today"
+  },
+  {
+    "path": "/v1/care/alerts",
+    "methods": [
+      "POST"
+    ],
+    "name": "create_alert",
+    "endpoint": "create_alert"
+  },
+  {
+    "path": "/v1/care/alerts",
+    "methods": [
+      "GET"
+    ],
+    "name": "list_alerts",
+    "endpoint": "list_alerts"
+  },
+  {
+    "path": "/v1/care/alerts/{alert_id}/ack",
+    "methods": [
+      "POST"
+    ],
+    "name": "ack_alert",
+    "endpoint": "ack_alert"
+  },
+  {
+    "path": "/v1/care/alerts/{alert_id}/resolve",
+    "methods": [
+      "POST"
+    ],
+    "name": "resolve_alert",
+    "endpoint": "resolve_alert"
+  },
+  {
+    "path": "/v1/care/device_status",
+    "methods": [
+      "GET"
+    ],
+    "name": "device_status",
+    "endpoint": "device_status"
+  },
+  {
+    "path": "/v1/care/devices/{device_id}/heartbeat",
+    "methods": [
+      "POST"
+    ],
+    "name": "heartbeat",
+    "endpoint": "heartbeat"
+  },
+  {
+    "path": "/v1/care/sessions",
+    "methods": [
+      "POST"
+    ],
+    "name": "create_care_session",
+    "endpoint": "create_care_session"
+  },
+  {
+    "path": "/v1/care/sessions",
+    "methods": [
+      "GET"
+    ],
+    "name": "list_care_sessions",
+    "endpoint": "list_care_sessions"
+  },
+  {
+    "path": "/v1/care/sessions/{session_id}",
+    "methods": [
+      "PATCH"
+    ],
+    "name": "patch_care_session",
+    "endpoint": "patch_care_session"
+  },
+  {
     "path": "/v1/config",
     "methods": [
       "GET"
@@ -372,36 +964,132 @@
     "endpoint": "config"
   },
   {
-    "path": "/v1/device/session",
+    "path": "/v1/cookies",
     "methods": [
       "GET"
     ],
-    "name": "get_device_session",
-    "endpoint": "get_device_session"
+    "name": "cookies",
+    "endpoint": "cookies"
   },
   {
-    "path": "/v1/device/trust",
-    "methods": [
-      "POST"
-    ],
-    "name": "trust_device",
-    "endpoint": "trust_device"
-  },
-  {
-    "path": "/v1/forgot",
-    "methods": [
-      "POST"
-    ],
-    "name": "forgot",
-    "endpoint": "forgot"
-  },
-  {
-    "path": "/v1/google/auth/callback",
+    "path": "/v1/csrf",
     "methods": [
       "GET"
     ],
-    "name": "google_oauth_callback",
-    "endpoint": "google_oauth_callback"
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/debug/auth-state",
+    "methods": [
+      "GET"
+    ],
+    "name": "debug_auth_state",
+    "endpoint": "debug_auth_state"
+  },
+  {
+    "path": "/v1/debug/config",
+    "methods": [
+      "GET"
+    ],
+    "name": "debug_config",
+    "endpoint": "debug_config"
+  },
+  {
+    "path": "/v1/debug/cookies",
+    "methods": [
+      "GET"
+    ],
+    "name": "debug_cookies",
+    "endpoint": "debug_cookies"
+  },
+  {
+    "path": "/v1/debug/oauth",
+    "methods": [
+      "GET"
+    ],
+    "name": "debug_oauth_page",
+    "endpoint": "debug_oauth_page"
+  },
+  {
+    "path": "/v1/debug/oauth/config",
+    "methods": [
+      "GET"
+    ],
+    "name": "debug_oauth_config",
+    "endpoint": "debug_oauth_config"
+  },
+  {
+    "path": "/v1/debug/oauth/routes",
+    "methods": [
+      "GET"
+    ],
+    "name": "debug_oauth_routes",
+    "endpoint": "debug_oauth_routes"
+  },
+  {
+    "path": "/v1/debug/token-health",
+    "methods": [
+      "GET"
+    ],
+    "name": "token_health",
+    "endpoint": "token_health"
+  },
+  {
+    "path": "/v1/device_status",
+    "methods": [
+      "GET"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/devices/pair/complete",
+    "methods": [
+      "POST"
+    ],
+    "name": "pair_complete",
+    "endpoint": "pair_complete"
+  },
+  {
+    "path": "/v1/devices/pair/start",
+    "methods": [
+      "POST"
+    ],
+    "name": "pair_start",
+    "endpoint": "pair_start"
+  },
+  {
+    "path": "/v1/devices/{device_id}/revoke",
+    "methods": [
+      "POST"
+    ],
+    "name": "device_revoke",
+    "endpoint": "device_revoke"
+  },
+  {
+    "path": "/v1/docs/ws",
+    "methods": [
+      "GET"
+    ],
+    "name": "ws_helper_page",
+    "endpoint": "ws_helper_page"
+  },
+  {
+    "path": "/v1/finish",
+    "methods": [
+      "POST"
+    ],
+    "name": "finish_clerk_login",
+    "endpoint": "finish_clerk_login"
+  },
+  {
+    "path": "/v1/finish",
+    "methods": [
+      "GET"
+    ],
+    "name": "finish_clerk_login",
+    "endpoint": "finish_clerk_login"
   },
   {
     "path": "/v1/google/auth/callback",
@@ -420,20 +1108,28 @@
     "endpoint": "google_login_url"
   },
   {
-    "path": "/v1/google/auth/login_url",
+    "path": "/v1/google/callback",
     "methods": [
       "GET"
     ],
-    "name": "google_login_url",
-    "endpoint": "google_login_url"
+    "name": "google_oauth_callback",
+    "endpoint": "google_oauth_callback"
   },
   {
-    "path": "/v1/google/google/oauth/callback",
+    "path": "/v1/google/callback",
+    "methods": [
+      "POST"
+    ],
+    "name": "google_oauth_callback_post",
+    "endpoint": "google_oauth_callback_post"
+  },
+  {
+    "path": "/v1/google/connect",
     "methods": [
       "GET"
     ],
-    "name": "legacy_google_callback",
-    "endpoint": "legacy_google_callback"
+    "name": "google_connect",
+    "endpoint": "google_connect"
   },
   {
     "path": "/v1/google/google/oauth/callback",
@@ -444,20 +1140,68 @@
     "endpoint": "google_callback_root"
   },
   {
+    "path": "/v1/google/login_url",
+    "methods": [
+      "GET"
+    ],
+    "name": "google_login_url",
+    "endpoint": "google_login_url"
+  },
+  {
+    "path": "/v1/google/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "google_status_public",
+    "endpoint": "google_status_public"
+  },
+  {
+    "path": "/v1/ha/entities",
+    "methods": [
+      "GET"
+    ],
+    "name": "ha_entities",
+    "endpoint": "ha_entities"
+  },
+  {
+    "path": "/v1/ha/health",
+    "methods": [
+      "GET"
+    ],
+    "name": "ha_health",
+    "endpoint": "ha_health"
+  },
+  {
+    "path": "/v1/ha/resolve",
+    "methods": [
+      "GET"
+    ],
+    "name": "ha_resolve",
+    "endpoint": "ha_resolve"
+  },
+  {
+    "path": "/v1/ha/service",
+    "methods": [
+      "POST"
+    ],
+    "name": "ha_service",
+    "endpoint": "ha_service"
+  },
+  {
+    "path": "/v1/ha/webhook",
+    "methods": [
+      "POST"
+    ],
+    "name": "ha_webhook",
+    "endpoint": "ha_webhook"
+  },
+  {
     "path": "/v1/ha_status",
     "methods": [
       "GET"
     ],
     "name": "ha_status",
     "endpoint": "ha_status"
-  },
-  {
-    "path": "/v1/health",
-    "methods": [
-      "GET"
-    ],
-    "name": "health",
-    "endpoint": "health"
   },
   {
     "path": "/v1/health",
@@ -496,8 +1240,8 @@
     "methods": [
       "GET"
     ],
-    "name": "healthz",
-    "endpoint": "healthz"
+    "name": "healthz_v1",
+    "endpoint": "healthz_v1"
   },
   {
     "path": "/v1/integrations/google/disconnect",
@@ -516,20 +1260,28 @@
     "endpoint": "integrations_google_status"
   },
   {
-    "path": "/v1/integrations/spotify/integrations/spotify/status",
-    "methods": [
-      "GET"
-    ],
-    "name": "integrations_spotify_status",
-    "endpoint": "integrations_spotify_status"
-  },
-  {
     "path": "/v1/integrations/spotify/status",
     "methods": [
       "GET"
     ],
-    "name": "integrations_spotify_status",
-    "endpoint": "integrations_spotify_status"
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/integrations/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "integrations_status",
+    "endpoint": "integrations_status"
+  },
+  {
+    "path": "/v1/list",
+    "methods": [
+      "GET"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
   },
   {
     "path": "/v1/llama_status",
@@ -540,20 +1292,116 @@
     "endpoint": "llama_status"
   },
   {
-    "path": "/v1/login",
+    "path": "/v1/me",
     "methods": [
-      "POST"
+      "GET"
     ],
-    "name": "login",
-    "endpoint": "login"
+    "name": "me",
+    "endpoint": "me"
   },
   {
-    "path": "/v1/logout",
+    "path": "/v1/mock/set_access_cookie",
+    "methods": [
+      "GET"
+    ],
+    "name": "mock_set_access_cookie",
+    "endpoint": "mock_set_access_cookie"
+  },
+  {
+    "path": "/v1/models",
+    "methods": [
+      "GET"
+    ],
+    "name": "list_models",
+    "endpoint": "list_models"
+  },
+  {
+    "path": "/v1/music",
+    "methods": [
+      "GET"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/music/device",
+    "methods": [
+      "PUT"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/music/devices",
+    "methods": [
+      "GET"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/music/state",
+    "methods": [
+      "GET"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/next",
+    "methods": [
+      "GET"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/observability",
+    "methods": [
+      "GET"
+    ],
+    "name": "observability_metrics",
+    "endpoint": "observability_metrics"
+  },
+  {
+    "path": "/v1/onboarding/complete",
     "methods": [
       "POST"
     ],
-    "name": "logout",
-    "endpoint": "logout"
+    "name": "complete_onboarding",
+    "endpoint": "complete_onboarding"
+  },
+  {
+    "path": "/v1/onboarding/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_onboarding_status",
+    "endpoint": "get_onboarding_status"
+  },
+  {
+    "path": "/v1/pats",
+    "methods": [
+      "GET"
+    ],
+    "name": "list_pats",
+    "endpoint": "list_pats"
+  },
+  {
+    "path": "/v1/pats",
+    "methods": [
+      "POST"
+    ],
+    "name": "create_pat",
+    "endpoint": "create_pat"
+  },
+  {
+    "path": "/v1/pats/{pat_id}",
+    "methods": [
+      "DELETE"
+    ],
+    "name": "revoke_pat",
+    "endpoint": "revoke_pat"
   },
   {
     "path": "/v1/ping",
@@ -564,36 +1412,164 @@
     "endpoint": "ping_vendor_health"
   },
   {
+    "path": "/v1/profile",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_profile",
+    "endpoint": "get_profile"
+  },
+  {
+    "path": "/v1/profile",
+    "methods": [
+      "POST"
+    ],
+    "name": "update_profile",
+    "endpoint": "update_profile"
+  },
+  {
     "path": "/v1/rate_limit_status",
     "methods": [
       "GET"
     ],
-    "name": "rate_limit_status",
-    "endpoint": "rate_limit_status"
-  },
-  {
-    "path": "/v1/refresh",
-    "methods": [
-      "POST"
-    ],
-    "name": "refresh",
-    "endpoint": "refresh"
+    "name": "rate_limit_status_public",
+    "endpoint": "rate_limit_status_public"
   },
   {
     "path": "/v1/register",
     "methods": [
       "POST"
     ],
-    "name": "register",
-    "endpoint": "register"
+    "name": "register_v1",
+    "endpoint": "register_v1"
   },
   {
-    "path": "/v1/reset_password",
+    "path": "/v1/sessions",
+    "methods": [
+      "GET"
+    ],
+    "name": "sessions",
+    "endpoint": "sessions"
+  },
+  {
+    "path": "/v1/sessions/paginated",
+    "methods": [
+      "GET"
+    ],
+    "name": "sessions_paginated",
+    "endpoint": "sessions_paginated"
+  },
+  {
+    "path": "/v1/sessions/{sid}/revoke",
     "methods": [
       "POST"
     ],
-    "name": "reset_password",
-    "endpoint": "reset_password"
+    "name": "revoke_session",
+    "endpoint": "revoke_session"
+  },
+  {
+    "path": "/v1/spotify/callback",
+    "methods": [
+      "POST"
+    ],
+    "name": "spotify_callback_post",
+    "endpoint": "spotify_callback_post"
+  },
+  {
+    "path": "/v1/spotify/callback",
+    "methods": [
+      "GET"
+    ],
+    "name": "spotify_callback",
+    "endpoint": "spotify_callback"
+  },
+  {
+    "path": "/v1/spotify/callback-test",
+    "methods": [
+      "GET"
+    ],
+    "name": "spotify_callback_test",
+    "endpoint": "spotify_callback_test"
+  },
+  {
+    "path": "/v1/spotify/connect",
+    "methods": [
+      "GET"
+    ],
+    "name": "spotify_connect",
+    "endpoint": "spotify_connect"
+  },
+  {
+    "path": "/v1/spotify/debug",
+    "methods": [
+      "GET"
+    ],
+    "name": "spotify_debug",
+    "endpoint": "spotify_debug"
+  },
+  {
+    "path": "/v1/spotify/debug-cookie",
+    "methods": [
+      "GET"
+    ],
+    "name": "spotify_debug_cookie",
+    "endpoint": "spotify_debug_cookie"
+  },
+  {
+    "path": "/v1/spotify/debug/store",
+    "methods": [
+      "GET"
+    ],
+    "name": "debug_oauth_store",
+    "endpoint": "debug_oauth_store"
+  },
+  {
+    "path": "/v1/spotify/disconnect",
+    "methods": [
+      "DELETE"
+    ],
+    "name": "spotify_disconnect",
+    "endpoint": "spotify_disconnect"
+  },
+  {
+    "path": "/v1/spotify/health",
+    "methods": [
+      "GET"
+    ],
+    "name": "spotify_health",
+    "endpoint": "spotify_health"
+  },
+  {
+    "path": "/v1/spotify/status",
+    "methods": [
+      "GET"
+    ],
+    "name": "spotify_status",
+    "endpoint": "spotify_status"
+  },
+  {
+    "path": "/v1/spotify/test/full_flow",
+    "methods": [
+      "POST"
+    ],
+    "name": "test_full_flow",
+    "endpoint": "test_full_flow"
+  },
+  {
+    "path": "/v1/spotify/test/store_tx",
+    "methods": [
+      "POST"
+    ],
+    "name": "test_store_tx",
+    "endpoint": "test_store_tx"
+  },
+  {
+    "path": "/v1/state",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_system_state",
+    "endpoint": "get_system_state"
   },
   {
     "path": "/v1/status",
@@ -612,6 +1588,22 @@
     "endpoint": "budget_status_alias"
   },
   {
+    "path": "/v1/status/features",
+    "methods": [
+      "GET"
+    ],
+    "name": "features",
+    "endpoint": "features"
+  },
+  {
+    "path": "/v1/status/integrations",
+    "methods": [
+      "GET"
+    ],
+    "name": "integrations_status_fast",
+    "endpoint": "integrations_status_fast"
+  },
+  {
     "path": "/v1/status/preflight",
     "methods": [
       "GET"
@@ -620,11 +1612,227 @@
     "endpoint": "preflight"
   },
   {
+    "path": "/v1/status/rate_limit",
+    "methods": [
+      "GET"
+    ],
+    "name": "rate_limit_fast",
+    "endpoint": "rate_limit_fast"
+  },
+  {
+    "path": "/v1/status/vector_store",
+    "methods": [
+      "GET"
+    ],
+    "name": "status_vector_store",
+    "endpoint": "status_vector_store"
+  },
+  {
+    "path": "/v1/today",
+    "methods": [
+      "GET"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/transcribe/{job_id}",
+    "methods": [
+      "POST"
+    ],
+    "name": "handler",
+    "endpoint": "handler"
+  },
+  {
+    "path": "/v1/transcribe/{session_id}",
+    "methods": [
+      "POST"
+    ],
+    "name": "start_transcription",
+    "endpoint": "start_transcription"
+  },
+  {
+    "path": "/v1/transcribe/{session_id}",
+    "methods": [
+      "GET"
+    ],
+    "name": "get_transcription",
+    "endpoint": "get_transcription"
+  },
+  {
+    "path": "/v1/tts/speak",
+    "methods": [
+      "POST"
+    ],
+    "name": "speak",
+    "endpoint": "speak"
+  },
+  {
+    "path": "/v1/tv/calendar/next",
+    "methods": [
+      "GET"
+    ],
+    "name": "tv_calendar_next_alias",
+    "endpoint": "tv_calendar_next_alias"
+  },
+  {
     "path": "/v1/vendor-health",
     "methods": [
       "GET"
     ],
     "name": "get_vendor_health_status",
     "endpoint": "get_vendor_health_status"
+  },
+  {
+    "path": "/v1/whoami",
+    "methods": [
+      "GET"
+    ],
+    "name": "whoami",
+    "endpoint": "whoami"
+  },
+  {
+    "path": "/v1/ws/care",
+    "methods": [
+      "DELETE"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/care",
+    "methods": [
+      "PATCH"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/care",
+    "methods": [
+      "PUT"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/care",
+    "methods": [
+      "POST"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/care",
+    "methods": [
+      "GET"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/care/docs",
+    "methods": [
+      "GET"
+    ],
+    "name": "ws_care_docs",
+    "endpoint": "ws_care_docs"
+  },
+  {
+    "path": "/v1/ws/music",
+    "methods": [
+      "DELETE"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/music",
+    "methods": [
+      "PATCH"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/music",
+    "methods": [
+      "PUT"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/music",
+    "methods": [
+      "POST"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/music",
+    "methods": [
+      "GET"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/{path:path}",
+    "methods": [
+      "DELETE"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/{path:path}",
+    "methods": [
+      "PATCH"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/{path:path}",
+    "methods": [
+      "PUT"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/{path:path}",
+    "methods": [
+      "POST"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/ws/{path:path}",
+    "methods": [
+      "GET"
+    ],
+    "name": "websocket_http_handler",
+    "endpoint": "websocket_http_handler"
+  },
+  {
+    "path": "/v1/{path:path}",
+    "methods": [
+      "OPTIONS"
+    ],
+    "name": "v1_options_handler",
+    "endpoint": "v1_options_handler"
+  },
+  {
+    "path": "/whoami",
+    "methods": [
+      "GET"
+    ],
+    "name": "whoami_compat",
+    "endpoint": "whoami_compat"
   }
 ]

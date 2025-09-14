@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
-from fastapi import HTTPException, Request
+from fastapi import Request
 
 from app.security import _get_request_payload as _get_req_payload  # type: ignore
 from app.security import _payload_scopes as _payload_scopes
@@ -88,7 +88,9 @@ def require_roles(required: Iterable[str], *, any_of: bool = True):
             )
         # Authorize based on roles (403 if missing)
         if not has_roles(request, required, any_of=any_of):
-            raise HTTPException(status_code=403, detail="forbidden")
+            from app.http_errors import forbidden
+
+            raise forbidden(message="insufficient permissions")
         return None
 
     return _dep

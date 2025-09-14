@@ -4,7 +4,7 @@ import os
 import sys
 import time
 
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
@@ -47,7 +47,26 @@ def _get_bypass_scopes():
 
 
 def _key(client_ip: str, path: str, user_id: str | None) -> str:
-    raw = f"{client_ip}|{path}|{user_id or 'anon'}"
+    """Generate rate limit key based on configured strategy."""
+    key_scope = rate_limit_settings.key_scope
+
+    if key_scope == "user" and user_id and user_id != "anon":
+        # Key by user_id for authenticated requests
+        raw = f"user:{user_id}|{path}"
+    elif key_scope == "ip":
+        # Key by IP address
+        raw = f"ip:{client_ip}|{path}"
+    elif key_scope == "route":
+        # Key by route path only
+        raw = f"route:{path}"
+    elif key_scope == "global":
+        # Global rate limiting
+        raw = f"global:{path}"
+    else:
+        # Default: hybrid approach - use user_id if available, otherwise IP
+        identifier = user_id if user_id and user_id != "anon" else client_ip
+        raw = f"{identifier}|{path}"
+
     return hashlib.sha256(raw.encode()).hexdigest()
 
 
@@ -240,7 +259,17 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             retry_after_headers = get_retry_after_header(window_s)
             headers = {**rate_limit_headers, **retry_after_headers}
 
-            return PlainTextResponse("rate_limited", status_code=429, headers=headers)
+            # Return standard error envelope for rate limited requests
+            error_response = {
+                "code": "rate_limited",
+                "message": "Rate limit exceeded",
+                "detail": "Rate limit exceeded",
+                "hint": f"Please wait {window_s} seconds before retrying",
+                "meta": {
+                    "retry_after_seconds": window_s,
+                },
+            }
+            return JSONResponse(error_response, status_code=429, headers=headers)
 
         # For successful requests, add rate limit headers to the response
         response = await call_next(request)

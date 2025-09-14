@@ -21,7 +21,9 @@ class NotesDAO:
 
     async def _ensure_system_user(self) -> None:
         """Ensure the system user exists in the database."""
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             # Check if system user exists
             stmt = select(AuthUser.id).where(AuthUser.id == SYSTEM_USER_ID)
             result = await session.execute(stmt)
@@ -37,34 +39,53 @@ class NotesDAO:
                 )
                 session.add(system_user)
                 await session.commit()
+        finally:
+            await session.close()
 
     async def delete_id(self, idx: int) -> None:
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = delete(UserNote).where(
                 UserNote.user_id == SYSTEM_USER_ID, UserNote.id == idx
             )
             await session.execute(stmt)
             await session.commit()
+        finally:
+            await session.close()
 
     async def delete_text(self, text: str) -> None:
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = delete(UserNote).where(
                 UserNote.user_id == SYSTEM_USER_ID, UserNote.text.ilike(f"%{text}%")
             )
             await session.execute(stmt)
             await session.commit()
+        finally:
+            await session.close()
 
     async def get(self, idx: int) -> str | None:
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = select(UserNote.text).where(
                 UserNote.user_id == SYSTEM_USER_ID, UserNote.id == idx
             )
             result = await session.execute(stmt)
             row = result.scalar_one_or_none()
-            return row
+
+            result_row = row
+        finally:
+            await session.close()
+
+        return result_row
 
     async def list(self) -> list[tuple[int, str]]:
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = (
                 select(UserNote.id, UserNote.text)
                 .where(UserNote.user_id == SYSTEM_USER_ID)
@@ -72,19 +93,30 @@ class NotesDAO:
             )
             result = await session.execute(stmt)
             rows = result.fetchall()
-            return [(r[0], r[1]) for r in rows]
+
+            result_list = [(r[0], r[1]) for r in rows]
+        finally:
+            await session.close()
+
+        return result_list
 
     async def add(self, text: str) -> None:
         await self._ensure_system_user()
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             note = UserNote(
                 user_id=SYSTEM_USER_ID, text=text, created_at=datetime.now(UTC)
             )
             session.add(note)
             await session.commit()
+        finally:
+            await session.close()
 
     async def all_texts(self) -> list[str]:
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = (
                 select(UserNote.text)
                 .where(UserNote.user_id == SYSTEM_USER_ID)
@@ -92,7 +124,12 @@ class NotesDAO:
             )
             result = await session.execute(stmt)
             rows = result.fetchall()
-            return [r[0] for r in rows]
+
+            result_texts = [r[0] for r in rows]
+        finally:
+            await session.close()
+
+        return result_texts
 
     async def close(self) -> None:
         """No-op for PostgreSQL-based DAO."""

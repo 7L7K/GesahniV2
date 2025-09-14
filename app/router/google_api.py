@@ -141,7 +141,9 @@ async def google_oauth_callback(
             verify_signed_state(state)
         except Exception as e:
             logger.warning("google_oauth_callback.csrf", extra={"error": str(e)})
-            raise HTTPException(status_code=403, detail="Invalid state parameter")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="invalid_state", message="invalid state parameter")
 
         # Record callback attempt (best-effort)
         mon = _get_oauth_monitor_safe()

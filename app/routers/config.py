@@ -45,7 +45,7 @@ def build_plan() -> list[RouterSpec]:
 
     core = _must(
         [
-            RouterSpec("app.router.ask_api:router", "/v1"),
+            RouterSpec("app.api.ask:router", "/v1"),
             # Canonical auth router (use app.api.auth as source of truth)
             RouterSpec("app.api.auth:router", "/v1"),
             RouterSpec("app.router.google_api:router", "/v1/google"),

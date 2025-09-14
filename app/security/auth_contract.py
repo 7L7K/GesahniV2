@@ -28,9 +28,9 @@ from fastapi import HTTPException, Request
 # Try to reuse existing project helpers when available
 try:
     # Preferred: project-provided JWT decoding helper
-    from app.security import jwt_decode  # type: ignore
+    from app.security import decode_jwt  # type: ignore
 except Exception:
-    jwt_decode = None
+    decode_jwt = None
 
 try:
     # Cookie facade for canonical cookie reads
@@ -57,10 +57,10 @@ def _decode_jwt(token: str) -> Identity | None:
         return None
 
     # Use project helper if present
-    if jwt_decode is not None:
+    if decode_jwt is not None:
         try:
-            # jwt_decode(token, secret=None) implementations may read env
-            return jwt_decode(token)
+            # decode_jwt gets JWT secret from config internally
+            return decode_jwt(token)
         except Exception:
             return None
 
@@ -131,7 +131,9 @@ def require_auth(
     """
     ident = resolve_identity(request)
     if not ident:
-        raise HTTPException(status_code=401, detail="not_authenticated")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(code="not_authenticated", message="not authenticated")
 
     # Check scopes if required
     if required_scopes:

@@ -554,7 +554,9 @@ def require_scope(required: str) -> Callable[[Request], None]:
                 required,
                 ",".join(scopes),
             )
-            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="missing_scope", message="missing required scope")
 
     return _dep
 
@@ -612,7 +614,9 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
                 ",".join(required_set),
                 ",".join(scopes),
             )
-            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="missing_scope", message="missing required scope")
 
     return _dep
 
@@ -686,7 +690,9 @@ def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
                 ",".join(required_set),
                 ",".join(scopes),
             )
-            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="missing_scope", message="missing required scope")
 
     return _dep
 
@@ -726,7 +732,9 @@ def require_any_scopes(required: Iterable[str]) -> Callable[[Request], None]:
                 ",".join(required_set),
                 ",".join(scopes),
             )
-            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="missing_scope", message="missing required scope")
 
     return _dep
 
@@ -750,7 +758,9 @@ def require_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None]:
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not required_set <= set(scopes):
-            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="missing_scope", message="missing required scope")
 
     return _dep
 
@@ -773,7 +783,9 @@ def require_any_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not (set(scopes) & required_set):
-            raise HTTPException(status_code=403, detail="Forbidden: missing scope")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="missing_scope", message="missing required scope")
 
     return _dep
 

@@ -11,11 +11,36 @@ import asyncio
 import logging
 import time
 from collections.abc import Callable
+from dataclasses import fields
 from typing import Any
 
 from .models import PlayerState
 
 logger = logging.getLogger(__name__)
+
+
+def prune_to_model(d: dict, model_cls) -> dict:
+    """Prune dictionary to only include fields that exist in the model class.
+
+    This prevents WebSocket crashes when unexpected fields are present in device data.
+    Falls back to allowing all fields if model introspection fails.
+    """
+    try:
+        # Try Pydantic v2 style first
+        if hasattr(model_cls, "model_fields"):
+            allowed = set(model_cls.model_fields.keys())
+        # Try dataclass style
+        elif hasattr(model_cls, "__dataclass_fields__"):
+            allowed = set(model_cls.__dataclass_fields__.keys())
+        # Try dataclass fields() function
+        else:
+            allowed = {f.name for f in fields(model_cls)}
+    except Exception:
+        # If introspection fails, allow all fields as safety net
+        logger.warning("prune_to_model: introspection failed, allowing all fields")
+        return d
+
+    return {k: v for k, v in d.items() if k in allowed}
 
 
 class DeltaBuilder:
@@ -101,12 +126,24 @@ class DeltaBuilder:
             return
 
         try:
+            # Safely create state dict with device field pruning
+            state_dict = state.to_dict()
+
+            # Belt-and-suspenders: ensure device data is properly formatted
+            if state.device:
+                from .models import Device
+
+                device_dict = state.device.to_dict()
+                # Prune device dict to only include expected fields
+                pruned_device = prune_to_model(device_dict, Device)
+                state_dict["device"] = pruned_device
+
             # Create delta payload
             payload = {
                 "type": "state_delta" if not full else "state_full",
                 "proto_ver": 1,
                 "ts": int(time.time() * 1000),
-                "state": state.to_dict(),
+                "state": state_dict,
                 "state_hash": state.state_hash(),
             }
 
@@ -198,9 +235,19 @@ class DeltaBuilder:
             or (old_state.device is None and new_state.device is not None)
             or (old_state.device is not None and new_state.device is None)
         ):
+            from .models import Device
+
+            old_device_dict = None
+            new_device_dict = None
+
+            if old_state.device:
+                old_device_dict = prune_to_model(old_state.device.to_dict(), Device)
+            if new_state.device:
+                new_device_dict = prune_to_model(new_state.device.to_dict(), Device)
+
             changes["device"] = {
-                "old": old_state.device.to_dict() if old_state.device else None,
-                "new": new_state.device.to_dict() if new_state.device else None,
+                "old": old_device_dict,
+                "new": new_device_dict,
             }
 
         # Compare queue length (simplified)

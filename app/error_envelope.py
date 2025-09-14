@@ -21,7 +21,7 @@ class ErrorEnvelope(TypedDict, total=False):
     message: str
     detail: str  # For test compatibility
     hint: str | None
-    details: dict[str, Any]
+    meta: dict[str, Any]  # Changed from details to meta for chat route consistency
 
 
 def _ulid() -> str:
@@ -58,7 +58,7 @@ def build_error(
     code: str,
     message: str,
     hint: str | None = None,
-    details: dict[str, Any] | None = None,
+    meta: dict[str, Any] | None = None,  # Changed from details to meta
 ) -> ErrorEnvelope:
     """Standard error envelope used across the API.
 
@@ -67,14 +67,14 @@ def build_error(
       - message (human-readable)
       - detail (human-readable, for test compatibility)
       - hint (actionable hint for UI)
-      - details (debuggable context; safe for clients)
+      - meta (debuggable context; safe for clients)
     """
     body: ErrorEnvelope = {"code": code, "message": message}
     # Add detail field for test compatibility (matches message)
     body["detail"] = message
     if hint is not None:
         body["hint"] = hint
-    d = dict(details or {})
+    d = dict(meta or {})  # Changed from details to meta
     # Always enrich with request id and timestamp
     try:
         d.setdefault("req_id", req_id_var.get())
@@ -94,7 +94,7 @@ def build_error(
     if env:
         d.setdefault("env", env)
     if d:
-        body["details"] = d
+        body["meta"] = d  # Changed from details to meta
     return body
 
 
@@ -149,7 +149,7 @@ def raise_enveloped(
     message: str,
     *,
     hint: str | None = None,
-    details: dict[str, Any] | None = None,
+    meta: dict[str, Any] | None = None,  # Changed from details to meta
     status: int = 400,
 ):
     """Raise a FastAPI HTTPException carrying a standard envelope.
@@ -157,7 +157,9 @@ def raise_enveloped(
     Raw HTTPException should be avoided; prefer this helper.
     """
 
-    env = build_error(code=code, message=message, hint=hint, details=details)
+    env = build_error(
+        code=code, message=message, hint=hint, meta=meta
+    )  # Changed from details to meta
     headers = {"X-Error-Code": code}
     raise HTTPException(status_code=status, detail=env, headers=headers)
 
@@ -178,7 +180,7 @@ def enveloped_route(fn):
                 "internal",
                 "internal error",
                 hint="try again shortly",
-                details={"error": str(e)},
+                meta={"error": str(e)},  # Changed from details to meta
                 status=500,
             )
 

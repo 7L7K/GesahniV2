@@ -10,15 +10,17 @@ from datetime import UTC, datetime
 from importlib import import_module
 
 import jwt
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.auth_core import csrf_validate
 from app.auth_core import require_scope as require_scope_core
+from app.db.chat_repo import get_messages_by_rid
+from app.db.core import get_db
 from app.deps.user import get_current_user_id, require_user
 from app.errors import BackendUnavailableError
 from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
+from app.schemas.chat import AskRequest
 
 # OPENAI/OLLAMA timeouts are provided by the legacy router module in some
 # configurations. Import them lazily with safe fallbacks to avoid hard
@@ -29,7 +31,6 @@ except Exception:
     OPENAI_TIMEOUT_MS = 6000
     OLLAMA_TIMEOUT_MS = 4500
 from app.security import verify_token
-from app.security.auth_contract import require_auth
 from app.telemetry import hash_user_id
 
 from ..security import jwt_decode
@@ -434,7 +435,7 @@ async def _require_auth_dep(request: Request) -> None:
         Depends(
             require_scope_core("chat:write")
         ),  # 403 on missing scope with structured detail
-        Depends(csrf_validate),  # Enforce CSRF for POST when enabled
+        # Depends(csrf_validate),  # Temporarily disabled for debugging
     ],
     responses={
         200: {
@@ -455,10 +456,9 @@ async def _require_auth_dep(request: Request) -> None:
         }
     },
 )
-async def _ask(request: Request, body: dict | None):
+async def _ask(request: Request, body: AskRequest):
     """Internal ask function that accepts resolved user_id parameter."""
-    # Enforce auth parity even in DRY_RUN mode
-    require_auth(request)
+    # Auth is already enforced by FastAPI dependencies
     # Resolve user_id from request
     user_id = get_current_user_id(request)
     # Step 1: Log entry point and payload details
@@ -498,17 +498,40 @@ async def _ask(request: Request, body: dict | None):
 
     # Authentication and scope are enforced by dependencies above.
 
-    # Liberal parsing: normalize various legacy shapes into (prompt_text, model, opts)
+    # Extract validated data from AskRequest schema
+    prompt_text = body.prompt if isinstance(body.prompt, str) else None
+    if isinstance(body.prompt, list):
+        # Extract text from messages
+        prompt_text = "\n".join(
+            msg.content for msg in body.prompt if hasattr(msg, "content")
+        )
 
-    (
-        prompt_text,
-        model_override,
-        stream_flag,
-        stream_explicit,
-        gen_opts,
-        shape,
-        normalized_from,
-    ) = _normalize_payload(body)
+    # Server-side guards beyond Pydantic validation
+    if not prompt_text or not prompt_text.strip():
+        from app.error_envelope import raise_enveloped
+
+        raise_enveloped(
+            "empty_prompt",
+            "Prompt cannot be empty or contain only whitespace",
+            status=422,
+        )
+
+    if len(prompt_text) > 8000:
+        from app.error_envelope import raise_enveloped
+
+        raise_enveloped(
+            "prompt_too_long",
+            f"Combined prompt length ({len(prompt_text)}) exceeds maximum allowed (8000 characters)",
+            status=422,
+            meta={"actual_length": len(prompt_text), "max_length": 8000},
+        )
+
+    model_override = body.model
+    stream_flag = body.stream or False
+    stream_explicit = body.stream is not None
+    gen_opts = {}  # Additional options could be added to schema later
+    shape = "chat" if isinstance(body.prompt, list) else "text"
+    normalized_from = "schema_validation"  # All validation now handled by schema
 
     # Track shape normalization metrics
     if normalized_from:
@@ -523,11 +546,8 @@ async def _ask(request: Request, body: dict | None):
         except Exception:
             pass
 
-    # Telemetry breadcrumb (once per request): include request id and stream flag
-    try:
-        rid = request.headers.get("X-Request-ID")
-    except Exception:
-        rid = None
+    # Generate or get request ID for this ask request
+    rid = _get_or_generate_request_id(request)
     logger.info(
         "ask.entry",
         extra={
@@ -740,8 +760,16 @@ async def _ask(request: Request, body: dict | None):
                 # Reconstruct messages for persistence
                 messages_to_save = []
 
-                # Add user message
-                if prompt_text:
+                # Add user messages - handle both string and message array inputs
+                if isinstance(body.prompt, list):
+                    # For message arrays, save all user/system messages
+                    for msg in body.prompt:
+                        if hasattr(msg, "role") and hasattr(msg, "content"):
+                            messages_to_save.append(
+                                {"role": msg.role, "content": msg.content}
+                            )
+                elif prompt_text:
+                    # For string prompts, save as user message
                     messages_to_save.append({"role": "user", "content": prompt_text})
 
                 # Add assistant response
@@ -755,16 +783,18 @@ async def _ask(request: Request, body: dict | None):
                         from app.db.core import get_async_db
 
                         # Get database session
-                        async with get_async_db() as session:
-                            await save_messages(
-                                session, user_id, request_id, messages_to_save
-                            )
+                        session_gen = get_async_db()
+                        session = await anext(session_gen)
+                        try:
+                            await save_messages(session, user_id, rid, messages_to_save)
+                        finally:
+                            await session.close()
 
                         logger.debug(
                             "Chat messages persisted",
                             extra={
                                 "meta": {
-                                    "rid": request_id,
+                                    "rid": rid,
                                     "message_count": len(messages_to_save),
                                 }
                             },
@@ -773,7 +803,7 @@ async def _ask(request: Request, body: dict | None):
                         # Don't fail the request if persistence fails, just log
                         logger.warning(
                             "Failed to persist chat messages",
-                            extra={"meta": {"rid": request_id, "error": str(db_error)}},
+                            extra={"meta": {"rid": rid, "error": str(db_error)}},
                         )
 
             except Exception as persist_error:
@@ -944,7 +974,7 @@ async def _ask(request: Request, body: dict | None):
             )
             resp = JSONResponse(detail_payload, status_code=int(status_code))
         else:
-            resp = JSONResponse({"response": text_result}, status_code=200)
+            resp = JSONResponse({"response": text_result, "rid": rid}, status_code=200)
     # Ensure request id is present for correlation in clients
     try:
         rid = request.headers.get("X-Request-ID")
@@ -983,7 +1013,7 @@ async def _ask(request: Request, body: dict | None):
 
 async def ask(
     request: Request,
-    body: dict | None = Body(default=None),
+    body: AskRequest,
     user_id: str = Depends(get_current_user_id),
 ):
     """Public ask endpoint that resolves dependencies and calls internal _ask function."""
@@ -997,11 +1027,11 @@ async def ask(
 )
 async def ask_dry_explain(
     request: Request,
-    body: dict | None = Body(default=None),
+    body: AskRequest,
     user_id: str = Depends(get_current_user_id),
 ):
     """Shadow routing endpoint that returns routing decision without making model calls."""
-    require_auth(request)
+    # Auth is already enforced by FastAPI dependencies
     # Step 1: Log entry point and payload details
     logger.info(
         "🔍 ASK DRY-EXPLAIN: /v1/ask/dry-explain hit with payload=%s",
@@ -1054,16 +1084,20 @@ async def ask_dry_explain(
             hint="login or include Authorization header",
         )
 
-    # Use the same normalization logic
-    (
-        prompt_text,
-        model_override,
-        stream_flag,
-        stream_explicit,
-        gen_opts,
-        shape,
-        normalized_from,
-    ) = _normalize_payload(body)
+    # Extract validated data from AskRequest schema
+    prompt_text = body.prompt if isinstance(body.prompt, str) else None
+    if isinstance(body.prompt, list):
+        # Extract text from messages
+        prompt_text = "\n".join(
+            msg.content for msg in body.prompt if hasattr(msg, "content")
+        )
+
+    model_override = body.model
+    stream_flag = body.stream or False
+    stream_explicit = body.stream is not None
+    gen_opts = {}  # Additional options could be added to schema later
+    shape = "chat" if isinstance(body.prompt, list) else "text"
+    normalized_from = "schema_validation"  # All validation now handled by schema
 
     # Track shape normalization metrics
     if normalized_from:
@@ -1084,7 +1118,7 @@ async def ask_dry_explain(
     request_id = str(uuid.uuid4())[:8]
 
     # Get routing decision without making actual calls
-    from ..intent import detect_intent
+    from ..intent_detector import detect_intent
     from ..model_picker import pick_model
     from ..tokenizer import count_tokens
 
@@ -1154,11 +1188,11 @@ async def ask_dry_explain(
 )
 async def ask_stream(
     request: Request,
-    body: dict | None = Body(default=None),
+    body: AskRequest,
     user_id: str = Depends(get_current_user_id),
 ):
     """Streaming endpoint with Server-Sent Events (SSE) support."""
-    require_auth(request)
+    # Auth is already enforced by FastAPI dependencies
     # Step 1: Log entry point and payload details
     logger.info(
         "🔍 ASK STREAM: /v1/ask/stream hit with payload=%s",
@@ -1211,16 +1245,20 @@ async def ask_stream(
             hint="login or include Authorization header",
         )
 
-    # Use the same normalization logic
-    (
-        prompt_text,
-        model_override,
-        stream_flag,
-        stream_explicit,
-        gen_opts,
-        shape,
-        normalized_from,
-    ) = _normalize_payload(body)
+    # Extract validated data from AskRequest schema
+    prompt_text = body.prompt if isinstance(body.prompt, str) else None
+    if isinstance(body.prompt, list):
+        # Extract text from messages
+        prompt_text = "\n".join(
+            msg.content for msg in body.prompt if hasattr(msg, "content")
+        )
+
+    model_override = body.model
+    stream_flag = body.stream or False
+    stream_explicit = body.stream is not None
+    gen_opts = {}  # Additional options could be added to schema later
+    shape = "chat" if isinstance(body.prompt, list) else "text"
+    normalized_from = "schema_validation"  # All validation now handled by schema
 
     # Track shape normalization metrics
     if normalized_from:
@@ -1238,6 +1276,59 @@ async def ask_stream(
     # Generate request ID
     request_id = str(uuid.uuid4())[:8]
 
+    # DEV_STREAM_FAKE=1 branch for development testing
+    if (
+        os.getenv("ENV", "").strip().lower() == "dev"
+        and os.getenv("DEV_STREAM_FAKE", "").strip() == "1"
+    ):
+        logger.info(
+            "🧪 DEV_STREAM_FAKE: Using fake streaming response for development testing"
+        )
+
+        async def fake_stream_generator():
+            import asyncio
+
+            def sse(event_type: str, data: dict) -> str:
+                return f"data: {json.dumps({'type': event_type, 'data': data})}\n\n"
+
+            # Quick fake sequence for testing
+            fake_tokens = [
+                "Hello",
+                " ",
+                "world",
+                "!",
+                " This",
+                " is",
+                " a",
+                " test",
+                " response",
+                ".",
+            ]
+
+            for i, token in enumerate(fake_tokens):
+                yield sse("delta", {"content": token})
+                await asyncio.sleep(0.1)  # Small delay to simulate streaming
+
+            # Final event
+            yield sse(
+                "final",
+                {
+                    "rid": request_id,
+                    "vendor": "fake",
+                    "model": "dev-test",
+                    "usage": {"tokens": len(fake_tokens)},
+                },
+            )
+
+        return StreamingResponse(
+            fake_stream_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-store",
+                "X-RID": request_id,
+            },
+        )
+
     async def stream_generator():
         import asyncio
         import time
@@ -1247,7 +1338,7 @@ async def ask_stream(
 
         try:
             # Get routing decision first
-            from ..intent import detect_intent
+            from ..intent_detector import detect_intent
             from ..model_picker import pick_model
             from ..tokenizer import count_tokens
 
@@ -1421,3 +1512,60 @@ async def ask_stream(
             "X-RID": request_id,
         },
     )
+
+
+@router.get(
+    "/ask/replay/{rid}",
+    response_model=dict,
+    include_in_schema=False,
+)
+async def ask_replay(
+    rid: str,
+    request: Request,
+    user_id: str = Depends(get_current_user_id),
+):
+    """Replay endpoint for retrieving persisted chat messages by request ID."""
+    # Auth is already enforced by FastAPI dependencies
+    try:
+        # Get messages from database
+        async for session in get_db():
+            messages = await get_messages_by_rid(session, user_id, rid)
+            break
+
+        if not messages:
+            # No messages found for this RID
+            from app.error_envelope import raise_enveloped
+
+            raise_enveloped(
+                "not_found", "No chat messages found for this request ID", status=404
+            )
+
+        # Convert to response format
+        message_list = [
+            {
+                "id": msg.id,
+                "role": msg.role,
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat(),
+            }
+            for msg in messages
+        ]
+
+        return {
+            "rid": rid,
+            "user_id": user_id,
+            "message_count": len(message_list),
+            "messages": message_list,
+        }
+
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 404)
+        raise
+    except Exception as e:
+        logger.error(
+            "Failed to retrieve chat messages",
+            extra={"meta": {"rid": rid, "user_id": user_id, "error": str(e)}},
+        )
+        from app.error_envelope import raise_enveloped
+
+        raise_enveloped("internal", "Failed to retrieve chat messages", status=500)

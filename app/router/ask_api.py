@@ -15,9 +15,6 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from app import settings
-from app.db.chat_repo import get_messages_by_rid
-from app.db.core import get_db
-from app.deps.user import get_current_user_id
 from app.metrics import (
     ASK_ERRORS_TOTAL,
     ASK_LATENCY_MS,
@@ -357,58 +354,3 @@ async def ask_endpoint(
                 "message": "Service temporarily unavailable",
             },
         )
-
-
-@router.get(
-    "/ask/replay/{rid}",
-    dependencies=_require_auth_dep(),
-    response_model=dict,
-    include_in_schema=False,
-)
-async def ask_replay(
-    rid: str,
-    request: Request,
-    user_id: str = Depends(get_current_user_id),
-):
-    """Replay endpoint for retrieving persisted chat messages by request ID."""
-    try:
-        # Get messages from database
-        async for session in get_db():
-            messages = await get_messages_by_rid(session, user_id, rid)
-            break
-
-        if not messages:
-            # No messages found for this RID
-            from app.error_envelope import raise_enveloped
-
-            raise_enveloped(
-                "not_found", "No chat messages found for this request ID", status=404
-            )
-
-        # Convert to response format
-        message_list = [
-            {
-                "id": msg.id,
-                "role": msg.role,
-                "content": msg.content,
-                "created_at": msg.created_at.isoformat(),
-            }
-            for msg in messages
-        ]
-
-        return {
-            "rid": rid,
-            "user_id": user_id,
-            "message_count": len(message_list),
-            "messages": message_list,
-        }
-
-    except HTTPException:
-        # Re-raise HTTP exceptions (like 404)
-        raise
-    except Exception as e:
-        logger.error(
-            "Failed to retrieve chat messages",
-            extra={"meta": {"rid": rid, "user_id": user_id, "error": str(e)}},
-        )
-        raise_enveloped("internal", "Failed to retrieve chat messages", status=500)

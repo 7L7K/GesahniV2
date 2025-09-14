@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import HTMLResponse
 
 from app.deps.scopes import docs_security_with
@@ -15,7 +15,9 @@ router = APIRouter(
 def _guard(token: str | None) -> None:
     tok = _admin_token()
     if tok and token != tok:
-        raise HTTPException(status_code=403, detail="forbidden")
+        from app.http_errors import forbidden
+
+        raise forbidden(message="access forbidden")
 
 
 def _html_page(title: str, body: str) -> str:

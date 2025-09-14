@@ -449,7 +449,10 @@ def require_scope(required: str):
             from app.error_envelope import raise_enveloped
 
             raise_enveloped(
-                "missing_scope", f"Missing required scope: {required}", status=403
+                "missing_scope",
+                f"Missing required scope: {required}",
+                status=403,
+                meta={"required_scope": required},
             )
 
     return _dep
@@ -495,16 +498,31 @@ def csrf_validate(request: Request) -> None:
         if used_legacy and not allowed:
             from app.error_envelope import raise_enveloped
 
-            raise_enveloped("csrf_required", "CSRF token required", status=403)
+            raise_enveloped(
+                "csrf_required",
+                "CSRF token required",
+                status=403,
+                meta={"csrf_enabled": True},
+            )
         if not tok or not cookie or tok != cookie:
             from app.error_envelope import raise_enveloped
 
-            raise_enveloped("csrf_invalid", "Invalid CSRF token", status=403)
+            raise_enveloped(
+                "csrf_invalid",
+                "Invalid CSRF token",
+                status=403,
+                meta={"csrf_enabled": True},
+            )
     except Exception:
         # Be explicit: fail-closed for enabled CSRF on mutation
         from app.error_envelope import raise_enveloped
 
-        raise_enveloped("csrf_error", "CSRF validation failed", status=403)
+        raise_enveloped(
+            "csrf_error",
+            "CSRF validation failed",
+            status=403,
+            meta={"csrf_enabled": True},
+        )
 
 
 __all__ = [

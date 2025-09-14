@@ -100,6 +100,7 @@ def register_canonical_middlewares(
     env = (os.getenv("ENV") or "dev").strip().lower()
     dev_mode = _is_truthy(os.getenv("DEV_MODE"))
     in_ci = _is_truthy(os.getenv("CI")) or "PYTEST_CURRENT_TEST" in os.environ
+    # Rate limiting is enabled by default in dev, can be disabled with RATE_LIMIT_ENABLED=0
     rate_limit_enabled = _is_truthy(os.getenv("RATE_LIMIT_ENABLED", "1")) and not in_ci
     legacy_error_mw = _is_truthy(os.getenv("LEGACY_ERROR_MW"))
     legacy_headers_enabled = _is_truthy(os.getenv("GSN_ENABLE_LEGACY_GOOGLE")) or (
@@ -146,15 +147,17 @@ def register_canonical_middlewares(
     add_mw(app, RedactHashMiddleware, name="RedactHashMiddleware")
     add_mw(app, HealthCheckFilterMiddleware, name="HealthCheckFilterMiddleware")
 
-    # Rate limiting (conditional)
-    if rate_limit_enabled:
-        add_mw(app, RateLimitMiddleware, name="RateLimitMiddleware")
-
-    # Session and auth
-    session_attach_enabled = _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "0"))
+    # Session and auth (must run BEFORE rate limiting to provide user_id)
+    # Enable session attachment for admin endpoints to work properly
+    session_attach_enabled = _is_truthy(os.getenv("SESSION_ATTACH_ENABLED", "1"))
     if session_attach_enabled:
         add_mw(app, SessionAttachMiddleware, name="SessionAttachMiddleware")
     add_mw(app, SilentRefreshMiddleware, name="SilentRefreshMiddleware")
+
+    # Rate limiting (conditional - AFTER auth so it can key by user_id)
+    if rate_limit_enabled:
+        add_mw(app, RateLimitMiddleware, name="RateLimitMiddleware")
+
     add_mw(app, DedupMiddleware, name="DedupMiddleware")
 
     # Audit, metrics, and deprecation (CRITICAL ORDER: Metrics BEFORE Deprecation in execution)
@@ -206,9 +209,9 @@ def register_canonical_middlewares(
         "LegacyHeadersMiddleware",  # conditional, executes AFTER Deprecation
         "AuditMiddleware",
         "DedupMiddleware",
+        "RateLimitMiddleware",  # conditional - AFTER auth, BEFORE handler
         "SilentRefreshMiddleware",
         "SessionAttachMiddleware",  # conditional
-        "RateLimitMiddleware",  # conditional
         "HealthCheckFilterMiddleware",
         "RedactHashMiddleware",
         "TraceRequestMiddleware",

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends
 
 from app.security import verify_token
 
@@ -22,7 +22,9 @@ def require_scopes(scopes: list[str]):
             getattr(user, "state", None) or getattr(user, "jwt_payload", None) or user,
             scopes,
         ):
-            raise HTTPException(status_code=403, detail="forbidden")
+            from app.http_errors import forbidden
+
+            raise forbidden(code="insufficient_scopes", message="insufficient scopes")
         return user
 
     return _gate

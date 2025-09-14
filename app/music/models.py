@@ -15,6 +15,7 @@ class Device:
     provider: str | None = None
     type: str = "speaker"
     volume_percent: int = 50
+    volume: int | None = None  # Alias for backward compatibility
     is_active: bool = False
 
 
@@ -139,10 +140,26 @@ Device.to_dict = lambda self: {
     "provider": self.provider,
     "type": self.type,
     "volume_percent": self.volume_percent,
+    "volume": (
+        self.volume if self.volume is not None else self.volume_percent
+    ),  # Include volume for compatibility
     "is_active": self.is_active,
 }
 
-Device.from_dict = classmethod(lambda cls, data: cls(**data))
+Device.from_dict = classmethod(
+    lambda cls, data: cls(
+        id=data["id"],
+        name=data["name"],
+        area=data.get("area"),
+        provider=data.get("provider"),
+        type=data.get("type", "speaker"),
+        volume_percent=data.get(
+            "volume_percent", data.get("volume", 50)
+        ),  # Accept either field
+        volume=data.get("volume"),  # Keep original volume value if present
+        is_active=data.get("is_active", False),
+    )
+)
 
 QueueItem.to_dict = lambda self: {
     "id": self.id,

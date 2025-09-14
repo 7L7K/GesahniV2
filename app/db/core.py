@@ -14,10 +14,10 @@ Imports from this module:
 
 import logging
 import os
-from collections.abc import AsyncGenerator, Generator
+from collections.abc import Generator
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as sa_create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -72,13 +72,54 @@ def get_db() -> Generator[Session, None, None]:
             session.close()
 
 
-async def get_async_db() -> AsyncGenerator[AsyncSession, None]:
-    """Asynchronous database session dependency for FastAPI"""
-    async with AsyncSessionLocal() as session:
+class AsyncSessionGenerator:
+    """Async generator that also supports context manager protocol."""
+
+    def __init__(self):
+        self._generator = None
+        self._session = None
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self._generator is None:
+            self._generator = self._create_generator()
         try:
-            yield session
-        finally:
-            await session.close()
+            self._session = await anext(self._generator)
+            return self._session
+        except StopAsyncIteration:
+            raise
+
+    async def _create_generator(self):
+        async with AsyncSessionLocal() as session:
+            try:
+                yield session
+            finally:
+                await session.close()
+
+    # Context manager support
+    async def __aenter__(self):
+        if self._generator is None:
+            self._generator = self._create_generator()
+        self._session = await anext(self._generator)
+        return self._session
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        if self._session:
+            await self._session.close()
+        self._session = None
+
+
+def get_async_db() -> AsyncSessionGenerator:
+    """
+    Asynchronous database session dependency for FastAPI.
+
+    Can be used as:
+    - async for session in get_async_db():  # Generator usage
+    - async with get_async_db() as session:  # Context manager usage
+    """
+    return AsyncSessionGenerator()
 
 
 def health_check() -> bool:

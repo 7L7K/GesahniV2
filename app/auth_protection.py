@@ -104,12 +104,18 @@ async def require_auth_with_csrf(request: Request) -> str:
                 # Cross-site CSRF validation: require token in header + basic validation
                 if not token_hdr:
                     logger.warning("protected_route: csrf_missing_header_cross_site")
-                    raise HTTPException(status_code=400, detail="csrf.missing")
+                    from app.http_errors import http_error
+
+                    raise http_error(
+                        code="csrf_missing", message="CSRF token required", status=400
+                    )
 
                 # Basic validation for cross-site tokens
                 if len(token_hdr) < 16:  # Basic validation
                     logger.warning("protected_route: csrf_invalid_format_cross_site")
-                    raise HTTPException(status_code=403, detail="csrf.invalid")
+                    from app.http_errors import forbidden
+
+                    raise forbidden(code="csrf_invalid", message="invalid CSRF token")
 
                 # For cross-site, we accept any properly formatted token
                 logger.debug("protected_route: csrf_cross_site_validation passed")

@@ -56,6 +56,37 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     dev_env_detected = dev_mode or _is_dev_environment(request)
     is_tls = _get_scheme(request) == "https"
 
+    # Determine if current request appears cross-origin by comparing Origin to Host.
+    cross_origin = False
+    try:
+        origin = request.headers.get("origin") or ""
+        host = request.headers.get("host") or ""
+        if origin and host:
+            from urllib.parse import urlparse as _u
+
+            try:
+                o = _u(origin)
+                o_netloc = (o.hostname or "").strip().lower()
+                if o.port:
+                    o_netloc = f"{o_netloc}:{o.port}"
+            except Exception:
+                o_netloc = ""
+            # Normalize Host header (may include port)
+            h = host.strip().lower()
+            cross_origin = bool(o_netloc and h and o_netloc != h)
+    except Exception:
+        cross_origin = False
+
+    # In development, when a request is cross-origin (e.g., Next dev server at :3000
+    # calling backend at :8000), prefer SameSite=None to enable credentialed requests
+    # unless the admin has explicitly set COOKIE_SAMESITE to a non-default value.
+    env_name = (os.getenv("ENV") or "dev").strip().lower()
+    explicitly_set = os.getenv("COOKIE_SAMESITE")
+    if env_name == "dev" and cross_origin:
+        # If not explicitly set to "strict", force None for better UX during development.
+        if not explicitly_set or explicitly_set.strip().lower() in {"", "lax", "auto"}:
+            cookie_samesite = "none"
+
     # Determine secure flag - dev-friendly defaults:
     # - Default False unless explicitly forced or required by SameSite=None
     # - Respect COOKIE_SECURE overrides

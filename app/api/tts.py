@@ -84,9 +84,15 @@ async def speak(
             token_hdr, used_legacy, legacy_allowed = _extract_csrf_header(request)
             cookie = request.cookies.get("csrf_token") or ""
             if used_legacy and not legacy_allowed:
-                raise HTTPException(status_code=400, detail="missing_csrf")
+                from app.http_errors import http_error
+
+                raise http_error(
+                    code="missing_csrf", message="CSRF token required", status=400
+                )
             if not token_hdr or not cookie or token_hdr != cookie:
-                raise HTTPException(status_code=403, detail="invalid_csrf")
+                from app.http_errors import forbidden
+
+                raise forbidden(code="invalid_csrf", message="invalid CSRF token")
     except HTTPException:
         raise
     except Exception:

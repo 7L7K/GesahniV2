@@ -207,10 +207,18 @@ def _decode_refresh_token(token: str, leeway: int = None) -> dict[str, Any]:
 
         return payload
     except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="refresh_token_expired")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(
+            code="refresh_token_expired", message="refresh token expired"
+        )
     except jwt.InvalidTokenError as e:
         logger.warning(f"Invalid refresh token: {e}")
-        raise HTTPException(status_code=401, detail="invalid_refresh_token")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(
+            code="invalid_refresh_token", message="invalid refresh token"
+        )
 
 
 async def validate_refresh_token(
@@ -227,14 +235,22 @@ async def validate_refresh_token(
     # Extract required fields
     extracted_user_id = payload.get("user_id") or payload.get("sub")
     if not extracted_user_id:
-        raise HTTPException(status_code=401, detail="invalid_refresh_token")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(
+            code="invalid_refresh_token", message="invalid refresh token"
+        )
 
     if extracted_user_id != user_id:
-        raise HTTPException(status_code=401, detail="user_id_mismatch")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(code="user_id_mismatch", message="user ID mismatch")
 
     jti = str(payload.get("jti") or "")
     if not jti:
-        raise HTTPException(status_code=401, detail="missing_jti")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(code="missing_jti", message="missing JWT ID")
 
     # Device binding validation for extra security
     # Skip device ID validation in test environments to avoid test interference
@@ -251,7 +267,9 @@ async def validate_refresh_token(
             logger.warning(
                 f"Device ID mismatch for user {user_id}: token={token_device_id}, current={current_device_id}"
             )
-            raise HTTPException(status_code=401, detail="device_id_mismatch")
+            from app.http_errors import unauthorized
+
+            raise unauthorized(code="device_id_mismatch", message="device ID mismatch")
 
     # Calculate TTL
     now = int(time.time())
@@ -277,7 +295,11 @@ async def check_replay_protection(
     # Check if family is revoked
     if await is_refresh_family_revoked(sid):
         logger.info(f"Refresh family revoked for session {sid}")
-        raise HTTPException(status_code=401, detail="refresh_family_revoked")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(
+            code="refresh_family_revoked", message="refresh token family revoked"
+        )
 
     # For test scenarios, allow exactly 2 uses of the same JTI within a window
     try:
@@ -420,7 +442,11 @@ async def rotate_refresh_token(
     try:
         # Check replay protection
         if not await check_replay_protection(sid, jti, ttl, request):
-            raise HTTPException(status_code=401, detail="refresh_token_reused")
+            from app.http_errors import unauthorized
+
+            raise unauthorized(
+                code="refresh_token_reused", message="refresh token reused"
+            )
 
         # Decode token to check if rotation is needed
         payload = _decode_refresh_token(rtok, CFG.leeway_s)

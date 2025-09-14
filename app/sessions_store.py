@@ -28,7 +28,9 @@ class SessionsStore:
         if not did:
             did = uuid.uuid4().hex
 
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             # Create or update device
             device_stmt = select(AuthDevice).where(AuthDevice.id == did)
             result = await session.execute(device_stmt)
@@ -57,12 +59,16 @@ class SessionsStore:
             )
             session.add(session_obj)
             await session.commit()
+        finally:
+            await session.close()
 
         return {"sid": sid, "did": did}
 
     async def update_last_seen(self, sid: str) -> None:
         """Update last seen time for session."""
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = (
                 update(SessionModel)
                 .where(SessionModel.id == sid)
@@ -70,10 +76,14 @@ class SessionsStore:
             )
             await session.execute(stmt)
             await session.commit()
+        finally:
+            await session.close()
 
     async def list_user_sessions(self, user_id: str) -> list[dict[str, Any]]:
         """List all sessions for a user."""
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = (
                 select(SessionModel, AuthDevice)
                 .join(AuthDevice, SessionModel.device_id == AuthDevice.id)
@@ -104,11 +114,17 @@ class SessionsStore:
                     }
                 )
 
-            return sessions
+            result_sessions = sessions
+        finally:
+            await session.close()
+
+        return result_sessions
 
     async def revoke_family(self, sid: str) -> None:
         """Revoke a session family."""
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = (
                 update(SessionModel)
                 .where(SessionModel.id == sid)
@@ -116,10 +132,14 @@ class SessionsStore:
             )
             await session.execute(stmt)
             await session.commit()
+        finally:
+            await session.close()
 
     async def rename_device(self, user_id: str, did: str, new_name: str) -> bool:
         """Rename a device."""
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             # Verify device belongs to user
             stmt = select(AuthDevice).where(
                 AuthDevice.id == did, AuthDevice.user_id == user_id
@@ -132,11 +152,18 @@ class SessionsStore:
 
             device.device_name = new_name
             await session.commit()
-            return True
+
+            result_success = True
+        finally:
+            await session.close()
+
+        return result_success
 
     async def revoke_device_sessions(self, user_id: str, did: str) -> None:
         """Revoke all sessions for a device."""
-        async with get_async_db() as session:
+        session_gen = get_async_db()
+        session = await anext(session_gen)
+        try:
             stmt = (
                 update(SessionModel)
                 .where(SessionModel.user_id == user_id, SessionModel.device_id == did)
@@ -144,6 +171,8 @@ class SessionsStore:
             )
             await session.execute(stmt)
             await session.commit()
+        finally:
+            await session.close()
 
 
 # Global instance

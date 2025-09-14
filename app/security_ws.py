@@ -45,7 +45,9 @@ async def verify_ws(ws: WebSocket):
         except Exception:
             pass
         await ws.close(code=4403, reason="origin_not_allowed")
-        raise HTTPException(status_code=403, detail="origin_not_allowed")
+        from app.http_errors import forbidden
+
+        raise forbidden(code="origin_not_allowed", message="origin not allowed")
 
     # If no JWT secret is configured, allow connections (useful for tests/dev)
     jwt_secret = os.getenv("JWT_SECRET")
@@ -193,7 +195,9 @@ async def verify_ws(ws: WebSocket):
         except Exception:
             pass
         await ws.close(code=4401, reason="token_expired")
-        raise HTTPException(status_code=401, detail="token_expired")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(code="token_expired", message="token expired")
     except jwt.InvalidTokenError as e:
         log.warning("ws.auth.deny: invalid_token error=%s", str(e))
         record_ws_auth_failure("invalid_token")
@@ -202,7 +206,9 @@ async def verify_ws(ws: WebSocket):
         except Exception:
             pass
         await ws.close(code=4401, reason="invalid_token")
-        raise HTTPException(status_code=401, detail="invalid_token")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(code="invalid_token", message="invalid token")
     except Exception as e:
         log.error("ws.auth.error: unexpected_error error=%s", str(e))
         record_ws_auth_failure("unexpected_error")
@@ -211,7 +217,9 @@ async def verify_ws(ws: WebSocket):
         except Exception:
             pass
         await ws.close(code=4401, reason="auth_error")
-        raise HTTPException(status_code=401, detail="authentication_error")
+        from app.http_errors import unauthorized
+
+        raise unauthorized(code="authentication_error", message="authentication error")
 
 
 # WebSocket observability helpers
