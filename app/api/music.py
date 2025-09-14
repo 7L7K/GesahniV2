@@ -72,9 +72,85 @@ from ..deps.user import get_current_user_id
 
 # Use unified Spotify client that reads/writes tokens via auth_store_tokens
 from ..integrations.spotify.client import SpotifyAuthError, SpotifyClient
-from ..models.music_state import MusicVibe, load_state, save_state
+from ..models.music_state import MusicVibe, load_state as load_state_memory, save_state as save_state_memory
+from ..music.store import get_music_session, save_music_state, load_music_state
 
 router = APIRouter(prefix="", tags=["Music"])  # rate limit applied selectively in main
+
+
+# ============================================================================
+# MUSIC STATE PERSISTENCE WRAPPERS
+# ============================================================================
+
+async def load_state(user_id: str) -> MusicState:
+    """Load music state, preferring database but falling back to memory."""
+    try:
+        # Try database first
+        db_state = await load_music_state(user_id)
+        if db_state:
+            # Convert dict back to MusicState object
+            from ..models.music_state import MusicState
+            vibe_data = db_state.get("vibe", {})
+            state = MusicState(
+                vibe=MusicVibe(
+                    name=vibe_data.get("name", "Calm Night"),
+                    energy=float(vibe_data.get("energy", 0.25)),
+                    tempo=float(vibe_data.get("tempo", 80)),
+                    explicit=bool(vibe_data.get("explicit", False)),
+                ),
+                volume=int(db_state.get("volume", 25)),
+                device_id=db_state.get("device_id"),
+                last_track_id=db_state.get("last_track_id"),
+                last_recommendations=db_state.get("last_recommendations"),
+                recs_cached_at=db_state.get("recs_cached_at"),
+                duck_from=db_state.get("duck_from"),
+                quiet_hours=bool(db_state.get("quiet_hours", False)),
+                explicit_allowed=bool(db_state.get("explicit_allowed", True)),
+                radio_playing=bool(db_state.get("radio_playing", True)),
+                skip_count=int(db_state.get("skip_count", 0)),
+            )
+            return state
+    except Exception:
+        # Fall back to in-memory if database fails
+        pass
+
+    # Fallback to in-memory state
+    return load_state_memory(user_id)
+
+
+async def save_state(user_id: str, state: MusicState) -> None:
+    """Save music state to database and memory."""
+    try:
+        # Try to save to database first
+        session_id = await get_music_session(user_id)
+        if session_id:
+            # Convert MusicState to dict for database
+            state_dict = {
+                "vibe": {
+                    "name": state.vibe.name,
+                    "energy": state.vibe.energy,
+                    "tempo": state.vibe.tempo,
+                    "explicit": state.vibe.explicit,
+                },
+                "volume": state.volume,
+                "device_id": state.device_id,
+                "last_track_id": state.last_track_id,
+                "last_recommendations": state.last_recommendations,
+                "recs_cached_at": state.recs_cached_at,
+                "duck_from": state.duck_from,
+                "quiet_hours": state.quiet_hours,
+                "explicit_allowed": state.explicit_allowed,
+                "radio_playing": state.radio_playing,
+                "skip_count": state.skip_count,
+            }
+            await save_music_state(user_id, session_id, state_dict)
+            return
+    except Exception:
+        # Fall back to in-memory if database fails
+        pass
+
+    # Fallback to in-memory state
+    save_state_memory(user_id, state)
 
 
 # ---------------------------------------------------------------------------

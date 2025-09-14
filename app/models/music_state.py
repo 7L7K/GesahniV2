@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 from typing import Any
 
-# Lightweight in-memory state for music to avoid SQLite dependency in app/
+# Lightweight in-memory state for music to avoid legacy file-backed store dependency in app/
 _STATE: dict[str, str] = {}
 
 

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 """User model using PostgreSQL through app.db.core (Phase 3 conversion).
 
-Converted from sqlite3 to PostgreSQL for consistency with Phase 3 requirements.
+Converted from file-backed store to PostgreSQL for consistency with Phase 3 requirements.
 All database access now goes through app.db.core.
 """
 
@@ -161,42 +161,42 @@ async def delete_user_async(user: User) -> None:
 def get_session():
     """Deprecated: Use get_async_session() instead."""
     raise RuntimeError(
-        "SQLite synchronous operations are deprecated. Use async PostgreSQL operations."
+        "Legacy datastore path hit — not allowed in Postgres-only mode"
     )
 
 
 def create_user(db, username: str, hashed_password: str) -> User:
     """Deprecated: Use create_user_async() instead."""
     raise RuntimeError(
-        "SQLite operations are deprecated. Use async PostgreSQL operations."
+        "Legacy datastore path hit — not allowed in Postgres-only mode"
     )
 
 
 def get_user(db, username: str) -> User | None:
     """Deprecated: Use get_user_async() instead."""
     raise RuntimeError(
-        "SQLite operations are deprecated. Use async PostgreSQL operations."
+        "Legacy datastore path hit — not allowed in Postgres-only mode"
     )
 
 
 def list_users(db) -> Iterable[User]:
     """Deprecated: Use list_users_async() instead."""
     raise RuntimeError(
-        "SQLite operations are deprecated. Use async PostgreSQL operations."
+        "Legacy datastore path hit — not allowed in Postgres-only mode"
     )
 
 
 def update_login(db, user: User) -> User:
     """Deprecated: Use update_login_async() instead."""
     raise RuntimeError(
-        "SQLite operations are deprecated. Use async PostgreSQL operations."
+        "Legacy datastore path hit — not allowed in Postgres-only mode"
     )
 
 
 def delete_user(db, user: User) -> None:
     """Deprecated: Use delete_user_async() instead."""
     raise RuntimeError(
-        "SQLite operations are deprecated. Use async PostgreSQL operations."
+        "Legacy datastore path hit — not allowed in Postgres-only mode"
     )
 
 

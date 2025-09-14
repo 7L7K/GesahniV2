@@ -19,7 +19,7 @@ __all__ = [
 
 
 async def init_db_once() -> None:
-    """Best-effort initialization of lightweight SQLite-backed stores for tests.
+    """Best-effort initialization of lightweight legacy file-backed stores for tests.
 
     The production application may use Alembic migrations; for tests we
     ensure the minimal tables exist so endpoints don't fail at import-time.

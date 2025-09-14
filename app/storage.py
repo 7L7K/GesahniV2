@@ -15,7 +15,7 @@ STORAGE_DIR.mkdir(parents=True, exist_ok=True)
 
 ALIASES_JSON = STORAGE_DIR / "aliases.json"
 
-# Optional JSONL debug export (kept for debugging; SQLite is authoritative)
+# Optional JSONL debug export (kept for debugging; PostgreSQL is authoritative)
 LEDGER_FILE = Path(
     os.getenv(
         "LEDGER_FILE", Path(__file__).resolve().parents[1] / "data" / "ledger.jsonl"
@@ -124,7 +124,7 @@ def record_ledger(
 def export_ledger_jsonl(target_path: Path) -> None:
     """Export the entire ledger table to a newline-delimited JSON file.
 
-    This is an export-only helper; production writes must go to SQLite only.
+    This is an export-only helper; production writes must go to PostgreSQL only.
     """
     try:
         target_path.parent.mkdir(parents=True, exist_ok=True)

@@ -164,17 +164,17 @@
     },
     "calendar_integration": {
       "value": false,
-      "updated_at": 1757799801.0094788,
+      "updated_at": 1757822502.774936,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1757799801.012574,
+      "updated_at": 1757822502.77703,
       "source": "api"
     },
     "onboarding_completed": {
       "value": true,
-      "updated_at": 1757799801.049621,
+      "updated_at": 1757822502.815053,
       "source": "api"
     },
     "communication_style": {

@@ -12,7 +12,7 @@ async def record_action(
     metadata: dict[str, Any] | None = None,
     reversible: bool = True,
 ) -> bool:
-    """Record an action using the centralized SQLite ledger.
+    """Record an action using the centralized PostgreSQL ledger.
 
     Returns True when a new entry was recorded, False when deduped.
     The storage layer is authoritative; this function adapts the legacy call
@@ -39,7 +39,7 @@ async def record_action(
 
 
 async def get_last_reversible_action(user_id: str | None = None, action_types: list[str] | None = None) -> dict[str, Any] | None:
-    """Query the authoritative SQLite ledger for the latest reversible action.
+    """Query the authoritative PostgreSQL ledger for the latest reversible action.
 
     Returns a dict with keys: id, type, skill, slots, reversible, reverse_id, ts, idempotency_key, user_id
     """

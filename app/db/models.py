@@ -14,6 +14,7 @@ from sqlalchemy import (
     Text,
     Time,
     UniqueConstraint,
+    text as sqltext,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -40,7 +41,11 @@ class Base(DeclarativeBase):
 
 class AuthUser(Base):
     __tablename__ = "users"
-    __table_args__ = {"schema": "auth"}
+    __table_args__ = (
+        sa.Index("idx_auth_users_username", "username"),
+        sa.UniqueConstraint("username", name="users_username_key"),
+        {"schema": "auth"},
+    )
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
@@ -48,7 +53,7 @@ class AuthUser(Base):
         server_default=sa.text("uuid_generate_v4()"),
     )
     email: Mapped[str] = mapped_column(String(320), unique=True, nullable=False)
-    username: Mapped[str | None] = mapped_column(String(100), unique=True)
+    username: Mapped[str | None] = mapped_column(String(100))
     password_hash: Mapped[str | None] = mapped_column(Text)
     name: Mapped[str | None] = mapped_column(String(200))
     avatar_url: Mapped[str | None] = mapped_column(Text)
@@ -69,6 +74,12 @@ class AuthUser(Base):
         back_populates="user", cascade="all, delete-orphan"
     )
     pat_tokens: Mapped[list[PATToken]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    device_sessions: Mapped[list[DeviceSession]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+    ledger_entries: Mapped[list[Ledger]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
@@ -196,6 +207,39 @@ class PATToken(Base):
     user: Mapped[AuthUser] = relationship(back_populates="pat_tokens")
 
 
+class DeviceSession(Base):
+    __tablename__ = "device_sessions"
+    __table_args__ = (
+        sa.Index("idx_auth_device_sessions_user_id", "user_id"),
+        sa.Index("idx_auth_device_sessions_last_seen", sa.desc("last_seen_at"), postgresql_using="btree"),
+        sa.Index("idx_device_sessions_last_seen", "last_seen_at"),
+        sa.Index("idx_device_sessions_user_id", "user_id"),
+        UniqueConstraint(
+            "user_id",
+            "ua_hash",
+            "ip_hash",
+            name="device_sessions_user_id_ua_hash_ip_hash_key",
+        ),
+        {"schema": "auth"},
+    )
+
+    sid: Mapped[str] = mapped_column(Text, primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    device_name: Mapped[str | None] = mapped_column(String(200))
+    ua_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    ip_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    )
+    last_seen_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[AuthUser] = relationship(back_populates="device_sessions")
+
+
 # =====================================================================
 # USERS schema
 # =====================================================================
@@ -203,7 +247,10 @@ class PATToken(Base):
 
 class UserStats(Base):
     __tablename__ = "user_stats"
-    __table_args__ = {"schema": "users"}
+    __table_args__ = (
+        sa.Index("idx_users_user_stats_login", "user_id", sa.desc("last_login")),
+        {"schema": "users"},
+    )
 
     user_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
@@ -216,6 +263,9 @@ class UserStats(Base):
     last_login: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     request_count: Mapped[int] = mapped_column(
         Integer, nullable=False, server_default=sa.text("0")
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
 
 
@@ -427,7 +477,10 @@ class TVConfig(Base):
 
 class ChatMessage(Base):
     __tablename__ = "chat_messages"
-    __table_args__ = {"schema": "chat"}
+    __table_args__ = (
+        sa.Index("ix_chat_chat_messages_rid", "rid"),
+        {"schema": "chat"},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(
@@ -436,7 +489,7 @@ class ChatMessage(Base):
         nullable=False,
     )
     rid: Mapped[str] = mapped_column(
-        String(32), nullable=False, index=True
+        String(32), nullable=False
     )  # Request ID
     role: Mapped[str] = mapped_column(
         String(20), nullable=False
@@ -520,7 +573,11 @@ class MusicPreferences(Base):
 
 class MusicSession(Base):
     __tablename__ = "music_sessions"
-    __table_args__ = {"schema": "music"}
+    __table_args__ = (
+        sa.Index("idx_music_sessions_user_id", "user_id"),
+        sa.Index("idx_music_sessions_started_at", "started_at"),
+        {"schema": "music"},
+    )
 
     session_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
@@ -562,6 +619,8 @@ class MusicFeedback(Base):
         PrimaryKeyConstraint(
             "user_id", "track_id", "provider", "ts", name="pk_music_feedback"
         ),
+        sa.Index("idx_music_feedback_user_track", "user_id", "track_id", "provider"),
+        sa.Index("idx_music_feedback_ts", sa.desc("ts"), postgresql_using="btree"),
         {"schema": "music"},
     )
 
@@ -578,6 +637,33 @@ class MusicFeedback(Base):
     )
 
 
+class MusicState(Base):
+    __tablename__ = "music_states"
+    __table_args__ = (
+        sa.Index("idx_music_states_updated_at", "updated_at", postgresql_using="btree"),
+        {"schema": "music"},
+    )
+
+    session_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("music.music_sessions.session_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    state: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, server_default=sa.text("'{}'::jsonb")
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    )
+
+    # Relationship to session
+    session: Mapped[MusicSession] = relationship(back_populates="state")
+
+
+# Add back-reference to MusicSession
+MusicSession.state = relationship("MusicState", back_populates="session", uselist=False)
+
+
 # =====================================================================
 # TOKENS schema
 # =====================================================================
@@ -589,7 +675,11 @@ class MusicFeedback(Base):
 
 class UserNote(Base):
     __tablename__ = "notes"
-    __table_args__ = {"schema": "user_data"}
+    __table_args__ = (
+        sa.Index("idx_user_notes_created_at", "created_at"),
+        sa.Index("idx_user_notes_user_id", "user_id"),
+        {"schema": "user_data"},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[str] = mapped_column(
@@ -604,6 +694,41 @@ class UserNote(Base):
 
 
 # =====================================================================
+# STORAGE schema
+# =====================================================================
+
+
+class Ledger(Base):
+    __tablename__ = "ledger"
+    __table_args__ = (
+        sa.UniqueConstraint("user_id", "idempotency_key", name="ledger_user_id_idempotency_key_key"),
+        sa.Index("idx_ledger_idempotency", "idempotency_key"),
+        sa.Index("idx_ledger_user_created", "user_id", "created_at"),
+        sa.Index("idx_storage_ledger_user_id", "user_id"),
+        sa.Index("idx_storage_ledger_user_idempotency", "user_id", "idempotency_key"),
+        {"schema": "storage"},
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("auth.users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    idempotency_key: Mapped[str] = mapped_column(Text, nullable=False)
+    operation: Mapped[str] = mapped_column(String(100), nullable=False)
+    amount: Mapped[float | None] = mapped_column(sa.Numeric(10, 2))
+    meta: Mapped[dict | None] = mapped_column(
+        "metadata", JSONB, server_default=sa.text("'{}'::jsonb")
+    )
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    )
+
+    user: Mapped[AuthUser] = relationship(back_populates="ledger_entries")
+
+
+# =====================================================================
 # TOKENS schema
 # =====================================================================
 
@@ -613,6 +738,18 @@ class ThirdPartyToken(Base):
     __table_args__ = (
         PrimaryKeyConstraint(
             "user_id", "provider", "provider_sub", name="pk_third_party_tokens"
+        ),
+        sa.Index("idx_third_party_tokens_provider_sub", "provider_sub"),
+        sa.Index("idx_tokens_third_party_user_provider", "user_id", "provider"),
+        sa.Index(
+            "idx_tokens_third_party_expires",
+            "expires_at",
+            postgresql_where=sqltext("expires_at IS NOT NULL"),
+        ),
+        sa.Index(
+            "idx_tokens_third_party_expires_at",
+            "expires_at",
+            postgresql_where=sqltext("expires_at IS NOT NULL"),
         ),
         {"schema": "tokens"},
     )
@@ -638,7 +775,17 @@ class ThirdPartyToken(Base):
 
 class AuditLog(Base):
     __tablename__ = "audit_log"
-    __table_args__ = {"schema": "audit"}
+    __table_args__ = (
+        sa.Index("idx_audit_log_user_id", "user_id"),
+        sa.Index("idx_audit_log_created_at", sa.desc("created_at"), postgresql_using="btree"),
+        sa.Index("idx_audit_log_created_at_brin", "created_at", postgresql_using="brin"),
+        sa.Index("idx_audit_log_event_type", "event_type", sa.desc("created_at"), postgresql_using="btree"),
+        sa.Index("idx_audit_log_meta_gin", "meta", postgresql_using="gin"),
+        sa.Index("idx_audit_log_recent", sa.desc("created_at"), postgresql_using="btree"),
+        sa.Index("idx_audit_log_session_id", "session_id"),
+        sa.Index("idx_audit_log_user_session", "user_id", "session_id", sa.desc("created_at"), postgresql_using="btree"),
+        {"schema": "audit"},
+    )
 
     id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
@@ -649,7 +796,7 @@ class AuditLog(Base):
         UUID(as_uuid=False), ForeignKey("auth.users.id", ondelete="SET NULL")
     )
     session_id: Mapped[str | None] = mapped_column(
-        UUID(as_uuid=False), ForeignKey("auth.sessions.id", ondelete="SET NULL")
+        Text, ForeignKey("auth.device_sessions.sid", ondelete="SET NULL")
     )
     event_type: Mapped[str] = mapped_column(String(80), nullable=False)
     meta: Mapped[dict | None] = mapped_column(JSONB)

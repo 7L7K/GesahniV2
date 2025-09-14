@@ -1,7 +1,7 @@
 """
 PostgreSQL-only DB configuration for GesahniV2.
 
-This module intentionally enforces PostgreSQL and removes any SQLite fallbacks.
+This module intentionally enforces PostgreSQL and removes any legacy file-backed store fallbacks.
 Use app.db.core for engines and dependencies in application code.
 """
 

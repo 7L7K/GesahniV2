@@ -14,13 +14,13 @@ from app.db.core import sync_engine
 
 def _compute_db_path() -> Path:
     """Deprecated: Care data now stored in PostgreSQL via app.db.core."""
-    # Return a dummy path since we no longer use SQLite files
+    # Return a dummy path since we no longer use legacy file-backed store files
     return Path("/dev/null")
 
 
 def _db_path() -> Path:
     """Deprecated: Care data now stored in PostgreSQL via app.db.core."""
-    # Return a dummy path since we no longer use SQLite files
+    # Return a dummy path since we no longer use legacy file-backed store files
     return Path("/dev/null")
 
 

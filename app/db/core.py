@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 logger = logging.getLogger(__name__)
 
-# Enforce PostgreSQL-only - no SQLite fallbacks
+# Enforce PostgreSQL-only - no legacy file-backed store fallbacks
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise RuntimeError(
@@ -31,7 +31,7 @@ if not DATABASE_URL:
     )
 if DATABASE_URL.split(":", 1)[0].lower() == "sqlite":
     raise RuntimeError(
-        "SQLite URLs are not supported. Use PostgreSQL with DATABASE_URL."
+        "Legacy datastore path hit — not allowed in Postgres-only mode"
     )
 
 # Validate PostgreSQL URL format

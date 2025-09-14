@@ -7,7 +7,7 @@ from sqlalchemy.orm import declarative_base
 
 from app.db.core import sync_engine
 
-# Use PostgreSQL through app.db.core instead of direct SQLite engine
+# Use PostgreSQL through app.db.core instead of direct legacy file-backed store engine
 Base = declarative_base()
 
 

@@ -140,5 +140,5 @@ class TimerSkill(Skill):
         # store reverse_id when available in ledger (best-effort)
         # storage.record_ledger returns (inserted, rowid) at lower layer; ledger.record_action
         # kept boolean compatibility, so we need to query last reversible action if necessary.
-        # For now we rely on SQLite forward entry being present; undo will query ledger for latest reversible.
+        # For now we rely on PostgreSQL forward entry being present; undo will query ledger for latest reversible.
         return f"Timer '{name}' started for {amount} {unit}."
