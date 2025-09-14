@@ -42,7 +42,7 @@ async def openai_router(payload: dict[str, Any]) -> dict[str, Any]:
     try:
         _init_client()
     except Exception as e:
-        raise RuntimeError("OpenAI backend unavailable: %s" % e)
+        raise RuntimeError(f"OpenAI backend unavailable: {e}")
 
     # TODO: perform real async call using the cached client
     # For now, return standardized dry-run response

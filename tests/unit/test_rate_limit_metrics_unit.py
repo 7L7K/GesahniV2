@@ -25,7 +25,6 @@ def _h(uid: str = "u"):
 def test_metrics_allow_and_block_counters(monkeypatch):
     app = _app()
     client = TestClient(app)
-    m = app.__metrics__
     # Tighten limits
     monkeypatch.setenv("RATE_LIMIT_PER_MIN", "1")
     monkeypatch.setenv("RATE_LIMIT_BURST", "1")

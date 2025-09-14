@@ -63,7 +63,7 @@ class TestAuthRateLimiting:
         _test_set_config(max_req=3, window_s=60)
 
         # Make requests up to the limit
-        for i in range(3):
+        for _i in range(3):
             response = client.get("/health")
             assert response.status_code == 200
 
@@ -80,7 +80,7 @@ class TestAuthRateLimiting:
         _test_set_config(max_req=2, window_s=60)
 
         # Make requests up to the limit
-        for i in range(2):
+        for _i in range(2):
             response = client.get("/health")
             assert response.status_code == 200
 
@@ -95,7 +95,7 @@ class TestAuthRateLimiting:
         _test_set_config(max_req=2, window_s=1)
 
         # Make requests up to the limit
-        for i in range(2):
+        for _i in range(2):
             response = client.get("/health")
             assert response.status_code == 200
 
@@ -125,7 +125,7 @@ class TestAuthRateLimiting:
 
         # Make requests from different IPs - should not interfere
         for ip in ["192.168.1.1", "192.168.1.2"]:
-            for i in range(2):
+            for _i in range(2):
                 make_request_with_ip(ip)
                 # In real scenario, each IP would be tracked separately
 
@@ -137,7 +137,7 @@ class TestAuthRateLimiting:
         endpoints = ["/v1/whoami", "/v1/auth/refresh", "/health"]
 
         for endpoint in endpoints:
-            for i in range(2):
+            for _i in range(2):
                 if endpoint == "/health":
                     # Health endpoint should not be rate limited
                     response = client.get(endpoint)
@@ -180,8 +180,8 @@ class TestAuthRateLimiting:
             mock_middleware.return_value.dispatch = mock_dispatch
 
             # Make multiple requests - should not be rate limited due to admin scope
-            for i in range(5):
-                response = client.get("/v1/whoami")
+            for _i in range(5):
+                client.get("/v1/whoami")
                 # Note: In real scenario, scope would be set by authentication middleware
 
     def test_rate_limit_options_preflight(self, client):
@@ -246,7 +246,7 @@ class TestAuthRateLimiting:
 
         # Both should be able to make 2 requests each before being limited
         # (though in this test setup, they're both anonymous)
-        for i in range(2):
+        for _i in range(2):
             response = make_anonymous_request()
             assert response.status_code == 200
 
@@ -339,7 +339,7 @@ class TestAuthEndpointRateLimitingIntegration:
 
         # Make requests across different endpoints
         for endpoint in endpoints:
-            for i in range(3):
+            for _i in range(3):
                 if endpoint == "/v1/whoami":
                     response = client.get(endpoint)
                     assert response.status_code == 200

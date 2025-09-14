@@ -19,7 +19,7 @@ def test_jwt_rotation_backward_compat():
     try:
         # Test 1: Issue token with old key, rotate, ensure decode still works
         os.environ["JWT_SECRET"] = "old_secret_for_rotation_test_12345678901234567890"
-        old_cfg = get_jwt_config()
+        get_jwt_config()
 
         # Create token with old key
         old_token = sign_access_token("test_user", extra={"test": "rotation"})

@@ -526,7 +526,7 @@ def require_scope(required: str) -> Callable[[Request], None]:
                 pass
 
         # Use session middleware's 3-state logic instead of direct payload extraction
-        user_id = _get_user_id_from_request(request)
+        _get_user_id_from_request(request)
         scopes = _get_scopes_from_request(request)
 
         if scopes is None:

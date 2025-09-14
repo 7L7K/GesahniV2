@@ -189,7 +189,7 @@ class TestAuthMonitoringIntegration:
     async def test_whoami_endpoint_monitoring(self, client):
         """Test that whoami endpoint includes monitoring."""
         with patch("app.auth_monitoring.record_whoami_call") as mock_record:
-            response = await client.get("/v1/whoami")
+            await client.get("/v1/whoami")
 
             # Should record the call
             mock_record.assert_called_once()
@@ -204,7 +204,7 @@ class TestAuthMonitoringIntegration:
             with patch("app.api.auth._require_user_or_dev") as mock_auth:
                 mock_auth.return_value = "test_user"
 
-                response = await client.post("/v1/auth/finish")
+                await client.post("/v1/auth/finish")
 
                 # Should record the call
                 mock_record.assert_called()
@@ -214,7 +214,7 @@ class TestAuthMonitoringIntegration:
         """Test that blocked privileged calls are monitored."""
         with patch("app.auth_monitoring.record_privileged_call_blocked") as mock_record:
             # Try to access protected endpoint without auth
-            response = await client.get("/v1/me")
+            await client.get("/v1/me")
 
             # Should record the blocked call
             mock_record.assert_called()

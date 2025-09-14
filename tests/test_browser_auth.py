@@ -43,7 +43,7 @@ def test_boot_sequence():
 
         # Check if whoami shows unauthenticated
         is_authenticated = whoami_data.get("is_authenticated", False)
-        session_ready = whoami_data.get("session_ready", False)
+        whoami_data.get("session_ready", False)
         source = whoami_data.get("source", "missing")
 
         print_result(

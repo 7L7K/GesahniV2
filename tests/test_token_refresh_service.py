@@ -198,7 +198,7 @@ class TestTokenRefreshService:
         ):
             # Start multiple concurrent refresh attempts
             tasks = []
-            for i in range(5):
+            for _i in range(5):
                 task = refresh_service.get_valid_token_with_refresh(
                     user_id="test_user", provider="spotify", force_refresh=False
                 )

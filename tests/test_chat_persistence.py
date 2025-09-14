@@ -421,7 +421,7 @@ class TestChatPersistence:
             await save_messages(session, user_id, rid, messages)
 
         # Each user should only see their own messages
-        for user_id, expected_messages in users_and_messages.items():
+        for user_id, _expected_messages in users_and_messages.items():
             user_messages = await get_messages_by_rid(session, user_id, rid)
             assert len(user_messages) == 2
             assert user_messages[0].user_id == user_id

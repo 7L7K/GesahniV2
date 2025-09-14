@@ -79,7 +79,7 @@ def test_backoff_sleep_in_login(monkeypatch):
     monkeypatch.setattr(asyncio, "sleep", fake_sleep)
 
     # Call login; it will trigger backoff path which calls asyncio.sleep
-    r = client.post(
+    client.post(
         "/v1/login",
         json={"username": username, "password": "test_wrong_password"},
         headers={"X-CSRF-Token": "t"},

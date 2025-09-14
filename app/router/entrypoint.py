@@ -45,10 +45,10 @@ async def route_prompt(*args, **kwargs) -> dict[str, Any]:
             "intent_hint": req.intent_hint,
             "metadata": req.metadata or {},
         }
-        user_id: str | None = kwargs.get("user_id")
+        kwargs.get("user_id")
     elif isinstance(payload_or_request, dict):
         payload = payload_or_request
-        user_id = payload.get("user_id") or kwargs.get("user_id")
+        payload.get("user_id") or kwargs.get("user_id")
     elif len(args) >= 2 and isinstance(args[0], str):
         # Legacy: route_prompt(prompt_text, user_id, **kwargs)
         payload = {
@@ -56,10 +56,10 @@ async def route_prompt(*args, **kwargs) -> dict[str, Any]:
             "model_override": kwargs.get("model_override"),
             "metadata": kwargs.get("metadata") or {},
         }
-        user_id = args[1]
+        args[1]
     else:
         payload = {"prompt": str(payload_or_request)}
-        user_id = kwargs.get("user_id")
+        kwargs.get("user_id")
 
     # Non-blocking health snapshot: never await in request path
     payload.setdefault("health_snapshot", HEALTH.get_snapshot())

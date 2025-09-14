@@ -62,7 +62,7 @@ class TestAPIEndpointsComprehensive:
             assert isinstance(components, dict)
 
             # If components exist, they should have proper structure
-            for component, info in components.items():
+            for _component, info in components.items():
                 assert "status" in info
                 assert info["status"] in ["healthy", "unhealthy"]
 

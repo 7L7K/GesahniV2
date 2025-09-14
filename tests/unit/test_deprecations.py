@@ -74,8 +74,8 @@ class TestDeprecations:
 
         # At minimum, we should have some deprecated routes documented
         deprecated_count = 0
-        for path, path_spec in paths.items():
-            for method, method_spec in path_spec.items():
+        for _path, path_spec in paths.items():
+            for _method, method_spec in path_spec.items():
                 if isinstance(method_spec, dict) and method_spec.get("deprecated"):
                     deprecated_count += 1
 

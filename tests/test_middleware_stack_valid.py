@@ -83,20 +83,6 @@ def test_middleware_stack_integrity():
     )
 
     # Verify expected middleware are present (this will need updating if middleware changes)
-    expected_middleware = [
-        "CORSMiddleware",
-        "EnhancedErrorHandlingMiddleware",
-        "SilentRefreshMiddleware",
-        "ReloadEnvMiddleware",
-        "CSRFMiddleware",
-        "RateLimitMiddleware",
-        "SessionAttachMiddleware",
-        "RedactHashMiddleware",
-        "TraceRequestMiddleware",
-        "HealthCheckFilterMiddleware",
-        "DedupMiddleware",
-        "RequestIDMiddleware",
-    ]
 
     actual_names = [m.cls.__name__ for m in middleware_list]
 

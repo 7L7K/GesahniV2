@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import ValidationError as PydanticValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from app.error_envelope import build_error, shape_from_status
+from app.error_envelope import build_error, shape_from_status, validate_error_envelope
 from app.otel_utils import get_trace_id_hex
 
 log = logging.getLogger(__name__)
@@ -59,6 +59,18 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
         except Exception:
             pass
 
+        # Validate error envelope format before returning
+        try:
+            validate_error_envelope(shaped)
+        except ValueError as e:
+            log.error("Invalid error envelope format: %s", e)
+            # Fallback to a safe envelope
+            shaped = build_error(
+                code="internal",
+                message="Internal error",
+                hint="try again shortly",
+                meta={"original_error": str(e)},
+            )
         _emit_auth_metrics(request, status, shaped)
         return JSONResponse(shaped, status_code=status, headers=headers)
 
@@ -85,8 +97,10 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
     except Exception:
         pass
     headers["X-Error-Code"] = code
+    error_envelope = build_error(code=code, message=msg, hint=hint, meta=details)
+    # Validation is redundant here since build_error always creates valid envelopes
     return JSONResponse(
-        build_error(code=code, message=msg, hint=hint, meta=details),
+        error_envelope,
         status_code=status,
         headers=headers,
     )
@@ -150,6 +164,17 @@ async def handle_validation_error(request: Request, exc: RequestValidationError)
     except Exception:
         pass
 
+    # Validate the envelope before returning
+    try:
+        validate_error_envelope(envelope)
+    except ValueError as e:
+        log.error("Invalid validation error envelope: %s", e)
+        envelope = build_error(
+            code="validation_error",
+            message="Validation Error",
+            meta={"original_error": str(e)},
+        )
+
     # Include traditional FastAPI 'detail' for legacy clients/tests
     combined = {
         **envelope,
@@ -174,9 +199,10 @@ async def handle_unexpected_error(request: Request, exc: Exception):
         hint="try again shortly",
         meta=details,
     )
+    # Validation is redundant here since build_error always creates valid envelopes
     headers = {"X-Error-Code": "internal"}
     try:
-        det = env.get("details") or {}
+        det = env.get("meta") or {}  # Changed from details to meta
         if isinstance(det, dict):
             if det.get("error_id"):
                 headers["X-Error-ID"] = str(det["error_id"])

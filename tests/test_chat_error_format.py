@@ -164,7 +164,7 @@ class TestChatRouteErrorResponses:
             ("/health", {}, 200),  # Success case for comparison
         ]
 
-        for endpoint, payload, expected_status in test_cases:
+        for endpoint, payload, _expected_status in test_cases:
             if endpoint == "/health":
                 response = client.get(endpoint)
             else:

@@ -14,7 +14,7 @@ COOKIE_RE = re.compile(
 def _assert_auth_cookies(
     set_cookie_headers, *, expect_samesite=None, expect_secure=None
 ):
-    names = [h.split("=", 1)[0] for h in set_cookie_headers]
+    [h.split("=", 1)[0] for h in set_cookie_headers]
     assert any(h.startswith("GSNH_AT=") for h in set_cookie_headers), "GSNH_AT not set"
     assert any(h.startswith("GSNH_RT=") for h in set_cookie_headers), "GSNH_RT not set"
     for h in set_cookie_headers:

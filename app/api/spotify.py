@@ -579,7 +579,6 @@ async def spotify_connect(request: Request) -> Response:
     # If in test mode, short-circuit to backend callback for deterministic e2e tests
     if os.getenv("SPOTIFY_TEST_MODE", "0") == "1":
         backend = os.getenv("BACKEND_URL", "http://127.0.0.1:8000")
-        original_url = auth_url
         auth_url = f"{backend}/v1/spotify/callback?code=fake&state={state}"
 
         logger.info(
@@ -1524,7 +1523,7 @@ async def spotify_status(request: Request) -> dict:
     # If token looks connected, optionally verify device/state probes and scopes
     if connected:
         try:
-            devices = await client.get_devices()
+            await client.get_devices()
             devices_ok = True
         except Exception:
             devices_ok = False

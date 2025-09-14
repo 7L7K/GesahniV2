@@ -42,7 +42,7 @@ class QuoteClient:
 
             return R()
         else:
-            assert False, "unexpected URL"
+            raise AssertionError("unexpected URL")
 
 
 class CryptoClient:

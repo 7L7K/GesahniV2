@@ -153,7 +153,7 @@ def test_rate_limiting_disabled_in_ci():
     with running_server() as base_url:
         # Make multiple requests quickly
         responses = []
-        for i in range(10):
+        for _i in range(10):
             response = requests.get(f"{base_url}/health", timeout=5)
             responses.append(response)
 

@@ -76,8 +76,8 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
         try:
             # Fetch latest token row by user_id
             session_gen = get_async_db()
-    session = await anext(session_gen)
-    try:
+            session = await anext(session_gen)
+            try:
                 stmt = (
                     select(ThirdPartyToken)
                     .where(
@@ -104,40 +104,40 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
                     else token.refresh_token
                 )
 
-            td = await refresh_token(refresh_tok)
+                td = await refresh_token(refresh_tok)
 
-            # Persist new token row using the centralized upsert service
-            from ..auth_store_tokens import upsert_token
+                # Persist new token row using the centralized upsert service
+                from ..auth_store_tokens import upsert_token
 
-            now = int(time.time())
-            expires_at = int(
-                td.get("expires_at", now + int(td.get("expires_in", 3600)))
-            )
+                now = int(time.time())
+                expires_at = int(
+                    td.get("expires_at", now + int(td.get("expires_in", 3600)))
+                )
 
-            # Create new token object for upsert
-            from ..models.third_party_tokens import ThirdPartyToken
+                # Create new token object for upsert
+                from ..models.third_party_tokens import ThirdPartyToken
 
-            new_token = ThirdPartyToken(
-                id=f"google:{secrets.token_hex(8)}",
-                user_id=user_id,
-                identity_id="",  # Not used for Google tokens
-                provider="google",
-                access_token=td.get("access_token", "").encode(),
-                refresh_token=(
-                    td.get("refresh_token", "").encode()
-                    if td.get("refresh_token")
-                    else None
-                ),
-                scopes=td.get("scope"),
-                expires_at=expires_at,
-                created_at=now,
-                updated_at=now,
-            )
-            await upsert_token(new_token)
-        finally:
-            await session.close()
+                new_token = ThirdPartyToken(
+                    id=f"google:{secrets.token_hex(8)}",
+                    user_id=user_id,
+                    identity_id="",  # Not used for Google tokens
+                    provider="google",
+                    access_token=td.get("access_token", "").encode(),
+                    refresh_token=(
+                        td.get("refresh_token", "").encode()
+                        if td.get("refresh_token")
+                        else None
+                    ),
+                    scopes=td.get("scope"),
+                    expires_at=expires_at,
+                    created_at=now,
+                    updated_at=now,
+                )
+                await upsert_token(new_token)
+            finally:
+                await session.close()
 
-        try:
+            try:
                 SPOTIFY_REFRESH.inc()
                 GOOGLE_REFRESH_SUCCESS.labels(user_id).inc()
             except Exception:
@@ -178,7 +178,7 @@ async def run_once() -> None:
         return
 
     tasks = []
-    for user_id, provider, expires_at in candidates:
+    for user_id, provider, _expires_at in candidates:
         tasks.append(_refresh_for_user(user_id, provider))
 
     await asyncio.gather(*tasks)

@@ -132,7 +132,6 @@ class TestPATComplete:
 
     async def test_revoke_pat(self, setup_user):
         """Test PAT revocation."""
-        user_id = setup_user
         token, pat_id = await self.test_pat_creation_and_hashing(setup_user)
 
         # Verify token works before revocation

@@ -40,7 +40,7 @@ def test_rate_limit_basic(monkeypatch):
     # Make exactly 3 requests to trigger rate limiting
     # The rate limit is 2 requests per 1-second window
     responses = []
-    for i in range(3):
+    for _i in range(3):
         r = c.get("/v1/csrf")
         responses.append(r.status_code)
 

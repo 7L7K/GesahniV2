@@ -18,7 +18,7 @@ def test_sessions_paginated(monkeypatch):
 
     # Create many sessions for the tester
     async def _seed():
-        for i in range(55):
+        for _i in range(55):
             await sessions_store.create_session("tester")
 
     import asyncio

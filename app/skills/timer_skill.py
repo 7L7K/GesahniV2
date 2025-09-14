@@ -150,7 +150,7 @@ class TimerSkill(Skill):
         idemp = f"timer:{name}:start:{bucket}"
         # Set skill_why for observability
         self.skill_why = f"timer.start: duration_s={total_seconds}"
-        inserted = await record_action(
+        await record_action(
             "timer.start",
             idempotency_key=idemp,
             metadata={"duration_s": total_seconds, "label": name},

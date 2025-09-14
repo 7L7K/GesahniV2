@@ -468,7 +468,7 @@ class TestTokenErrorHandling:
             mock_refresh.side_effect = Exception("Persistent failure")
 
             # First few attempts should retry
-            for attempt in range(3):
+            for _attempt in range(3):
                 result = await refresh_service.get_valid_token_with_refresh(
                     user_id="test_user", provider="spotify", force_refresh=True
                 )

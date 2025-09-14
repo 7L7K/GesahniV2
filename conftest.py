@@ -46,7 +46,7 @@ def live_server(_bootstrap_db_and_env):
     last_err = None
     while time.time() < deadline:
         try:
-            with socket.create_connection(("127.0.0.1", 8000), timeout=0.5) as s:
+            with socket.create_connection(("127.0.0.1", 8000), timeout=0.5):
                 break
         except Exception as e:
             last_err = e

@@ -146,8 +146,8 @@ class TestBearerAuthEndToEnd:
         monkeypatch.setenv("JWT_SECRET", "test_secret")
         monkeypatch.setenv("CSRF_ENABLED", "1")
 
-        client = TestClient(app)
-        token = create_test_token("alice", "test_secret")
+        TestClient(app)
+        create_test_token("alice", "test_secret")
 
         # Test WebSocket connection with bearer token
         # Note: This test is skipped due to dependency issues in the test environment

@@ -35,7 +35,7 @@ def test_no_duplicate_routes():
 
     def get_endpoint_info(route):
         """Get endpoint information for route"""
-        if isinstance(route, (APIRoute, APIWebSocketRoute)):
+        if isinstance(route, APIRoute | APIWebSocketRoute):
             if hasattr(route.endpoint, "__module__") and hasattr(
                 route.endpoint, "__name__"
             ):
@@ -63,7 +63,7 @@ def test_no_duplicate_routes():
             error_msg += f"  Route: {key}\n"
             error_msg += f"    Existing: {existing_endpoint}\n"
             error_msg += f"    Duplicate: {new_endpoint}\n"
-        assert False, error_msg
+        raise AssertionError(error_msg)
 
     # Ensure we have a reasonable number of routes (sanity check)
     assert len(seen_routes) > 10, f"Expected > 10 routes, got {len(seen_routes)}"

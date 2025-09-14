@@ -66,7 +66,7 @@ class TestAuthErrorContracts:
 
         # Optional hint field
         if "hint" in error_data:
-            assert isinstance(error_data["hint"], (str, type(None)))
+            assert isinstance(error_data["hint"], str | type(None))
 
         # Check expected code if provided
         if expected_code:

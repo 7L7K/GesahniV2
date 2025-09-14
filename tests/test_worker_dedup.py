@@ -20,9 +20,6 @@ def test_worker_dedup():
         del importlib.sys.modules["app.main"]
 
     # Force a fresh import
-    import app.main
-
-    app_instance = app.main.app
 
     # Give some time for any background tasks to start
     # (In practice, lifespan events run during app startup)

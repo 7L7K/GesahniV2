@@ -29,8 +29,8 @@ async def temp_dbs(tmp_path):
     auth_db = tmp_path / "test_auth.db"
 
     # Override the DB paths for testing
-    original_token_path = _default_db_path()
-    original_auth_path = AUTH_DB_PATH()
+    _default_db_path()
+    AUTH_DB_PATH()
 
     # Set up auth database using environment variable override
     import os

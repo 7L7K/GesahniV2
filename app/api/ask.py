@@ -1254,8 +1254,6 @@ async def ask_stream(
         )
 
     model_override = body.model
-    stream_flag = body.stream or False
-    stream_explicit = body.stream is not None
     gen_opts = {}  # Additional options could be added to schema later
     shape = "chat" if isinstance(body.prompt, list) else "text"
     normalized_from = "schema_validation"  # All validation now handled by schema
@@ -1305,7 +1303,7 @@ async def ask_stream(
                 ".",
             ]
 
-            for i, token in enumerate(fake_tokens):
+            for _i, token in enumerate(fake_tokens):
                 yield sse("delta", {"content": token})
                 await asyncio.sleep(0.1)  # Small delay to simulate streaming
 

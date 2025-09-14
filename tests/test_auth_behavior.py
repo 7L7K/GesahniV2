@@ -311,7 +311,7 @@ class TestAuthenticationBehavior:
         auth_changes = mock_auth_orchestrator.auth_state_changes
         assert len(auth_changes) == 1, "Should have exactly one auth state change"
         assert (
-            auth_changes[0]["to"]["isAuthenticated"] == True
+            auth_changes[0]["to"]["isAuthenticated"] is True
         ), "Should flip to authenticated"
 
         # 5. Verify getMusicState runs once and succeeds after auth
@@ -369,7 +369,7 @@ class TestAuthenticationBehavior:
         auth_changes = mock_auth_orchestrator.auth_state_changes
         assert len(auth_changes) == 1, "Should have exactly one auth state change"
         assert (
-            auth_changes[0]["to"]["isAuthenticated"] == False
+            auth_changes[0]["to"]["isAuthenticated"] is False
         ), "Should flip to unauthenticated"
 
         # Verify no privileged calls fire afterward
@@ -502,14 +502,14 @@ class TestAuthenticationBehavior:
 
         # Test auth state change triggers WS behavior
         mock_auth_orchestrator.setAuthenticated(True)
-        assert mock_ws_hub.auth_state == True, "WS should reflect auth state"
+        assert mock_ws_hub.auth_state is True, "WS should reflect auth state"
 
         mock_auth_orchestrator.setAuthenticated(False)
-        assert mock_ws_hub.auth_state == False, "WS should reflect auth state"
+        assert mock_ws_hub.auth_state is False, "WS should reflect auth state"
 
         # Verify WS connections are closed when auth is lost
         music_status = mock_ws_hub.getConnectionStatus("music")
-        assert music_status["isOpen"] == False, "WS should be closed when auth is lost"
+        assert music_status["isOpen"] is False, "WS should be closed when auth is lost"
 
     def test_network_panel_401_tracking(self, mock_network_panel):
         """Test network panel 401 tracking"""
@@ -534,23 +534,23 @@ class TestAuthenticationBehavior:
         """Test auth state transition tracking"""
 
         # Initial state
-        assert mock_auth_orchestrator.getState()["isAuthenticated"] == False
+        assert mock_auth_orchestrator.getState()["isAuthenticated"] is False
 
         # Transition to authenticated
         mock_auth_orchestrator.setAuthenticated(True)
-        assert mock_auth_orchestrator.getState()["isAuthenticated"] == True
+        assert mock_auth_orchestrator.getState()["isAuthenticated"] is True
 
         # Transition back to unauthenticated
         mock_auth_orchestrator.setAuthenticated(False)
-        assert mock_auth_orchestrator.getState()["isAuthenticated"] == False
+        assert mock_auth_orchestrator.getState()["isAuthenticated"] is False
 
         # Verify all transitions are tracked
         auth_changes = mock_auth_orchestrator.auth_state_changes
         assert len(auth_changes) == 2, "Should track both auth state transitions"
-        assert auth_changes[0]["from"]["isAuthenticated"] == False
-        assert auth_changes[0]["to"]["isAuthenticated"] == True
-        assert auth_changes[1]["from"]["isAuthenticated"] == True
-        assert auth_changes[1]["to"]["isAuthenticated"] == False
+        assert auth_changes[0]["from"]["isAuthenticated"] is False
+        assert auth_changes[0]["to"]["isAuthenticated"] is True
+        assert auth_changes[1]["from"]["isAuthenticated"] is True
+        assert auth_changes[1]["to"]["isAuthenticated"] is False
 
 
 class TestAuthenticationIntegration:
@@ -591,7 +591,7 @@ class TestAuthenticationIntegration:
 
         # 6. Verify WebSocket disconnects
         music_status = mock_ws_hub.getConnectionStatus("music")
-        assert music_status["isOpen"] == False
+        assert music_status["isOpen"] is False
 
         # 7. Verify no privileged calls work
         with patch("app.deps.user.get_current_user_id", return_value="anon"):
@@ -601,8 +601,8 @@ class TestAuthenticationIntegration:
         # 8. Verify auth state changes are tracked
         auth_changes = mock_auth_orchestrator.auth_state_changes
         assert len(auth_changes) == 2  # login + logout
-        assert auth_changes[0]["to"]["isAuthenticated"] == True
-        assert auth_changes[1]["to"]["isAuthenticated"] == False
+        assert auth_changes[0]["to"]["isAuthenticated"] is True
+        assert auth_changes[1]["to"]["isAuthenticated"] is False
 
 
 if __name__ == "__main__":

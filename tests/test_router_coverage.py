@@ -15,11 +15,15 @@ def test_no_direct_endpoints_in_main():
         # Check if object has route handler attributes
         if hasattr(obj, "methods"):
             # This indicates a route handler function
-            assert False, f"Direct route handler found in main.py: {name} = {obj}"
+            raise AssertionError(
+                f"Direct route handler found in main.py: {name} = {obj}"
+            )
 
         # Also check for FastAPI route objects
         if hasattr(obj, "endpoint") and hasattr(obj, "methods"):
-            assert False, f"FastAPI route object found in main.py: {name} = {obj}"
+            raise AssertionError(
+                f"FastAPI route object found in main.py: {name} = {obj}"
+            )
 
 
 def test_no_app_decorators_in_main():
@@ -43,7 +47,7 @@ def test_no_app_decorators_in_main():
 
     for pattern in decorator_patterns:
         if pattern in content:
-            assert False, f"Direct route decorator found in main.py: {pattern}"
+            raise AssertionError(f"Direct route decorator found in main.py: {pattern}")
 
     # Also check for APIRouter decorators (though these should be in separate files)
     router_patterns = [
@@ -56,6 +60,6 @@ def test_no_app_decorators_in_main():
 
     for pattern in router_patterns:
         if pattern in content:
-            assert (
-                False
-            ), f"Router decorator found in main.py (should be in separate files): {pattern}"
+            raise AssertionError(
+                f"Router decorator found in main.py (should be in separate files): {pattern}"
+            )

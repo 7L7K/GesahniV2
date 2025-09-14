@@ -46,11 +46,11 @@ def protocol_relative():
 @app.route("/multiple_params")
 def multiple_params():
     redirect_url = request.args.get("redirect")  # Should trigger warning
-    next_url = request.args.get("next")  # Should trigger warning
-    url_param = request.args.get("url")  # Should trigger warning
-    return_url = request.args.get("return_url")  # Should trigger warning
-    return_to = request.args.get("returnTo")  # Should trigger warning
-    continue_url = request.args.get("continue")  # Should trigger warning
+    request.args.get("next")  # Should trigger warning
+    request.args.get("url")  # Should trigger warning
+    request.args.get("return_url")  # Should trigger warning
+    request.args.get("returnTo")  # Should trigger warning
+    request.args.get("continue")  # Should trigger warning
 
     # Using one of them unsafely
     return redirect(redirect_url)

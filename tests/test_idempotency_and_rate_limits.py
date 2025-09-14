@@ -259,7 +259,7 @@ class TestPerRouteRateLimiting:
     def test_admin_endpoints_tight_rate_limit(self):
         """Test that admin endpoints have tight rate limiting."""
         # Should allow first 3 requests to admin status
-        for i in range(3):
+        for _i in range(3):
             response = self.client.get("/v1/admin/status")
             assert response.status_code == 200
 
@@ -270,7 +270,7 @@ class TestPerRouteRateLimiting:
     def test_read_endpoints_loose_rate_limit(self):
         """Test that read endpoints have looser rate limiting (10 requests)."""
         # Should allow first 10 requests
-        for i in range(10):
+        for _i in range(10):
             response = self.client.get("/v1/data")
             assert response.status_code == 200
 

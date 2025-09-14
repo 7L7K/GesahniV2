@@ -289,7 +289,7 @@ class TokenDAO:
                             expires_at=token.expires_at,
                             created_at=(
                                 datetime.fromtimestamp(token.created_at, UTC)
-                                if isinstance(token.created_at, (int, float))
+                                if isinstance(token.created_at, int | float)
                                 else token.created_at
                             ),
                             updated_at=now,
@@ -375,7 +375,7 @@ class TokenDAO:
                             and_(
                                 ThirdPartyTokenModel.user_id == user_id,
                                 ThirdPartyTokenModel.provider == provider,
-                                ThirdPartyTokenModel.is_valid == True,
+                                ThirdPartyTokenModel.is_valid is True,
                             )
                         )
                         .order_by(desc(ThirdPartyTokenModel.created_at))
@@ -389,7 +389,7 @@ class TokenDAO:
                                 ThirdPartyTokenModel.user_id == user_id,
                                 ThirdPartyTokenModel.provider == provider,
                                 ThirdPartyTokenModel.provider_sub == provider_sub,
-                                ThirdPartyTokenModel.is_valid == True,
+                                ThirdPartyTokenModel.is_valid is True,
                             )
                         )
                         .order_by(desc(ThirdPartyTokenModel.created_at))
@@ -508,7 +508,7 @@ class TokenDAO:
                     .where(
                         and_(
                             ThirdPartyTokenModel.user_id == user_id,
-                            ThirdPartyTokenModel.is_valid == True,
+                            ThirdPartyTokenModel.is_valid is True,
                         )
                     )
                     .order_by(
@@ -608,7 +608,7 @@ class TokenDAO:
                             and_(
                                 ThirdPartyTokenModel.user_id == user_id,
                                 ThirdPartyTokenModel.provider == provider,
-                                ThirdPartyTokenModel.is_valid == True,
+                                ThirdPartyTokenModel.is_valid is True,
                             )
                         )
                         .values(is_valid=False, updated_at=datetime.now(UTC))
@@ -647,7 +647,7 @@ class TokenDAO:
                     base_conditions = [
                         ThirdPartyTokenModel.user_id == user_id,
                         ThirdPartyTokenModel.provider == provider,
-                        ThirdPartyTokenModel.is_valid == True,
+                        ThirdPartyTokenModel.is_valid is True,
                     ]
 
                     # Add provider-specific constraints
@@ -718,7 +718,7 @@ class TokenDAO:
 
                     stmt = delete(ThirdPartyTokenModel).where(
                         and_(
-                            ThirdPartyTokenModel.is_valid == False,
+                            ThirdPartyTokenModel.is_valid is False,
                             ThirdPartyTokenModel.updated_at < cutoff_time,
                         )
                     )
@@ -1569,7 +1569,7 @@ async def get_token_system_health() -> dict:
             stmt = (
                 select(func.count())
                 .select_from(ThirdPartyTokenModel)
-                .where(ThirdPartyTokenModel.is_valid == True)
+                .where(ThirdPartyTokenModel.is_valid is True)
             )
             result = await session.execute(stmt)
             valid_tokens = result.scalar() or 0
@@ -1579,7 +1579,7 @@ async def get_token_system_health() -> dict:
                 select(
                     ThirdPartyTokenModel.provider, func.count(ThirdPartyTokenModel.id)
                 )
-                .where(ThirdPartyTokenModel.is_valid == True)
+                .where(ThirdPartyTokenModel.is_valid is True)
                 .group_by(ThirdPartyTokenModel.provider)
             )
 
@@ -1594,7 +1594,7 @@ async def get_token_system_health() -> dict:
                 .where(
                     and_(
                         ThirdPartyTokenModel.expires_at < now,
-                        ThirdPartyTokenModel.is_valid == True,
+                        ThirdPartyTokenModel.is_valid is True,
                     )
                 )
             )

@@ -73,7 +73,7 @@ class LightsSkill(Skill):
     async def run(self, prompt: str, match: re.Match | None) -> str:
         if match is None:
             return "Sorry, I couldn't match a light command."
-        light_map = await _build_light_map()
+        await _build_light_map()
 
         if match and "bright" in match.groupdict():  # brightness intent
             name = match.group("name")

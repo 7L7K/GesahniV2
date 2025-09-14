@@ -64,7 +64,6 @@ class ThirdPartyToken:
         # expires_at, created_at, updated_at, is_valid
         id = row[0]
         user_id = row[1]
-        idx = 2
         identity_id = None
         # Detect whether identity_id is present (new canonical schema)
         if len(row) >= 22:

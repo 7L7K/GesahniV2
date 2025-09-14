@@ -31,9 +31,9 @@ async def trust_device(request: Request, response: Response) -> dict:
     """
     from ..cookie_config import get_cookie_config, get_token_ttls
 
-    now = int(time.time())
+    int(time.time())
     access_ttl, _ = get_token_ttls()
-    cookie_config = get_cookie_config(request)
+    get_cookie_config(request)
     secret = os.getenv("JWT_SECRET")
     if secret:
         # Use tokens.py facade instead of direct JWT encoding

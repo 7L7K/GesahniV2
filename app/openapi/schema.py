@@ -92,8 +92,12 @@ def setup_openapi_for_app(app: Any) -> None:
         try:
             from ..config_docs import get_dev_servers, should_show_servers
         except ImportError:
-            should_show_servers = lambda: False
-            get_dev_servers = lambda: []
+
+            def should_show_servers():
+                return False
+
+            def get_dev_servers():
+                return []
 
         schema = generate_custom_openapi(
             title=app.title,

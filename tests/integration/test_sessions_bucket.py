@@ -96,7 +96,7 @@ def _logout_family(
 
 def test_phase1_map_and_cookie_persistence():
     client = _mk_client()
-    out = _register_and_login(client)  # Use generated unique username
+    _register_and_login(client)  # Use generated unique username
 
     # Cookies should be set and HttpOnly
     assert "GSNH_AT" in client.cookies

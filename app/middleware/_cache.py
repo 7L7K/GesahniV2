@@ -136,7 +136,7 @@ class InMemoryIdempotencyStore(IdempotencyStore):
             self._cache[key] = time.monotonic()
 
             # Clean up expired entries
-            now = time.monotonic()
+            time.monotonic()
             expired_keys = [
                 k
                 for k in self._data.keys()

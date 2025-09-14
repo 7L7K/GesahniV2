@@ -143,7 +143,7 @@ def assert_cookies_present(response, expected_cookies=None):
         if cookie_name in cookies:
             continue
         # If neither, fail
-        assert False, f"Missing cookie: {cookie_name}"
+        raise AssertionError(f"Missing cookie: {cookie_name}")
 
 
 def assert_cookies_cleared(response):

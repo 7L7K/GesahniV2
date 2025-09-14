@@ -28,11 +28,11 @@ class TestSLOMonitoring:
     def test_api_availability_slo(self):
         """Test API availability SLO with good requests."""
         # Record successful requests
-        for i in range(100):
+        for _i in range(100):
             record_api_request(200, 100.0, True, route="/v1/test", method="GET")
 
         # Record some failures (but within acceptable range)
-        for i in range(2):
+        for _i in range(2):
             record_api_request(500, 200.0, False, route="/v1/test", method="GET")
 
         results = run_slo_tests()
@@ -45,11 +45,11 @@ class TestSLOMonitoring:
     def test_auth_success_rate_slo(self):
         """Test authentication success rate SLO."""
         # Record successful auth attempts
-        for i in range(95):
+        for _i in range(95):
             record_auth_attempt(True, 200.0)
 
         # Record some failures
-        for i in range(5):
+        for _i in range(5):
             record_auth_attempt(False, 500.0)
 
         results = run_slo_tests()
@@ -62,11 +62,11 @@ class TestSLOMonitoring:
     def test_api_latency_slo(self):
         """Test API latency SLO."""
         # Record fast requests
-        for i in range(100):
+        for _i in range(100):
             record_api_request(200, 500.0, True, route="/v1/test", method="GET")
 
         # Record some slower requests (but within acceptable range)
-        for i in range(5):
+        for _i in range(5):
             record_api_request(200, 1500.0, True, route="/v1/test", method="GET")
 
         results = run_slo_tests()
@@ -79,15 +79,15 @@ class TestSLOMonitoring:
     def test_error_rate_slos(self):
         """Test error rate SLOs."""
         # Mostly successful requests
-        for i in range(950):
+        for _i in range(950):
             record_api_request(200, 100.0, True)
 
         # Some 4xx errors
-        for i in range(30):
+        for _i in range(30):
             record_api_request(400, 100.0, False)
 
         # Few 5xx errors
-        for i in range(20):
+        for _i in range(20):
             record_api_request(500, 100.0, False)
 
         results = run_slo_tests()
@@ -103,7 +103,7 @@ class TestSLOMonitoring:
     def test_insufficient_sample_size(self):
         """Test SLO evaluation with insufficient samples."""
         # Record very few requests
-        for i in range(5):
+        for _i in range(5):
             record_api_request(200, 100.0, True)
 
         results = run_slo_tests()
@@ -125,7 +125,7 @@ class TestSLOCIIntegration:
     def test_successful_slo_ci_test(self):
         """Test successful SLO CI test."""
         # Generate good metrics
-        for i in range(1000):
+        for _i in range(1000):
             record_api_request(200, 100.0, True, route="/v1/test", method="GET")
 
         # Should not raise any exceptions
@@ -137,7 +137,7 @@ class TestSLOCIIntegration:
     def test_failed_slo_ci_test(self):
         """Test failed SLO CI test."""
         # Generate poor metrics
-        for i in range(100):
+        for _i in range(100):
             record_api_request(500, 10000.0, False, route="/v1/test", method="GET")
 
         # Should raise AssertionError
@@ -147,7 +147,7 @@ class TestSLOCIIntegration:
     def test_partial_slo_failure_ci_test(self):
         """Test CI test with some SLO failures."""
         # Mix of good and bad metrics
-        for i in range(50):
+        for _i in range(50):
             record_api_request(200, 100.0, True)
             record_api_request(500, 100.0, False)
 
@@ -158,11 +158,11 @@ class TestSLOCIIntegration:
     def test_ai_response_slo(self):
         """Test AI response SLO tracking."""
         # Record successful AI requests
-        for i in range(80):
+        for _i in range(80):
             record_ai_request(True, 2000.0)
 
         # Record some failures
-        for i in range(20):
+        for _i in range(20):
             record_ai_request(False, 3000.0)
 
         results = run_slo_tests()
@@ -176,7 +176,7 @@ class TestSLOCIIntegration:
         """Test security incident rate SLO."""
         # Record no security incidents (good case)
         results = run_slo_tests()
-        security_slo = results["slo_results"]["security_incident_rate"]
+        results["slo_results"]["security_incident_rate"]
 
         # Should have 0 incidents (but may have insufficient samples)
         # This is more of a smoke test that the metric exists
@@ -194,7 +194,7 @@ class TestSLOAlertingThresholds:
     def test_warning_threshold_detection(self):
         """Test that warning thresholds are properly detected."""
         # Generate metrics that should trigger warning but not critical
-        for i in range(100):
+        for _i in range(100):
             record_api_request(200, 6000.0, True)  # 6 second response time
 
         results = run_slo_tests()
@@ -207,7 +207,7 @@ class TestSLOAlertingThresholds:
     def test_critical_threshold_detection(self):
         """Test that critical thresholds are properly detected."""
         # Generate metrics that should trigger critical alert
-        for i in range(100):
+        for _i in range(100):
             record_api_request(200, 15000.0, True)  # 15 second response time
 
         results = run_slo_tests()
@@ -220,7 +220,7 @@ class TestSLOAlertingThresholds:
     def test_system_health_check(self):
         """Test overall system health determination."""
         # Start with healthy system
-        for i in range(1000):
+        for _i in range(1000):
             record_api_request(200, 100.0, True)
 
         is_healthy, issues = slo_monitor.is_system_healthy()
@@ -228,7 +228,7 @@ class TestSLOAlertingThresholds:
         assert len(issues) == 0
 
         # Introduce critical failure
-        for i in range(100):
+        for _i in range(100):
             record_api_request(500, 100.0, False)  # 100% 5xx errors
 
         is_healthy, issues = slo_monitor.is_system_healthy()

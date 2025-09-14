@@ -31,7 +31,7 @@ def test_no_duplicate_critical_endpoints():
         ]
         # Group by HTTP method (excluding OPTIONS which FastAPI adds automatically)
         method_counts = {}
-        for path, methods in endpoint_routes:
+        for _path, methods in endpoint_routes:
             for method in methods:
                 if (
                     method != "OPTIONS"

@@ -37,7 +37,7 @@ def test_refresh_lazy_no_cookie(setup_client):
     assert isinstance(body["rotated"], bool)
 
     # Check that cookies are being managed properly
-    set_cookie_headers = r.headers.get_list("set-cookie")
+    r.headers.get_list("set-cookie")
     # Should not crash and should return valid response
     assert body is not None
 

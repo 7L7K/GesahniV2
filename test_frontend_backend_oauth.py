@@ -236,9 +236,8 @@ def simulate_frontend_oauth_flow():
         print("   Step 6: Google redirects back with code ✅")
 
         # Extract state for callback simulation
-        state = None
         if "state=" in auth_url:
-            state = auth_url.split("state=")[1].split("&")[0]
+            auth_url.split("state=")[1].split("&")[0]
 
         print("   Step 7: Backend processes callback ✅")
         print("   Step 8: Tokens exchanged successfully ✅")

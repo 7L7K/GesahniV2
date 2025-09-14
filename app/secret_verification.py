@@ -148,7 +148,10 @@ def _check_jwt_secret_strength(results: dict[str, dict[str, str]]) -> None:
 
 def _in_test_mode() -> bool:
     """Detect test mode similar to other modules so tests can run with weaker secrets."""
-    v = lambda s: str(os.getenv(s, "")).strip().lower()
+
+    def v(s):
+        return str(os.getenv(s, "")).strip().lower()
+
     env = v("ENV")
     dev_mode = v("DEV_MODE") in {"1", "true", "yes", "on"}
     return bool(

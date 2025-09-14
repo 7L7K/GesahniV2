@@ -365,7 +365,7 @@ def main():
     base_url = sys.argv[1] if len(sys.argv) > 1 else "http://localhost:8000"
 
     tester = AuthAcceptanceTester(base_url)
-    results = tester.run_all_tests()
+    tester.run_all_tests()
     success = tester.print_summary()
 
     # Exit with appropriate code

@@ -143,6 +143,12 @@ def set_auth_cookies_canon(
     This function intentionally uses resp.set_cookie and lives in app/cookies.py
     to satisfy the guard that prohibits raw set_cookie usage elsewhere.
     """
+    from app.feature_flags import AUTH_COOKIES_ENABLED
+
+    if not AUTH_COOKIES_ENABLED:
+        # Silently skip setting cookies when feature is disabled
+        # This prevents auth cookies from being set without breaking the API
+        return
     common = dict(
         httponly=True, secure=bool(secure), samesite=samesite, domain=domain, path="/"
     )

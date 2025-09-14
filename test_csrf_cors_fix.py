@@ -23,7 +23,7 @@ def test_csrf_cross_site_validation():
     mock_app.return_value = Mock()
 
     # Create CSRF middleware
-    middleware = CSRFMiddleware(mock_app)
+    CSRFMiddleware(mock_app)
 
     # Test cross-site validation with valid token
     print("✓ CSRF middleware imported successfully")
@@ -51,9 +51,7 @@ def test_cors_middleware():
     mock_app.return_value = Mock()
 
     # Create CORS middleware
-    middleware = CorsMiddleware(
-        mock_app, allow_origins=origins, allow_credentials=allow_credentials
-    )
+    CorsMiddleware(mock_app, allow_origins=origins, allow_credentials=allow_credentials)
 
     print("✓ CORS middleware created successfully")
     return True
@@ -76,7 +74,7 @@ def test_csrf_enforcement():
     token, used_legacy, legacy_allowed = _extract_csrf_header(request)
 
     assert token == "test_token_123"
-    assert used_legacy == False
+    assert used_legacy is False
     print("✓ CSRF header extraction works correctly")
 
     # Test with X-CSRF header (legacy)
@@ -86,7 +84,7 @@ def test_csrf_enforcement():
     token, used_legacy, legacy_allowed = _extract_csrf_header(request)
 
     assert token == "legacy_token"
-    assert used_legacy == True
+    assert used_legacy is True
     print("✓ CSRF legacy header extraction works correctly")
 
     return True

@@ -884,7 +884,7 @@ def _test_phase5_diet():
     """Test Phase 5: Diet (unused code removal)."""
     try:
         # Get all functions in router module
-        router_functions = [
+        [
             name
             for name, obj in globals().items()
             if callable(obj) and not name.startswith("_")
@@ -1425,7 +1425,10 @@ async def route_prompt(
             from .router_policy import can_user_call_llm
             from .skills.tools.catalog import validate_and_execute
         except Exception:
-            can_user_call_llm = lambda uid: False  # type: ignore
+
+            def can_user_call_llm(uid):
+                return False  # type: ignore
+
             validate_and_execute = None  # type: ignore
 
         if can_user_call_llm(user_id):

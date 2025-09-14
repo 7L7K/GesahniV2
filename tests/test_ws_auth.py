@@ -10,7 +10,7 @@ async def test_websocket_auth():
     try:
         # Test without token (should fail)
         print("Testing WebSocket without token...")
-        async with websockets.connect("ws://localhost:8000/v1/ws/transcribe") as ws:
+        async with websockets.connect("ws://localhost:8000/v1/ws/transcribe"):
             print("ERROR: Connection should have failed!")
     except websockets.exceptions.ConnectionClosed as e:
         print(f"✓ Connection closed as expected: {e.code} - {e.reason}")
@@ -23,7 +23,7 @@ async def test_websocket_auth():
         headers = {"Origin": "https://malicious.com"}
         async with websockets.connect(
             "ws://localhost:8000/v1/ws/transcribe", extra_headers=headers
-        ) as ws:
+        ):
             print("ERROR: Connection should have failed!")
     except websockets.exceptions.ConnectionClosed as e:
         print(f"✓ Connection closed as expected: {e.code} - {e.reason}")

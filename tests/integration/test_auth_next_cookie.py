@@ -220,7 +220,6 @@ class TestAuthNextCookieFlow:
         set_gs_next_cookie(response1, "/post-login-target", request1)
 
         # Step 2: Simulate having the cookie set for login
-        cookie_value = "post-login-target"  # Simplified for test
 
         # Step 3: Login with cookie (would consume it)
         login_response = self.client.post(

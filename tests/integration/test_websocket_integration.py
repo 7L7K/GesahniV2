@@ -118,8 +118,6 @@ class TestWebSocketIntegration:
         # Frontend builds URLs using canonical origin (http://localhost:3000)
         # Backend validates origins against the same canonical origin
 
-        canonical_origin = "http://localhost:3000"
-
         # Frontend would build: ws://localhost:3000/v1/ws/test
         # Backend expects: Origin: http://localhost:3000
 
@@ -328,7 +326,7 @@ class TestWebSocketIntegration:
 
         conn_state = await manager.add_connection(mock_ws, "test_user", endpoint="test")
         assert conn_state.user_id == "test_user"
-        assert conn_state.is_alive == True
+        assert conn_state.is_alive is True
         assert conn_state.metadata["endpoint"] == "test"
 
         # Test getting connection
@@ -341,7 +339,7 @@ class TestWebSocketIntegration:
 
         # Test sending to specific user
         success = await manager.send_to_user("test_user", {"direct": "message"})
-        assert success == True
+        assert success is True
         assert mock_ws.send_json.call_count == 2
 
         # Test removing connection
@@ -375,7 +373,7 @@ class TestWebSocketIntegration:
 
         # Dead connection should have been marked as not alive
         dead_conn = manager.get_connection("dead_user")
-        assert dead_conn.is_alive == False
+        assert dead_conn.is_alive is False
 
     def test_websocket_http_handler_comprehensive_errors(self):
         """Test comprehensive error handling for HTTP requests to WS endpoints."""

@@ -22,6 +22,7 @@ def detect_profile() -> StartupProfile:
 
     # Base components (keep order deterministic)
     base = (
+        "init_feature_flags_logging",
         "init_database",
         "init_database_migrations",
         "init_token_store_schema",
@@ -39,6 +40,7 @@ def detect_profile() -> StartupProfile:
         return StartupProfile(
             "ci",
             (
+                "init_feature_flags_logging",
                 "init_database",
                 "init_database_migrations",
                 "init_token_store_schema",

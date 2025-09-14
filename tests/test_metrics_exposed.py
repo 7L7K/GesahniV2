@@ -76,7 +76,7 @@ def test_metrics_expose_rbac_deny_total(client):
 def test_metrics_expose_rate_limited_total(client):
     """Test that rate_limited_total metric is exposed"""
     # Make many rapid requests to potentially trigger rate limiting
-    for i in range(100):
+    for _i in range(100):
         response = client.get("/healthz")
         if response.status_code == 429:
             break

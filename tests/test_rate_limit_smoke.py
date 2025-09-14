@@ -37,7 +37,7 @@ def test_rate_limit_smoke_csrf_endpoint(monkeypatch):
     last_response = None
 
     with TestClient(app) as client:
-        for i in range(7):  # Make 7 requests (more than our limit of 5)
+        for _i in range(7):  # Make 7 requests (more than our limit of 5)
             response = client.get("/v1/csrf")
             requests_made += 1
             last_response = response

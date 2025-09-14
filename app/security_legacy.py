@@ -42,8 +42,13 @@ except Exception:  # pragma: no cover - optional
 try:
     from .auth_monitoring import record_auth_lock_event, record_privileged_call_blocked
 except Exception:  # pragma: no cover - optional
-    record_privileged_call_blocked = lambda *a, **k: None
-    record_auth_lock_event = lambda *a, **k: None
+
+    def record_privileged_call_blocked(*a, **k):
+        return None
+
+    def record_auth_lock_event(*a, **k):
+        return None
+
 
 # Phase 6.1: Clean auth metrics
 try:
@@ -998,7 +1003,7 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
     try:
         from .auth_core import resolve_auth as _resolve
 
-        out = _resolve(request)
+        _resolve(request)
         src = getattr(request.state, "auth_source", "none")
         payload = getattr(request.state, "jwt_payload", None)
         if src in {"authorization", "access_cookie"} and isinstance(payload, dict):
@@ -1164,7 +1169,7 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
                     from .tokens import make_access
                     from .web.cookies import set_auth_cookies
 
-                    now = int(_t.time())
+                    int(_t.time())
                     from .cookies import read_access_cookie, read_refresh_cookie
 
                     at = read_access_cookie(request)
@@ -1325,7 +1330,11 @@ async def verify_token_strict(request: Request) -> None:
     secret = os.getenv("JWT_SECRET")
     if not secret:
         logger.error("deny: missing_jwt_secret")
-        raise HTTPException(status_code=500, detail="missing_jwt_secret")
+        from app.http_errors import internal_error
+
+        raise internal_error(
+            code="missing_jwt_secret", message="JWT secret not configured"
+        )
     auth = request.headers.get("Authorization")
     token: str | None = None
     if auth and auth.startswith("Bearer "):
@@ -1433,7 +1442,7 @@ async def rate_limit(request: Request) -> None:
                 window,
                 retry_long,
             )
-            headers = {
+            {
                 "Retry-After": str(retry_long),
                 "RateLimit-Limit": str(rate_limit_per_min),
                 "RateLimit-Remaining": "0",
@@ -1459,7 +1468,7 @@ async def rate_limit(request: Request) -> None:
                 burst_window,
                 retry_burst,
             )
-            headers = {
+            {
                 "Retry-After": str(retry_burst),
                 "RateLimit-Limit": str(rate_limit_burst),
                 "RateLimit-Remaining": "0",
@@ -1743,7 +1752,11 @@ async def require_nonce(
         return
     nonce = request.headers.get("X-Nonce")
     if not nonce:
-        raise HTTPException(status_code=400, detail="missing_nonce")
+        from app.http_errors import http_error
+
+        raise http_error(
+            code="missing_nonce", message="Nonce header required", status=400
+        )
     now = time.time()
     async with _lock:
         # prune expired
@@ -1764,7 +1777,11 @@ async def require_nonce(
         base = f"user:{uid}|sid:{sid or '-'}|did:{did or '-'}|nonce:{nonce}"
         nonce_key = f"{base}:{test_salt}" if test_salt else base
         if nonce_key in _nonce_store:
-            raise HTTPException(status_code=409, detail="nonce_reused")
+            from app.http_errors import http_error
+
+            raise http_error(
+                code="nonce_reused", message="Nonce has already been used", status=409
+            )
         _nonce_store[nonce_key] = now
 
 
@@ -1828,7 +1845,11 @@ async def verify_webhook(
     body = await request.body()
     secrets = _load_webhook_secrets()
     if not secrets:
-        raise HTTPException(status_code=500, detail="webhook_secret_missing")
+        from app.http_errors import internal_error
+
+        raise internal_error(
+            code="webhook_secret_missing", message="Webhook secrets not configured"
+        )
     # Allow direct call style (not DI) by falling back to headers when params missing
     if x_signature is None:
         try:
@@ -1854,9 +1875,17 @@ async def verify_webhook(
         try:
             ts_val = float(str(x_timestamp).strip())
         except Exception:
-            raise HTTPException(status_code=400, detail="invalid_timestamp")
+            from app.http_errors import http_error
+
+            raise http_error(
+                code="invalid_timestamp", message="Invalid timestamp format", status=400
+            )
     if require_ts and ts_val is None:
-        raise HTTPException(status_code=400, detail="missing_timestamp")
+        from app.http_errors import http_error
+
+        raise http_error(
+            code="missing_timestamp", message="Timestamp header required", status=400
+        )
     # Enforce freshness
     if ts_val is not None:
         now = time.time()
@@ -1882,7 +1911,13 @@ async def verify_webhook(
                         if t < cutoff:
                             _webhook_seen.pop(k, None)
                     if key in _webhook_seen:
-                        raise HTTPException(status_code=409, detail="replay_detected")
+                        from app.http_errors import http_error
+
+                        raise http_error(
+                            code="replay_detected",
+                            message="Webhook replay detected",
+                            status=409,
+                        )
                     _webhook_seen[key] = time.time()
                 return body
     # Back-compat path: allow legacy signature that only covers body
@@ -2063,10 +2098,14 @@ def rate_limit_with(long_limit: int | None = None, burst_limit: int | None = Non
                     pass
                 if b_count > _burst:
                     retry_b = max(0, int(b_ttl))
-                    raise HTTPException(
-                        status_code=429,
-                        detail={"error": "rate_limited", "retry_after": retry_b},
+                    from app.http_errors import http_error
+
+                    raise http_error(
+                        code="rate_limited",
+                        message="Rate limit exceeded",
+                        status=429,
                         headers={"Retry-After": str(retry_b)},
+                        meta={"retry_after_seconds": retry_b},
                     )
                 l_count, l_ttl = await _redis_incr_with_ttl(r, long_key, _window)
                 if l_count != -1:
@@ -2079,13 +2118,14 @@ def rate_limit_with(long_limit: int | None = None, burst_limit: int | None = Non
                         pass
                     if l_count > _long:
                         retry_after = max(0, int(l_ttl))
-                        raise HTTPException(
-                            status_code=429,
-                            detail={
-                                "error": "rate_limited",
-                                "retry_after": retry_after,
-                            },
+                        from app.http_errors import http_error
+
+                        raise http_error(
+                            code="rate_limited",
+                            message="Rate limit exceeded",
+                            status=429,
                             headers={"Retry-After": str(retry_after)},
+                            meta={"retry_after_seconds": retry_after},
                         )
                     return
         # Local fallback
@@ -2093,18 +2133,26 @@ def rate_limit_with(long_limit: int | None = None, burst_limit: int | None = Non
             ok_b = _bucket_rate_limit(key_local, http_burst, _burst, _burst_window)
             retry_b = _bucket_retry_after(http_burst, _burst_window)
             if not ok_b:
-                raise HTTPException(
-                    status_code=429,
-                    detail={"error": "rate_limited", "retry_after": retry_b},
+                from app.http_errors import http_error
+
+                raise http_error(
+                    code="rate_limited",
+                    message="Rate limit exceeded",
+                    status=429,
                     headers={"Retry-After": str(retry_b)},
+                    meta={"retry_after_seconds": retry_b},
                 )
             ok_long = _bucket_rate_limit(key_local, _http_requests, _long, _window)
             retry_long = _bucket_retry_after(_http_requests, _window)
         if not ok_long:
-            raise HTTPException(
-                status_code=429,
-                detail={"error": "rate_limited", "retry_after": retry_long},
+            from app.http_errors import http_error
+
+            raise http_error(
+                code="rate_limited",
+                message="Rate limit exceeded",
+                status=429,
                 headers={"Retry-After": str(retry_long)},
+                meta={"retry_after_seconds": retry_long},
             )
 
     return _dep
@@ -2193,19 +2241,18 @@ async def rate_limit_problem(
             remaining = int(snap.get("remaining", 0))
         except Exception:
             remaining = 0
-        problem = {
-            "type": "about:blank",
-            "title": "Too Many Requests",
-            "status": 429,
-            "detail": None,
-            "instance": _safe_request_path(request) or "/",
-            "retry_after": retry_after,
-        }
-        # Preserve original detail under nested key to keep both forms available
-        problem["detail"] = (
-            exc.detail if isinstance(exc.detail, str) else (exc.detail or {})
-        )
+        from app.http_errors import http_error
+
         headers = dict(exc.headers or {})
-        headers["Content-Type"] = "application/problem+json"
         headers["X-RateLimit-Remaining"] = str(remaining)
-        raise HTTPException(status_code=429, detail=problem, headers=headers)
+        raise http_error(
+            code="rate_limited",
+            message="Too Many Requests",
+            status=429,
+            headers=headers,
+            meta={
+                "retry_after_seconds": retry_after,
+                "instance": _safe_request_path(request) or "/",
+                "remaining": remaining,
+            },
+        )

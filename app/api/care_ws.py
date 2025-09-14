@@ -66,9 +66,7 @@ async def _broadcast(topic: str, payload: dict) -> None:
             dead.append(ws)
 
     # Use gather with return_exceptions for parallel sending
-    results = await _aio.gather(
-        *[_send(ws) for ws in list(clients)], return_exceptions=True
-    )
+    await _aio.gather(*[_send(ws) for ws in list(clients)], return_exceptions=True)
 
     if dead:
         async with _lock:

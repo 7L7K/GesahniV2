@@ -36,9 +36,7 @@ class TestLogoutCookieClearing:
         cookies, csrf_token = self._add_csrf_token(cookies)
 
         # Mock the token store to avoid actual database calls
-        with patch(
-            "app.token_store.revoke_refresh_family", new_callable=AsyncMock
-        ) as mock_revoke:
+        with patch("app.token_store.revoke_refresh_family", new_callable=AsyncMock):
             response = client.post(
                 "/v1/auth/logout", cookies=cookies, headers={"X-CSRF-Token": csrf_token}
             )
@@ -182,7 +180,6 @@ class TestLogoutCookieClearing:
 
     def test_logout_revokes_refresh_tokens_with_authorization_header(self, client):
         """Test that logout extracts session ID from Authorization header when cookies are missing."""
-        headers = {"Authorization": "Bearer test_token"}
 
         # Mock _decode_any to return a payload with user_id
         with patch("app.api.auth._decode_any") as mock_decode:

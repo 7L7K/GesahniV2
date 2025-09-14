@@ -266,15 +266,13 @@ async def test_spotify_integrations_status_recently_refreshed(
 
     from app.api.spotify import integrations_spotify_status
 
-    dao = temp_db
-
     # Create test identity and token
     user_id = "test_user_refreshed"
     identity_id = await create_test_identity(user_id)
 
     # Create token with recent refresh
     now = int(time.time())
-    token = ThirdPartyToken(
+    ThirdPartyToken(
         user_id=user_id,
         provider="spotify",
         provider_iss="https://accounts.spotify.com",

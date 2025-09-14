@@ -68,7 +68,7 @@ def find_router_decorators(file_path: str) -> list[dict]:
                     k += 1
 
                 func_body_lines = lines[func_start:k]
-                func_body = "\n".join(func_body_lines)
+                "\n".join(func_body_lines)
 
                 # Also include the decorator lines for dependency checking
                 decorator_start = i

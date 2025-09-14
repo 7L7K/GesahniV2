@@ -31,7 +31,7 @@ class TestSpotifyOAuthRobust:
 
     async def test_successful_oauth_callback_storage(self, client, dao):
         """Test that OAuth callback properly stores tokens with issuer"""
-        now = int(time.time())
+        int(time.time())
 
         # Mock the OAuth callback data
         callback_data = {
@@ -408,13 +408,6 @@ class TestSpotifyOAuthRobust:
         import asyncio
 
         now = int(time.time())
-        callback_data = {
-            "access_token": "concurrent_token",
-            "refresh_token": "concurrent_refresh",
-            "expires_in": 3600,
-            "scope": "user-read-private",
-            "token_type": "Bearer",
-        }
 
         async def mock_oauth_flow(user_id):
             # Simulate OAuth callback for different users

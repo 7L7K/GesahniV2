@@ -482,7 +482,7 @@ def decode_jwt_token(token: str) -> dict[str, Any]:
 
     # All public keys for asymmetric algorithms (including old keys for rotation)
     if cfg.public_keys:
-        for k, pub_key in cfg.public_keys.items():
+        for _k, pub_key in cfg.public_keys.items():
             keys_to_try.append((cfg.alg, pub_key))
 
     # Also try legacy JWT_SECRET if available (for migration scenarios)
@@ -538,7 +538,7 @@ def test_jwt_backward_compatibility():
     try:
         # Test 1: Issue token with old key, rotate, ensure decode still works
         os.environ["JWT_SECRET"] = "old_secret_for_rotation_test_12345678901234567890"
-        old_cfg = get_jwt_config()
+        get_jwt_config()
 
         # Create token with old key
         old_token = sign_access_token("test_user", extra={"test": "rotation"})

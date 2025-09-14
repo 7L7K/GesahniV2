@@ -31,7 +31,7 @@ def _get_endpoint_info(route) -> str:
         # Get module and qualified name
         module = getattr(endpoint, "__module__", "<unknown>")
         qualname = getattr(endpoint, "__qualname__", "<unknown>")
-        name = getattr(endpoint, "__name__", "<unknown>")
+        getattr(endpoint, "__name__", "<unknown>")
 
         # Try to get source file information
         source_file = "<unknown>"

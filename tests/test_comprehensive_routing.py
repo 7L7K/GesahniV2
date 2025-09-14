@@ -262,7 +262,7 @@ def test_user_circuit_breaker_thread_safety():
 
         # Test recording multiple failures concurrently
         tasks = []
-        for i in range(5):
+        for _i in range(5):
             task = _user_cb_record_failure(user_id)
             tasks.append(task)
 
@@ -282,7 +282,7 @@ def test_user_circuit_breaker_thread_safety():
 
         # Test concurrent reads
         read_tasks = []
-        for i in range(10):
+        for _i in range(10):
             task = _user_circuit_open(user_id)
             read_tasks.append(task)
 

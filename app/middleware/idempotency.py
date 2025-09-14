@@ -107,7 +107,7 @@ class IdempotencyStore:
     def cleanup_expired(self):
         """Clean up expired entries from memory store."""
         if not self._redis_client:
-            current_time = time.time()
+            time.time()
             # Memory store entries don't have TTL, so we don't clean them up automatically
             # They would be cleaned up by Redis TTL when using Redis
             pass

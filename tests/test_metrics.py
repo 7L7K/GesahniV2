@@ -10,7 +10,6 @@ def test_metrics_exposes_prometheus_and_increments_counter():
     r0 = c.get("/metrics", headers={"Cookie": "access_token=bad"})
     assert r0.status_code == 200
     assert r0.headers.get("content-type", "").startswith("text/plain")
-    body0 = r0.text
     # Hit a simple GET (unauthed health)
     _ = c.get("/healthz/live")
     r1 = c.get("/metrics")

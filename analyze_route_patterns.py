@@ -34,9 +34,9 @@ def analyze_routes():
         route_matches = re.findall(
             r'@router\.(get|post|api_route)\s*\(\s*["\']([^"\']+)["\']', content
         )
-        method_matches = re.findall(r"methods=\s*\[([^\]]+)\]", content)
+        re.findall(r"methods=\s*\[([^\]]+)\]", content)
 
-        for i, (method, path) in enumerate(route_matches):
+        for _i, (method, path) in enumerate(route_matches):
             # Check if this path matches our patterns
             matched_patterns = []
             for pattern_name, regex in patterns.items():
@@ -75,7 +75,7 @@ def analyze_routes():
             content = f.read()
 
         # Find routes with their decorators
-        route_blocks = re.findall(
+        re.findall(
             r"(@router\.(?:get|post)\s*\([^)]+\)\s*\n\s*)?async def (login|logout|register|refresh)",
             content,
             re.MULTILINE,

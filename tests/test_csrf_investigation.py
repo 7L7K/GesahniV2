@@ -291,7 +291,7 @@ class CSRFInvestigator:
 
         # Step 5: Test cookie behavior
         print("\n4️⃣ Testing Cookie Behavior:")
-        cookie_result = self.test_cookie_behavior()
+        self.test_cookie_behavior()
 
         print("\n" + "=" * 40)
 

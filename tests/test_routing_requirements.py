@@ -660,7 +660,7 @@ class TestGoldenTraceEmitsExactlyOnce:
         # Clear any existing log records
         caplog.clear()
 
-        result = asyncio.run(router.route_prompt(TEST_PROMPT, user_id=TEST_USER_ID))
+        asyncio.run(router.route_prompt(TEST_PROMPT, user_id=TEST_USER_ID))
 
         # Find golden trace log
         golden_trace_record = next(
@@ -737,7 +737,7 @@ class TestCircuitBreakerOpensAfterThreshold:
         monkeypatch.setattr(router, "pick_model", fake_pick_model)
 
         # First 2 failures should not open circuit breaker (threshold is 3)
-        for i in range(2):
+        for _i in range(2):
             with pytest.raises(httpx.TimeoutException):
                 asyncio.run(router.route_prompt(TEST_PROMPT, user_id=TEST_USER_ID))
 
@@ -815,7 +815,7 @@ class TestCircuitBreakerOpensAfterThreshold:
         monkeypatch.setattr(router, "pick_model", fake_pick_model)
 
         # First 2 failures should not open circuit breaker (threshold is 3)
-        for i in range(2):
+        for _i in range(2):
             with pytest.raises(httpx.TimeoutException):
                 asyncio.run(router.route_prompt(TEST_PROMPT, user_id=TEST_USER_ID))
 

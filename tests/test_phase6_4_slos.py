@@ -299,8 +299,8 @@ class TestSLOCompliance:
         }
 
         print("SLO Compliance Report:")
-        for slo_name, data in report.items():
-            status = "✅ PASS" if data["met"] else "❌ FAIL"
+        for _slo_name, data in report.items():
+            "✅ PASS" if data["met"] else "❌ FAIL"
             print(".3f")
 
         # Overall compliance

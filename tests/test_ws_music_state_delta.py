@@ -130,7 +130,7 @@ async def test_ws_music_pause_ticks_slow():
                 msg = json.loads(ws.receive_text())
                 if msg["type"] == "position_tick":
                     tick_received = True
-                    playing_tick_time = time.time()
+                    time.time()
                     break
             except:
                 pass

@@ -59,20 +59,8 @@ async def pair_complete(body: dict[str, Any]) -> dict[str, Any]:
     # Mint a resident-scoped device token
     now = _now()
     ttl = int(os.getenv("DEVICE_TOKEN_TTL_S", "2592000"))  # default 30 days
-    exp = now + ttl
+    now + ttl
     jti = secrets.token_urlsafe(16)
-    claims = {
-        "sub": owner_id,
-        "user_id": owner_id,
-        "iat": now,
-        "exp": exp,
-        "jti": jti,
-        # resident scope only; no admin privileges
-        "scope": "care:resident",
-        "roles": ["resident"],
-        "device": label or "tv",
-        "type": "device",
-    }
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access
 

@@ -551,7 +551,7 @@ def test_req_id_propagation_both_vendors(monkeypatch):
     postcall_data_instances.clear()
 
     # Call with OpenAI
-    result = asyncio.run(
+    asyncio.run(
         router.route_prompt("hello world", user_id="u", model_override="gpt-4o")
     )
 

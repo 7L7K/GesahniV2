@@ -35,7 +35,9 @@ async def feature_flags(user_id: str = Depends(get_current_user_id)):
 
 
 def _is_test_mode() -> bool:
-    v = lambda s: str(os.getenv(s, "")).strip().lower()
+    def v(s):
+        return str(os.getenv(s, "")).strip().lower()
+
     return (
         v("PYTEST_MODE") in {"1", "true", "yes", "on"}
         or v("PYTEST_RUNNING") in {"1", "true", "yes"}

@@ -159,7 +159,7 @@ class TestTokenImprovementsDemo:
         assert valid2, "✅ Second token should validate"
 
         stored1 = await dao.upsert_token(token1)
-        stored2 = await dao.upsert_token(token2)
+        await dao.upsert_token(token2)
 
         assert stored1, "✅ First token should store"
         # Note: Second token might fail due to unique constraint, but that's expected

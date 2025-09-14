@@ -89,7 +89,7 @@ def check_environment():
     try:
         response = requests.get(f"{BASE_URL}/config")
         if response.status_code == 200:
-            config = response.json()
+            response.json()
             print(f"   Backend config available: {response.status_code}")
         else:
             print(f"   Backend config: {response.status_code}")

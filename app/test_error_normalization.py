@@ -59,7 +59,6 @@ async def test_key_error():
 @router.get("/test/type-error")
 async def test_type_error():
     """Test endpoint that raises a TypeError."""
-    result = "string" + 123  # This will raise TypeError
 
 
 @router.get("/test/permission-error")

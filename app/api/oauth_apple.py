@@ -86,7 +86,7 @@ async def apple_start(request: Request) -> Response:
     # Use centralized cookie configuration
     from ..cookie_config import get_cookie_config
 
-    cookie_config = get_cookie_config(request)
+    get_cookie_config(request)
 
     # Set OAuth state cookies using centralized cookie surface
     from ..web.cookies import set_oauth_state_cookies
@@ -162,7 +162,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
 
     sess = await sessions_store.create_session(user_id)
     sid, did = sess["sid"], sess["did"]
-    now = datetime.now(UTC)
+    datetime.now(UTC)
     # Use tokens.py facade instead of direct JWT encoding
     from ..tokens import make_access, make_refresh
 
@@ -173,7 +173,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
     # Use centralized cookie configuration for sharp and consistent cookies
     from ..cookie_config import get_cookie_config, get_token_ttls
 
-    cookie_config = get_cookie_config(request)
+    get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
 
     # Create opaque session ID instead of using JWT

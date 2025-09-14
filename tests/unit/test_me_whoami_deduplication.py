@@ -125,8 +125,7 @@ def test_single_handler_verification():
     assert "GET /whoami" in routes
 
     # Verify exactly the expected routes (no duplicates)
-    expected_routes = {"GET /v1/me", "GET /v1/whoami", "GET /whoami"}
-    actual_routes = {
+    {
         f"{list(r.methods)[0]} {r.path}"
         for r in app.routes
         if hasattr(r, "methods") and hasattr(r, "path")

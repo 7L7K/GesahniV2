@@ -35,7 +35,7 @@ _nonce_store_ttl_seconds = 600  # 10 minutes TTL for nonces
 
 def _cleanup_nonce_store():
     """Clean up expired nonces from the store to prevent memory leaks."""
-    current_time = time.time()
+    time.time()
     with _nonce_store_lock:
         # In a production system, we'd want to store timestamps with nonces
         # For now, we'll do a simple cleanup based on store size

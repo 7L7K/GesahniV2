@@ -38,7 +38,7 @@ def test_history_replay():
     print()
 
     # Get token
-    token = get_jwt_token()
+    get_jwt_token()
     print("✅ Generated JWT token")
 
     # Create mock test data since we don't have full database setup

@@ -46,7 +46,7 @@ async def create_user(
     """Create or upsert a user, honoring the provided id."""
     async with get_async_db() as session:
         norm_email = (email or "").strip().lower()
-        providers_json = json.dumps(auth_providers or [])
+        json.dumps(auth_providers or [])
 
         # Check for existing user by email
         stmt = select(AuthUser).where(AuthUser.email == norm_email)

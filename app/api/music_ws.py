@@ -93,7 +93,7 @@ def _validate_envelope(payload: dict) -> tuple[bool, str]:
         return False, "req_id must be a string"
 
     ts = payload.get("ts")
-    if ts is not None and not isinstance(ts, (int, float)):
+    if ts is not None and not isinstance(ts, int | float):
         return False, "ts must be a number"
 
     return True, ""

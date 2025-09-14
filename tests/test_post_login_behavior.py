@@ -237,7 +237,7 @@ class PostLoginTester:
 
         # Make a few requests
         whoami_results = []
-        for i in range(3):
+        for _i in range(3):
             result = self._make_whoami_call(f"{self.base_url}/v1/whoami")
             whoami_results.append(result)
             time.sleep(0.5)

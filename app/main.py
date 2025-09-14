@@ -85,7 +85,11 @@ except Exception:
 try:
     from .auth_monitoring import record_ws_reconnect_attempt
 except Exception:  # pragma: no cover - optional
-    record_ws_reconnect_attempt = lambda *a, **k: None
+
+    def record_ws_reconnect_attempt(*a, **k):
+        return None
+
+
 from .session_manager import SESSIONS_DIR as SESSIONS_DIR  # re-export for tests
 from .storytime import schedule_nightly_jobs
 

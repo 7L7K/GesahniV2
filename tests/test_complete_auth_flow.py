@@ -44,7 +44,7 @@ def test_boot_sequence_analysis():
         print(f"   Response: {json.dumps(whoami_data, indent=2)}")
 
         is_authenticated = whoami_data.get("is_authenticated", False)
-        session_ready = whoami_data.get("session_ready", False)
+        whoami_data.get("session_ready", False)
         source = whoami_data.get("source", "missing")
 
         print(f"   Analysis: is_authenticated={is_authenticated}, source={source}")

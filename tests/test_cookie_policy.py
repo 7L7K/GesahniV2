@@ -22,7 +22,7 @@ def test_set_named_cookie_enforces_samesite_none_secure(monkeypatch):
         # minimal placeholder; cookie_config was monkeypatched above
         pass
 
-    req = DummyReq()
+    DummyReq()
     resp = Response()
 
     # Act: request SameSite=None without secure=True; helper should auto-enable Secure

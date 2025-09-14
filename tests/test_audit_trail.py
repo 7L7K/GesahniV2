@@ -223,9 +223,7 @@ def test_audit_append_with_authentication(client, tmp_audit_dir):
     """Test audit logging with authentication context"""
     # This would need a valid token in a real scenario
     # For now, test with invalid token to see auth-related fields
-    response = client.get(
-        "/v1/admin/config", headers={"Authorization": "Bearer invalid-token"}
-    )
+    client.get("/v1/admin/config", headers={"Authorization": "Bearer invalid-token"})
 
     audit_file = tmp_audit_dir / "events.ndjson"
     content = audit_file.read_text().strip()
@@ -284,7 +282,7 @@ def test_audit_append_concurrent_access(client, tmp_audit_dir):
 def test_audit_append_file_rotation_scenario(client, tmp_audit_dir):
     """Test audit file behavior (in a real system, this would test log rotation)"""
     # Make many requests to simulate file growth
-    for i in range(100):
+    for _i in range(100):
         client.get("/v1/healthz")
 
     audit_file = tmp_audit_dir / "events.ndjson"

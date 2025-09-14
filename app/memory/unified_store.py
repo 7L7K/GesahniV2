@@ -319,7 +319,7 @@ def get_vector_store_info() -> dict[str, str]:
                     "path": chroma_path,
                 }
             elif legacy_type == "qdrant":
-                url = os.getenv("QDRANT_URL", "http://localhost:6333")
+                os.getenv("QDRANT_URL", "http://localhost:6333")
                 return {
                     "dsn": dsn,
                     "scheme": "qdrant",

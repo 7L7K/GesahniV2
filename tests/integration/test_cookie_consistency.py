@@ -64,13 +64,12 @@ class TestCookieConsistency:
 
         # Parse and verify cookie attributes
         access_cookie = None
-        refresh_cookie = None
 
         for header in set_cookie_headers:
             if "access_token=" in header:
                 access_cookie = header
             elif "refresh_token=" in header:
-                refresh_cookie = header
+                pass
 
         assert access_cookie is not None
 

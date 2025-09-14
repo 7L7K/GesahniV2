@@ -364,8 +364,6 @@ async def admin_unlink_identity(
             if not identity:
                 raise HTTPException(status_code=404, detail="identity_not_found")
 
-            provider = identity.provider
-
             # Count remaining identities for this user
             stmt = (
                 select(func.count())
@@ -435,7 +433,10 @@ def _is_test_mode() -> bool:
 
     Accept multiple hints so isolated tests don't have to coordinate env vars.
     """
-    v = lambda s: str(os.getenv(s, "")).strip().lower()
+
+    def v(s):
+        return str(os.getenv(s, "")).strip().lower()
+
     return (
         v("PYTEST_MODE") in {"1", "true", "yes", "on"}
         or v("PYTEST_RUNNING") in {"1", "true", "yes"}

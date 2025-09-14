@@ -143,7 +143,6 @@ class TestComprehensiveErrors:
     def test_memory_store_large_content(self):
         """Test memory store handling of very large content."""
         # Test with very large content - should not crash the system
-        large_content = "x" * 1000000  # 1MB
         try:
             store = _get_store()
             # Large content handling should be graceful
@@ -270,7 +269,7 @@ class TestComprehensiveErrors:
         # Generate many requests quickly to test ID uniqueness
         request_ids = set()
 
-        for i in range(1000):
+        for _i in range(1000):
             response = self.client.get("/health")
             req_id = response.headers.get("X-Request-ID")
             if req_id:
@@ -379,7 +378,7 @@ class TestComprehensiveErrors:
 
         # Use /healthz endpoint instead of /health to avoid slow external service checks
         # Reduce iterations to avoid overwhelming the test server
-        for i in range(10):  # Reduced from 100 to 10
+        for _i in range(10):  # Reduced from 100 to 10
             response = self.client.get("/healthz")
             assert response.status_code == 200
 
@@ -396,7 +395,7 @@ class TestComprehensiveErrors:
 
         # Trigger an error
         try:
-            response = self.client.post("/ask", json={"invalid": "data"})
+            self.client.post("/ask", json={"invalid": "data"})
         except Exception:
             pass
 
@@ -420,7 +419,7 @@ class TestComprehensiveErrors:
         start_time = time.time()
 
         # Make many requests
-        for i in range(100):
+        for _i in range(100):
             response = self.client.get("/health")
             assert response.status_code == 200
 
@@ -461,7 +460,7 @@ class TestComprehensiveErrors:
 
         # Test should handle memory pressure gracefully
         try:
-            for i in range(1000):
+            for _i in range(1000):
                 large_objects.append("x" * 10000)  # 10KB each
             # If we get here, memory allocation succeeded
             assert len(large_objects) == 1000
@@ -616,7 +615,7 @@ class TestIntegrationFailures:
 
         # Make many requests quickly
         responses = []
-        for i in range(100):
+        for _i in range(100):
             response = client.get("/health")
             responses.append(response.status_code)
 

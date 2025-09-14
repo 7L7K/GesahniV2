@@ -43,7 +43,9 @@ from .history import append_history
 
 
 def _in_test_mode() -> bool:
-    v = lambda s: str(os.getenv(s, "")).strip().lower()
+    def v(s):
+        return str(os.getenv(s, "")).strip().lower()
+
     return bool(
         os.getenv("PYTEST_CURRENT_TEST")
         or os.getenv("PYTEST_RUNNING")

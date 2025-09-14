@@ -164,6 +164,31 @@ def raise_enveloped(
     raise HTTPException(status_code=status, detail=env, headers=headers)
 
 
+def validate_error_envelope(envelope: dict) -> bool:
+    """Validate that an error envelope conforms to the required {code, message, meta} format.
+
+    Returns True if valid, raises ValueError if invalid.
+    """
+    if not isinstance(envelope, dict):
+        raise ValueError("Error envelope must be a dictionary")
+
+    required_keys = {"code", "message", "meta"}
+    missing_keys = required_keys - set(envelope.keys())
+    if missing_keys:
+        raise ValueError(f"Error envelope missing required keys: {missing_keys}")
+
+    if not isinstance(envelope["code"], str):
+        raise ValueError("Error envelope 'code' must be a string")
+
+    if not isinstance(envelope["message"], str):
+        raise ValueError("Error envelope 'message' must be a string")
+
+    if not isinstance(envelope["meta"], dict):
+        raise ValueError("Error envelope 'meta' must be a dictionary")
+
+    return True
+
+
 def enveloped_route(fn):
     """Decorator to auto-wrap unhandled exceptions with a standard envelope."""
 

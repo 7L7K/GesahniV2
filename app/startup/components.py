@@ -291,6 +291,33 @@ async def init_dev_user():
         logger.warning("Failed to create dev user: %s", e)
 
 
+async def init_feature_flags_logging():
+    """Log all feature flags at application startup.
+
+    This provides visibility into which features are enabled/disabled
+    for debugging and security auditing purposes.
+    """
+    from app.feature_flags import list_flags
+
+    flags = list_flags()
+    logger.info("🚩 Feature flags at startup:")
+    for flag_name, flag_value in sorted(flags.items()):
+        logger.info(f"  {flag_name}: {flag_value}")
+
+    # Special warnings for risky features
+    risky_flags = {
+        "MUSIC_ENABLED": "Music integration (external service dependency)",
+        "AUTH_COOKIES_ENABLED": "Auth cookies (stateful authentication)",
+        "MODEL_ROUTING_ENABLED": "Model routing (LLM failover logic)",
+    }
+
+    for flag_name, description in risky_flags.items():
+        if flags.get(flag_name, "false").lower() == "true":
+            logger.warning(f"⚠️  Risky feature ENABLED: {flag_name} ({description})")
+        else:
+            logger.info(f"🛡️  Risky feature DISABLED: {flag_name} ({description})")
+
+
 async def init_client_warmup():
     """Warm up lazy clients (Qdrant, OpenAI) in production.
 
@@ -313,7 +340,7 @@ async def init_client_warmup():
         # Warm OpenAI client (DNS + TCP)
         from app.embeddings import get_openai_client
 
-        client = get_openai_client()
+        get_openai_client()
         # Simple DNS resolution and connection test
         logger.debug("OpenAI client warmed up")
     except Exception as e:
@@ -323,7 +350,7 @@ async def init_client_warmup():
         # Warm Qdrant client (DNS + TCP + basic ping)
         from app.embeddings import get_qdrant_client
 
-        qdrant = get_qdrant_client()
+        get_qdrant_client()
         # The QdrantVectorStore constructor already performs connection setup
         logger.debug("Qdrant client warmed up")
     except Exception as e:

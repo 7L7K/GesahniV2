@@ -3,7 +3,7 @@ import os
 
 def test_no_basicConfig():
     # Only check your real app code, not tests or random scripts
-    for root, dirs, files in os.walk("app"):
+    for root, _dirs, files in os.walk("app"):
         for name in files:
             if name.endswith(".py"):
                 with open(os.path.join(root, name), encoding="utf-8") as f:

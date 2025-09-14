@@ -90,9 +90,7 @@ async def check_builtin_skills(prompt: str) -> str | None:
             continue
         # pattern_score = proportion of named groups that were matched
         groups = m.groupdict()
-        total_named = (
-            len([p for p in m.re.pattern.split("(?P") if p]) if m.re.pattern else 0
-        )
+        (len([p for p in m.re.pattern.split("(?P") if p]) if m.re.pattern else 0)
         matched_named = len([k for k, v in groups.items() if v])
         pattern_score = (matched_named / max(1, len(groups))) if groups else 0.5
         # context bonus: alias hits or recent usage (simple heuristic)

@@ -20,6 +20,6 @@ def test_jwt_decode_respects_leeway(monkeypatch):
     # With leeway=0 it should fail
     try:
         jwt_decode(token, os.getenv("JWT_SECRET"), algorithms=["HS256"], leeway=0)
-        assert False, "expected ExpiredSignatureError"
+        raise AssertionError("expected ExpiredSignatureError")
     except jwt.ExpiredSignatureError:
         pass

@@ -367,7 +367,9 @@ def debug_auth_state(request: Request) -> dict[str, Any]:
 
 
 def _in_test_mode() -> bool:
-    v = lambda s: str(os.getenv(s, "")).strip().lower()
+    def v(s):
+        return str(os.getenv(s, "")).strip().lower()
+
     return bool(
         os.getenv("PYTEST_CURRENT_TEST")
         or os.getenv("PYTEST_RUNNING")
@@ -1407,7 +1409,7 @@ async def register_v1(request: Request, response: Response):
 
         import jwt as _jwt
 
-        now = int(time.time())
+        int(time.time())
         jti = _jwt.api_jws.base64url_encode(_os.urandom(16)).decode()
         refresh_token = make_refresh(
             {"user_id": username, "jti": jti, "device_id": device_id}, ttl_s=refresh_ttl
@@ -1540,7 +1542,7 @@ async def login(
     # Use centralized cookie configuration for sharp and consistent cookies
     from ..cookie_config import get_cookie_config, get_token_ttls
 
-    cookie_config = get_cookie_config(request)
+    get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
 
     # Use consistent TTL from cookie config

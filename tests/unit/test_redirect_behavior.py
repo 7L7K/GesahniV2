@@ -200,7 +200,7 @@ class TestRedirectSecurity:
 
         # Current implementation may not include cache headers on redirects
         # This is acceptable for legacy redirect endpoints
-        cache_control = response.headers.get("Cache-Control", "")
+        response.headers.get("Cache-Control", "")
         # Just check that the response is valid, cache headers are optional
         assert response.status_code == 308
 

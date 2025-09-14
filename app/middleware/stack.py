@@ -109,7 +109,7 @@ def setup_middleware_stack(
     ]
 
     # Environment checks for conditionals
-    env = (os.getenv("ENV") or "dev").strip().lower()
+    (os.getenv("ENV") or "dev").strip().lower()
     dev_mode = _is_truthy(os.getenv("DEV_MODE"))
     in_ci = _is_truthy(os.getenv("CI")) or "PYTEST_CURRENT_TEST" in os.environ
     rate_limit_enabled_env = os.getenv("RATE_LIMIT_ENABLED", "1")

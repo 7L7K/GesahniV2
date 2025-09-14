@@ -166,7 +166,7 @@ def translate_validation_error(exc: ValidationError) -> HTTPException:
 
 def translate_common_exception(exc: Exception) -> HTTPException:
     """Translate common Python exceptions to appropriate HTTP status codes."""
-    exc_type = type(exc).__name__
+    type(exc).__name__
 
     # Validation errors: pydantic's core ValidationError may come from
     # pydantic or pydantic_core; detect by the presence of an `errors()` method

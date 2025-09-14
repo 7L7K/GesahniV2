@@ -88,7 +88,7 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
 
         # Attempt to initialise store (may raise when misconfigured)
         try:
-            s = _get_store()
+            _get_store()
         except Exception as e:
             logger.exception("admin.bootstrap_vector_store: store init failed: %s", e)
             if strict:

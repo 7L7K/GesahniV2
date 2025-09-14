@@ -12,8 +12,8 @@ def _summarize_set_cookie(headers):
     items = []
     for k, v in headers:
         # raw headers may be bytes
-        key = k.decode() if isinstance(k, (bytes, bytearray)) else k
-        val = v.decode() if isinstance(v, (bytes, bytearray)) else v
+        key = k.decode() if isinstance(k, bytes | bytearray) else k
+        val = v.decode() if isinstance(v, bytes | bytearray) else v
         if key.lower() == "set-cookie":
             name = val.split("=", 1)[0]
             flags = {

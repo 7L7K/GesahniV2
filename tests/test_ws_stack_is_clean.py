@@ -79,7 +79,7 @@ def test_ws_health_rejects_invalid_token():
 
     # Test without token - should fail
     try:
-        with c.websocket_connect("/v1/ws/health") as ws:
+        with c.websocket_connect("/v1/ws/health"):
             raise AssertionError("Should not connect without token")
     except Exception as e:
         # Should get connection error due to missing token
@@ -110,7 +110,7 @@ def test_ws_health_rejects_expired_token():
 
     # Test with expired token - should fail
     try:
-        with c.websocket_connect(f"/v1/ws/health?token={expired_token}") as ws:
+        with c.websocket_connect(f"/v1/ws/health?token={expired_token}"):
             raise AssertionError("Should not connect with expired token")
     except Exception as e:
         # Should get connection error due to expired token
@@ -170,7 +170,7 @@ def test_ws_state_properly_attached():
     from app.security_ws import verify_ws
 
     try:
-        result = asyncio.run(verify_ws(ws))
+        asyncio.run(verify_ws(ws))
 
         # Verify state was properly set (no None values)
         assert hasattr(ws.state, "user_id"), "ws.state.user_id should be set"

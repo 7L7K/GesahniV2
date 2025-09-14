@@ -71,7 +71,7 @@ def debug_file(file_path: str):
                     k += 1
 
                 func_body_lines = lines[func_start:k]
-                func_body = "\n".join(func_body_lines)
+                "\n".join(func_body_lines)
 
                 # Also include the decorator lines for dependency checking
                 decorator_start = i

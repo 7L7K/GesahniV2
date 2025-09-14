@@ -20,6 +20,11 @@ QDRANT_ON = _is_on("GSN_ENABLE_QDRANT", "0")
 # Security feature flags
 SAFE_REDIRECTS_ENFORCED = _is_on("SAFE_REDIRECTS_ENFORCED", "1")
 
+# Risky path feature flags
+MUSIC_ENABLED = _is_on("GSN_ENABLE_MUSIC", "0")
+AUTH_COOKIES_ENABLED = _is_on("GSN_ENABLE_AUTH_COOKIES", "0")
+MODEL_ROUTING_ENABLED = _is_on("GSN_ENABLE_MODEL_ROUTING", "1")
+
 # Legacy compatibility flags (map to new names)
 # Support existing OLLAMA_URL presence as implicit enable
 if not OLLAMA_ON and os.getenv("OLLAMA_URL"):
@@ -45,6 +50,9 @@ def list_flags() -> dict[str, str]:
         "HA_ON": str(HA_ON).lower(),
         "QDRANT_ON": str(QDRANT_ON).lower(),
         "SAFE_REDIRECTS_ENFORCED": str(SAFE_REDIRECTS_ENFORCED).lower(),
+        "MUSIC_ENABLED": str(MUSIC_ENABLED).lower(),
+        "AUTH_COOKIES_ENABLED": str(AUTH_COOKIES_ENABLED).lower(),
+        "MODEL_ROUTING_ENABLED": str(MODEL_ROUTING_ENABLED).lower(),
     }
     # Add runtime flags
     flags.update({k: str(v).lower() for k, v in _runtime_flags.items()})
@@ -61,6 +69,9 @@ __all__ = [
     "HA_ON",
     "QDRANT_ON",
     "SAFE_REDIRECTS_ENFORCED",
+    "MUSIC_ENABLED",
+    "AUTH_COOKIES_ENABLED",
+    "MODEL_ROUTING_ENABLED",
     "_is_on",
     "list_flags",
     "set_value",

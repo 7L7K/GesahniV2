@@ -164,7 +164,7 @@ class TestSecretVerification:
 
     def test_critical_secrets_configuration(self):
         """Test that CRITICAL_SECRETS configuration is properly structured."""
-        for secret_name, config in CRITICAL_SECRETS.items():
+        for _secret_name, config in CRITICAL_SECRETS.items():
             assert "description" in config
             assert "required" in config
             assert "insecure_defaults" in config

@@ -236,7 +236,7 @@ class TestRateLimitingIntegration:
             patch("asyncio.sleep") as mock_sleep,
         ):
             # Make attempts up to backoff threshold
-            for i in range(_EXPONENTIAL_BACKOFF_THRESHOLD):
+            for _i in range(_EXPONENTIAL_BACKOFF_THRESHOLD):
                 response = client.post(
                     "/login",
                     json={"username": "test_user", "password": "wrong_password"},

@@ -182,7 +182,7 @@ class TestRateLimit:
         mock_request.state.user_id = "test_user"
 
         # Make calls until rate limited
-        for i in range(15):  # Make enough calls to trigger rate limit
+        for _i in range(15):  # Make enough calls to trigger rate limit
             try:
                 asyncio.run(rate_limit(mock_request))
             except HTTPException as e:
@@ -365,12 +365,10 @@ class TestOriginValidation:
         allowed_origins = ["http://localhost:3000"]
         origin = None
         referer = None
-        backend_origin = "http://127.0.0.1:8000"
 
         # This mimics the logic in the connect function
         origin_allowed = origin in allowed_origins if origin else False
         referer_allowed = referer in allowed_origins if referer else False
-        backend_allowed = backend_origin in allowed_origins
 
         # Only backend origin might be allowed depending on configuration
         assert not origin_allowed
@@ -422,7 +420,7 @@ class TestCookieSecurity:
                 message = record.message
                 assert "sensitive_jwt_value" not in message
                 if hasattr(record, "meta") and isinstance(record.meta, dict):
-                    for key, value in record.meta.items():
+                    for _key, value in record.meta.items():
                         assert "sensitive_jwt_value" not in str(value)
 
 
@@ -459,7 +457,7 @@ class TestRateLimitSecurity:
         mock_request2.state.user_id = "user2"
 
         # User 1 makes 10 requests
-        for i in range(10):
+        for _i in range(10):
             try:
                 asyncio.run(rate_limit(mock_request1))
             except HTTPException:

@@ -152,7 +152,7 @@ def test_edge_cases():
         "email": "test@example.com",
     }
     token_no_sub = jwt.encode(payload_no_sub, "dummy_key", algorithm="HS256")
-    result_no_sub = simulate_id_token_processing(token_no_sub)
+    simulate_id_token_processing(token_no_sub)
     print()
 
 

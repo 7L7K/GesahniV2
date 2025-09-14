@@ -29,7 +29,7 @@ def test_cookie_eviction_stress(monkeypatch):
     # Whoami should still be authenticated because auth cookies are high priority
     w = c.get("/v1/whoami")
     assert w.status_code == HTTPStatus.OK
-    body = w.json()
+    w.json()
     # Allow best-effort: is_authenticated can be False if JWT_SECRET not set for cookie decode
     # But presence of cookies should keep them from being evicted; emulate by asserting cookies still exist
     assert c.cookies.get(GSNH_AT) is not None

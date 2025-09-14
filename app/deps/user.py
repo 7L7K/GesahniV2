@@ -785,7 +785,6 @@ def resolve_session_id_strict(
     Deprecation path: callers should migrate from resolve_session_id() to this.
     """
     sid = None
-    target = request or websocket
     try:
         if isinstance(request, Request):
             from ..web.cookies import read_session_cookie

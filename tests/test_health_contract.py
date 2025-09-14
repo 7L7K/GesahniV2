@@ -38,7 +38,7 @@ def test_ready_contract_shape(client):
     assert set(components.keys()) >= expected_component_keys
 
     # Each component should have a status
-    for component_name, component_data in components.items():
+    for _component_name, component_data in components.items():
         assert isinstance(component_data, dict)
         assert "status" in component_data
         assert component_data["status"] in {"healthy", "unhealthy", "degraded"}

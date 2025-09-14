@@ -60,7 +60,7 @@ async def me(
         is_auth = True
 
     # Contract compliance: return 401 for anonymous users (outside optional mode)
-    optional_in_tests = os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {
+    os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {
         "1",
         "true",
         "yes",

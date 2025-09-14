@@ -26,10 +26,8 @@ def test_idempotency():
                 data1_parsed = response1.json()
                 req_id_1 = data1_parsed.get("req_id", "unknown")
                 print(f"   Request ID: {req_id_1}")
-                response1_text = response1.text
             except:
                 req_id_1 = "unknown"
-                response1_text = response1.text
         else:
             print(f"   Error: HTTP {response1.status_code}")
             return
@@ -55,10 +53,8 @@ def test_idempotency():
                 data2_parsed = response2.json()
                 req_id_2 = data2_parsed.get("req_id", "unknown")
                 print(f"   Request ID: {req_id_2}")
-                response2_text = response2.text
             except:
                 req_id_2 = "unknown"
-                response2_text = response2.text
         else:
             print(f"   Error: HTTP {response2.status_code}")
             return

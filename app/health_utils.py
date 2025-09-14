@@ -144,7 +144,7 @@ async def check_chroma() -> HealthResult:
 
             client = chromadb.PersistentClient(path=chroma_path)
             # Simple heartbeat check
-            collections = client.list_collections()
+            client.list_collections()
             return "ok"
         except Exception:
             return "error"

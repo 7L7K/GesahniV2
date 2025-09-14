@@ -194,7 +194,7 @@ async def test_fake_provider_transfer_playback():
     provider = FakeProvider()
 
     devices = await provider.list_devices()
-    bedroom_device = next(d for d in devices if d.id == "device2")
+    next(d for d in devices if d.id == "device2")
 
     # Transfer to bedroom device
     await provider.transfer_playback("device2")

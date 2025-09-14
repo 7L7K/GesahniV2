@@ -57,7 +57,7 @@ def test_apple_callback_sets_cookies_on_returned_302(monkeypatch):
     )
     assert r.status_code in (302, 307)
     # Ensure cookies are present on the response we returned
-    cookie_header = (
+    (
         ",".join(r.cookies.keys())
         if getattr(r, "cookies", None)
         else ";".join(r.headers.get("set-cookie", "").split("\n"))

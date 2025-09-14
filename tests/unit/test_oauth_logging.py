@@ -23,7 +23,7 @@ class TestOAuthLogging:
                 },
             ):
                 client = TestClient(app)
-                response = client.get("/v1/google/auth/login_url")
+                client.get("/v1/google/auth/login_url")
 
                 # Verify the log was called with correct structure
                 mock_logger.info.assert_called()
@@ -66,7 +66,7 @@ class TestOAuthLogging:
 
                         with patch("app.api.google_oauth.set_auth_cookies"):
                             client = TestClient(app)
-                            response = client.get(
+                            client.get(
                                 "/v1/google/auth/callback?code=test_code&state=test_state"
                             )
 
@@ -104,7 +104,7 @@ class TestOAuthLogging:
                     mock_exchange.side_effect = Exception("Token exchange failed")
 
                     client = TestClient(app)
-                    response = client.get(
+                    client.get(
                         "/v1/google/auth/callback?code=test_code&state=test_state"
                     )
 
@@ -137,7 +137,7 @@ class TestOAuthLogging:
         with patch("app.api.auth.logger") as mock_logger:
             with patch("app.deps.user.get_current_user_id", return_value="test_user"):
                 client = TestClient(app)
-                response = client.get("/v1/whoami")
+                client.get("/v1/whoami")
 
                 # Verify the log was called with correct structure
                 mock_logger.info.assert_called()
@@ -179,7 +179,7 @@ class TestOAuthLogging:
 
                         with patch("app.api.google_oauth.set_auth_cookies"):
                             client = TestClient(app)
-                            response = client.get(
+                            client.get(
                                 "/v1/google/auth/callback?code=test_code&state=test_state"
                             )
 

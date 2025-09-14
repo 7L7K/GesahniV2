@@ -78,8 +78,6 @@ async def debug_mismatch():
     import app.auth_store_tokens as auth_mod
 
     # Store original functions
-    original_get_token = auth_mod.get_token
-    original_get_all_user_tokens = auth_mod.get_all_user_tokens
 
     async def mock_get_token(user_id: str, provider: str, provider_sub=None):
         print(f"Mock get_token called: {user_id}, {provider}, {provider_sub}")

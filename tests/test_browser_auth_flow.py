@@ -164,7 +164,7 @@ class BrowserAuthSimulator:
                 result["auth_after"] = whoami_result
 
                 if (
-                    whoami_result.get("is_authenticated") == False
+                    whoami_result.get("is_authenticated") is False
                     and whoami_result.get("status_code") == 200
                 ):
                     print(f"🚨 LOGOUT TRIGGER: Lost authentication on {page}")
@@ -249,7 +249,7 @@ class BrowserAuthSimulator:
 
                     # Check if this actually logs us out
                     auth_check = self.check_auth_status()
-                    if auth_check.get("is_authenticated") == False:
+                    if auth_check.get("is_authenticated") is False:
                         result["confirmed_logout"] = True
                 else:
                     result["logout_triggered"] = False

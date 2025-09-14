@@ -107,8 +107,8 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
             # Update updated_at timestamp for the token (the refresh service handles the actual token upsert)
             now = datetime.now(UTC)
             session_gen = get_async_db()
-    session = await anext(session_gen)
-    try:
+            session = await anext(session_gen)
+            try:
                 # Find the most recent token for this user/provider combination
                 stmt = (
                     select(ThirdPartyToken)
@@ -140,10 +140,10 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
                         "spotify_refresh: no token found to update",
                         extra={"user_id": user_id, "provider": provider},
                     )
-        finally:
-            await session.close()
+            finally:
+                await session.close()
 
-        logger.info(
+            logger.info(
                 "spotify_refresh: exchange ok",
                 extra={"user_id": user_id, "provider": provider},
             )
@@ -199,7 +199,7 @@ async def run_once() -> None:
         return
 
     tasks = []
-    for user_id, provider, expires_at in candidates:
+    for user_id, provider, _expires_at in candidates:
         tasks.append(_refresh_for_user(user_id, provider))
 
     await asyncio.gather(*tasks)

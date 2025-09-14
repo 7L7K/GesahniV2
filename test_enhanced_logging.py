@@ -84,7 +84,7 @@ def test_error_token_exchange_logging():
         import asyncio
 
         try:
-            result = asyncio.run(async_token_exchange("invalid_code", "test_verifier"))
+            asyncio.run(async_token_exchange("invalid_code", "test_verifier"))
         except Exception as e:
             print(f"Expected exception: {type(e).__name__}: {e}")
 

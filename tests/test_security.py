@@ -80,7 +80,7 @@ def test_webhook_sign_verify_roundtrip(tmp_path, monkeypatch):
     path = tmp_path / "ha.txt"
     path.write_text("abc123\n")
     monkeypatch.setenv("HA_WEBHOOK_SECRET_FILE", str(path))
-    client = TestClient(app)
+    TestClient(app)
 
     # Minimal endpoint to exercise verify_webhook through the router
     body = b"hello"

@@ -306,7 +306,7 @@ class TestRedirectPathAbuse:
         """Test that logging doesn't break under high load."""
         with patch("app.security.redirects.logger") as mock_logger:
             # Generate many warnings/errors
-            for i in range(100):
+            for _i in range(100):
                 sanitize_next_path("http://evil.com/path")  # Should trigger warning
 
             # Verify logging calls don't cause issues

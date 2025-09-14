@@ -13,9 +13,19 @@ from fastapi import Request
 
 from app.api import music as _music_api
 from app.api import spotify as _spotify_api
+from app.feature_flags import MUSIC_ENABLED
+from app.http_errors import http_error
 
 
 async def music_status(request: Request) -> dict[str, Any]:
+    if not MUSIC_ENABLED:
+        raise http_error(
+            code="feature_disabled",
+            message="Music integration is disabled",
+            status=404,
+            meta={"feature": "music"},
+        )
+
     # Try to resolve user_id for provider calls; fall back to anon
     user_id = None
     try:
@@ -37,15 +47,23 @@ async def music_status(request: Request) -> dict[str, Any]:
         try:
             # Fallback to spotify status probe
             try:
-                status = await _spotify_api.spotify_status  # type: ignore[attr-defined]
+                await _spotify_api.spotify_status  # type: ignore[attr-defined]
             except Exception:
-                status = None
+                pass
             return {"playing": False, "device": None, "track": None}
         except Exception:
             return {"playing": False, "device": None, "track": None}
 
 
 async def music_devices(request: Request) -> dict[str, Any]:
+    if not MUSIC_ENABLED:
+        raise http_error(
+            code="feature_disabled",
+            message="Music integration is disabled",
+            status=404,
+            meta={"feature": "music"},
+        )
+
     # Resolve user id where possible
     user_id = "anon"
     try:
@@ -71,6 +89,14 @@ async def music_devices(request: Request) -> dict[str, Any]:
 
 
 async def set_music_device(request) -> dict[str, Any]:
+    if not MUSIC_ENABLED:
+        raise http_error(
+            code="feature_disabled",
+            message="Music integration is disabled",
+            status=404,
+            meta={"feature": "music"},
+        )
+
     # Accept device_id in body or query params for compatibility
     try:
         data = await request.json()
@@ -82,7 +108,7 @@ async def set_music_device(request) -> dict[str, Any]:
     try:
         # Try to call canonical set_device
         try:
-            res = await _music_api.set_device.__call__(
+            await _music_api.set_device.__call__(
                 {"device_id": device_id}
             )  # fallback; may not match
         except Exception:

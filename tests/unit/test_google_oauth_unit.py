@@ -124,9 +124,7 @@ class TestGoogleOAuthLoginUrl:
 
             # Verify signature
             message = f"{timestamp}:{random_token}".encode()
-            expected_sig = hmac.new(
-                b"test-secret-key", message, hashlib.sha256
-            ).hexdigest()[
+            hmac.new(b"test-secret-key", message, hashlib.sha256).hexdigest()[
                 :12
             ]  # Match the reduced signature length
             # Note: The actual signature might differ due to timing, but structure should be correct

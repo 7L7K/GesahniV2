@@ -195,6 +195,19 @@ class ModelRouter:
         request_id: str | None = None,
     ) -> RoutingDecision:
         """Route to appropriate model based on prompt, intent, and overrides."""
+        from app.feature_flags import MODEL_ROUTING_ENABLED
+        from fastapi import HTTPException
+
+        if not MODEL_ROUTING_ENABLED:
+            # When model routing is disabled, default to a safe fallback
+            return RoutingDecision(
+                vendor="openai",
+                model="gpt-4o-mini",  # Safe default model
+                reason="model_routing_disabled",
+                stream=stream,
+                allow_fallback=False,
+                request_id=request_id,
+            )
 
         # Handle model override path
         if model_override:

@@ -211,14 +211,14 @@ class TestTokenValidation:
     async def test_malformed_token_rejection(self, tmp_path):
         """Test rejection of malformed tokens"""
         db_path = str(tmp_path / "test_tokens.db")
-        dao = TokenDAO(db_path)
+        TokenDAO(db_path)
 
         now = int(time.time())
 
         # Test that malformed tokens are rejected during construction
         # The ThirdPartyToken constructor should validate required fields
         with pytest.raises(ValueError):
-            malformed_token = ThirdPartyToken(
+            ThirdPartyToken(
                 identity_id="e51c0c25-a883-4863-a5eb-92bae7889326",
                 user_id="test_user",
                 provider="spotify",

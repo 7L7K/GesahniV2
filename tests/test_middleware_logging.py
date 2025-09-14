@@ -27,6 +27,5 @@ def test_request_headers_set(monkeypatch):
     os.environ["OTEL_ENABLED"] = "0"
     c = TestClient(main.app)
     # Provide X-Request-ID to test propagation
-    rid = "test-rid-123"
     r = c.get("/health")
     assert "X-Request-ID" in r.headers
