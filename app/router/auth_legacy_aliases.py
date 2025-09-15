@@ -7,7 +7,7 @@ with deprecation headers, logging, and metrics tracking.
 
 from fastapi import APIRouter, Request, Response
 
-from ..api.auth import login_v1, logout, refresh, register_v1, whoami
+from ..api.auth import login_v1, logout, refresh
 from .legacy_alias import LegacyAlias
 
 router = APIRouter(tags=["Auth Legacy"])
@@ -47,54 +47,8 @@ async def legacy_login_handler(request: Request, response: Response):
     return await legacy_login(request, response)
 
 
-# Legacy route: POST /v1/register → POST /v1/auth/register
-legacy_register = LegacyAlias("/register", "/v1/auth/register", "POST", register_v1)
-
-
-@router.post(
-    "/register",
-    deprecated=True,
-    include_in_schema=True,
-    responses={
-        200: {
-            "content": {
-                "application/json": {
-                    "schema": {
-                        "example": {"access_token": "jwt", "refresh_token": "jwt"}
-                    }
-                }
-            }
-        },
-        400: {"description": "invalid or username_taken"},
-    },
-)
-async def legacy_register_handler(request: Request, response: Response):
-    """Legacy register endpoint - deprecated.
-
-    This endpoint is deprecated and will be removed after 2025-12-31.
-    Please use POST /v1/auth/register instead.
-
-    For backward compatibility, this endpoint redirects to the canonical
-    auth route with deprecation tracking.
-    """
-    return await legacy_register(request, response)
-
-
-# Legacy route: GET /v1/whoami → GET /v1/auth/whoami
-legacy_whoami_wrapper = LegacyAlias("/whoami", "/v1/auth/whoami", "GET", whoami)
-
-
-@router.get("/whoami", deprecated=True, include_in_schema=True)
-async def legacy_whoami_handler(request: Request):
-    """Legacy whoami endpoint - deprecated.
-
-    This endpoint is deprecated and will be removed after 2025-12-31.
-    Please use GET /v1/auth/whoami instead.
-
-    For backward compatibility, this endpoint redirects to the canonical
-    auth route with deprecation tracking.
-    """
-    return await legacy_whoami_wrapper(request)
+# Note: /register and /whoami are provided by the canonical auth router
+# so we don't need legacy aliases for them
 
 
 # Legacy route: POST /v1/logout → POST /v1/auth/logout

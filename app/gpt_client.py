@@ -25,7 +25,10 @@ from typing import TYPE_CHECKING
 
 try:  # pragma: no cover - exercised indirectly
     from openai import AsyncOpenAI
+
+    _openai_available = True
 except Exception:  # pragma: no cover - import-time guard
+    _openai_available = False
 
     class AsyncOpenAI:  # type: ignore
         """Fallback stub when ``openai`` isn't installed."""
@@ -188,6 +191,11 @@ async def ask_gpt(
         if kwargs.pop("allow_test", False):
             return "gpt-dummy", 0, 0, 0.0
         raise RuntimeError("GPT backend unavailable (test stub)")
+
+    # Check if openai package is available
+    if not _openai_available:
+        # Return error message as string instead of raising
+        return '{"code":"openai_unavailable","message":"OpenAI package not installed - error","details":{}}'
 
     model = _normalize_model_name(model)
     client = get_client()

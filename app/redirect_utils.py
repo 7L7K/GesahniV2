@@ -352,24 +352,64 @@ def sanitize_redirect_path(
                 AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="file_like_path").inc()
                 return fallback
             # Reject spaces or colon which often indicate pasted file URIs
-            if _re.search(r"[\\s:]", path):
+            if _re.search(r"[\s:]", path):
                 AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="suspicious_chars").inc()
                 return fallback
         except Exception:
             # If regex checks fail for any reason, continue; later steps still sanitize
             pass
 
-        # Step 5: Strip fragments (#...)
-        if "#" in path:
-            path = path.split("#")[0]
-            sanitized = True
+        # Step 5: Strip fragments (#...) and handle query parameters
+        from urllib.parse import urlsplit, urlunsplit
 
-        # Step 6: Remove any nested ?next=... parameters
-        if "?" in path:
-            from urllib.parse import parse_qs, urlencode, urlparse
+        # Use urlsplit to properly handle path, query, and fragment
+        s = urlsplit(path)
 
-            parsed = urlparse(path)
-            query_params = parse_qs(parsed.query)
+        # Check for external URLs (should have been caught earlier, but double-check)
+        if s.scheme or s.netloc:
+            AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="absolute_url").inc()
+            logger.info(
+                "Redirect sanitization",
+                extra={
+                    "component": "auth.redirect",
+                    "reason": "absolute_url",
+                    "input_len": len(raw_path),
+                    "output_path": fallback,
+                    "cookie_present": (
+                        get_gs_next_cookie(request) is not None if request else False
+                    ),
+                    "env": os.getenv("ENV", "dev"),
+                    "raw_path": raw_path,
+                },
+            )
+            return fallback
+
+        # Clean path by normalizing slashes and removing empty segments
+        clean_path = "/" + "/".join(filter(None, s.path.split("/")))
+        if not clean_path:
+            AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="fallback_default").inc()
+            logger.info(
+                "Redirect sanitization fallback",
+                extra={
+                    "component": "auth.redirect",
+                    "reason": "fallback_default",
+                    "input_len": len(raw_path),
+                    "output_path": fallback,
+                    "cookie_present": (
+                        get_gs_next_cookie(request) is not None if request else False
+                    ),
+                    "env": os.getenv("ENV", "dev"),
+                    "raw_path": raw_path,
+                },
+            )
+            return fallback
+
+        # Remove any nested ?next=... parameters from query
+        query_params = {}
+        if s.query:
+            from urllib.parse import parse_qs
+
+            query_params = parse_qs(s.query)
 
             # Remove any next parameters
             if "next" in query_params:
@@ -382,7 +422,7 @@ def sanitize_redirect_path(
                         "component": "auth.redirect",
                         "reason": "removed_nested_next",
                         "input_len": len(raw_path),
-                        "output_path": path if query_params else parsed.path,
+                        "output_path": clean_path,
                         "cookie_present": (
                             get_gs_next_cookie(request) is not None
                             if request
@@ -393,14 +433,17 @@ def sanitize_redirect_path(
                     },
                 )
 
-            # Reconstruct path without next params
-            if query_params:
-                new_query = urlencode(query_params, doseq=True)
-                path = f"{parsed.path}?{new_query}"
-            else:
-                path = parsed.path
+        # Reconstruct query string without next params
+        new_query = ""
+        if query_params:
+            from urllib.parse import urlencode
 
-        # Step 7: Prevent redirect loops by blocking auth-related paths
+            new_query = urlencode(query_params, doseq=True)
+
+        # Reconstruct path without fragment (drop s.fragment)
+        path = urlunsplit(("", "", clean_path, new_query, ""))
+
+        # Step 6: Prevent redirect loops by blocking auth-related paths
         if is_auth_path(path):
             AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="blocked_auth_path").inc()
             logger.info(
@@ -419,11 +462,12 @@ def sanitize_redirect_path(
             )
             return fallback
 
-        # Step 8: Normalize redundant slashes
+        # Step 7: Final path normalization (should be minimal since we already normalized above)
         import re
 
         normalized_path = re.sub(r"/+", "/", path)
         if normalized_path != path:
+            sanitized = True
             AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="normalized_slashes").inc()
             logger.info(
                 "Redirect sanitization",
@@ -441,9 +485,9 @@ def sanitize_redirect_path(
                     "normalized_path": normalized_path,
                 },
             )
-            return normalized_path
+            path = normalized_path
 
-        # Step 9: Basic path validation (no .. traversal)
+        # Step 8: Basic path validation (no .. traversal)
         if ".." in path:
             AUTH_REDIRECT_SANITIZED_TOTAL.labels(reason="fallback_default").inc()
             logger.info(

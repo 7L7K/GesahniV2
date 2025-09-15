@@ -255,7 +255,7 @@ def route_text(
         return _decision("gpt-4.1-nano", "keyword")
 
     ROUTER_DECISION.labels("default").inc()
-    return _decision("gpt-5-nano", "default")
+    return _decision("gpt-4.1-nano", "default")
 
 
 def _heuristic_self_check(

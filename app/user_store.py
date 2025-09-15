@@ -11,6 +11,7 @@ from sqlalchemy import select, update
 from .db.core import get_async_db
 from .db.models import UserStats
 from .models.user_stats import UserStats as UserStatsModel
+from .util.ids import to_uuid
 
 
 class UserDAO:
@@ -21,13 +22,15 @@ class UserDAO:
         session_gen = get_async_db()
         session = await anext(session_gen)  # Get the session from the async generator
         try:
-            stmt = select(UserStats).where(UserStats.user_id == user_id)
+            stmt = select(UserStats).where(UserStats.user_id == str(to_uuid(user_id)))
             result = await session.execute(stmt)
             stats = result.scalar_one_or_none()
 
             if not stats:
                 # Create default stats
-                stats = UserStats(user_id=user_id, login_count=0, request_count=0)
+                stats = UserStats(
+                    user_id=str(to_uuid(user_id)), login_count=0, request_count=0
+                )
                 session.add(stats)
                 await session.commit()
 
@@ -50,7 +53,7 @@ class UserDAO:
             # Try to update existing
             stmt = (
                 update(UserStats)
-                .where(UserStats.user_id == user_id)
+                .where(UserStats.user_id == str(to_uuid(user_id)))
                 .values(login_count=UserStats.login_count + 1, last_login=now)
             )
             result = await session.execute(stmt)
@@ -58,7 +61,10 @@ class UserDAO:
             if result.rowcount == 0:
                 # Create new record if none existed
                 stats = UserStats(
-                    user_id=user_id, login_count=1, last_login=now, request_count=0
+                    user_id=str(to_uuid(user_id)),
+                    login_count=1,
+                    last_login=now,
+                    request_count=0,
                 )
                 session.add(stats)
 
@@ -74,14 +80,16 @@ class UserDAO:
             # Try to update existing
             stmt = (
                 update(UserStats)
-                .where(UserStats.user_id == user_id)
+                .where(UserStats.user_id == str(to_uuid(user_id)))
                 .values(request_count=UserStats.request_count + 1)
             )
             result = await session.execute(stmt)
 
             if result.rowcount == 0:
                 # Create new record if none existed
-                stats = UserStats(user_id=user_id, login_count=0, request_count=1)
+                stats = UserStats(
+                    user_id=str(to_uuid(user_id)), login_count=0, request_count=1
+                )
                 session.add(stats)
 
             await session.commit()
@@ -93,13 +101,15 @@ class UserDAO:
         session_gen = get_async_db()
         session = await anext(session_gen)  # Get the session from the async generator
         try:
-            stmt = select(UserStats).where(UserStats.user_id == user_id)
+            stmt = select(UserStats).where(UserStats.user_id == str(to_uuid(user_id)))
             result = await session.execute(stmt)
             stats = result.scalar_one_or_none()
 
             if not stats:
                 # Create default stats
-                stats = UserStats(user_id=user_id, login_count=0, request_count=0)
+                stats = UserStats(
+                    user_id=str(to_uuid(user_id)), login_count=0, request_count=0
+                )
                 session.add(stats)
                 await session.commit()
         finally:

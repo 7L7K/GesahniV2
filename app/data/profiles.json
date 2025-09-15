@@ -113,14 +113,14 @@
   "u_test": {
     "favorite_color": {
       "value": "blue",
-      "updated_at": 1757687957.732578,
+      "updated_at": 1757909150.341471,
       "source": "ui"
     }
   },
   "u1": {
     "preferred_name": {
       "value": "Alex",
-      "updated_at": 1757687957.739291,
+      "updated_at": 1757909150.353775,
       "source": "import"
     }
   },
@@ -164,17 +164,17 @@
     },
     "calendar_integration": {
       "value": false,
-      "updated_at": 1757822502.774936,
+      "updated_at": 1757909435.7202718,
       "source": "api"
     },
     "gmail_integration": {
       "value": false,
-      "updated_at": 1757822502.77703,
+      "updated_at": 1757909435.721913,
       "source": "api"
     },
     "onboarding_completed": {
       "value": true,
-      "updated_at": 1757822502.815053,
+      "updated_at": 1757909435.9335418,
       "source": "api"
     },
     "communication_style": {
@@ -310,6 +310,28 @@
     "onboarding_completed": {
       "value": false,
       "updated_at": 1756561787.48497,
+      "source": "api"
+    }
+  },
+  "test_user": {
+    "name": {
+      "value": "test",
+      "updated_at": 1757897417.657258,
+      "source": "api"
+    },
+    "calendar_integration": {
+      "value": false,
+      "updated_at": 1757897417.6596239,
+      "source": "api"
+    },
+    "gmail_integration": {
+      "value": false,
+      "updated_at": 1757897417.661846,
+      "source": "api"
+    },
+    "onboarding_completed": {
+      "value": false,
+      "updated_at": 1757897417.664223,
       "source": "api"
     }
   }

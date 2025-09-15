@@ -19,6 +19,10 @@ def _bootstrap_db_and_env():
     os.environ.setdefault("ENABLE_GOOGLE_OAUTH", "1")
     os.environ.setdefault("ENABLE_SPOTIFY", "1")
 
+    # Offline mode: disable all external service checks during tests
+    os.environ.setdefault("TEST_OFFLINE", "1")
+    os.environ.setdefault("STARTUP_VENDOR_PINGS", "0")
+
     # isolated DB dir for this run
     os.environ.setdefault(
         "GESAHNI_TEST_DB_DIR", f"/tmp/gesahni_tests/{uuid.uuid4().hex}"
@@ -70,17 +74,32 @@ def pytest_load_initial_conftests(early_config, parser):
         # Mark pytest running so modules that compute DB paths at import see it
         os.environ.setdefault("PYTEST_RUNNING", "1")
 
-        # Per-worker test DB directory (xdist sets PYTEST_XDIST_WORKER or PYTEST_WORKER_ID)
+        # Per-worker test database configuration (xdist sets PYTEST_XDIST_WORKER or PYTEST_WORKER_ID)
         worker = (
             os.getenv("PYTEST_XDIST_WORKER") or os.getenv("PYTEST_WORKER_ID") or "main"
         )
+
+        # Use separate PostgreSQL databases per worker to avoid conflicts
+        if worker != "main":
+            os.environ.setdefault(
+                "DATABASE_URL",
+                f"postgresql://app:app_pw@localhost:5432/gesahni_test_{worker}",
+            )
+        else:
+            os.environ.setdefault(
+                "DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test"
+            )
+
+        # Fallback: per-worker SQLite directory (if PostgreSQL not available)
         test_dir = f"/tmp/gesahni_tests/{worker}"
         os.environ.setdefault("GESAHNI_TEST_DB_DIR", test_dir)
 
         # Test-friendly configuration overrides
         # JWT: Allow short secrets in tests
         os.environ.setdefault("DEV_MODE", "1")  # Allows weak JWT secrets
-        os.environ.setdefault("ENV", "dev")  # Alternative way to allow weak secrets
+        os.environ.setdefault(
+            "ENV", "test"
+        )  # Set environment to test for proper isolation
         # Provide a deterministic dev JWT secret to enable token minting
         os.environ.setdefault(
             "JWT_SECRET", "dev-secret-key-please-change-0123456789abcdef0123456789abcd"
@@ -573,6 +592,21 @@ def pytest_sessionfinish(session, exitstatus):
         os.environ["CHROMA_PATH"] = _prev_chroma
     else:
         os.environ.pop("CHROMA_PATH", None)
+
+
+# ------------------------------------------------------------------------------
+# 🔒  DOTENV autouse fixture: prevent .env writes during tests
+# ------------------------------------------------------------------------------
+@pytest.fixture(scope="session", autouse=True)
+def _prevent_dotenv_writes(tmp_path_factory):
+    """Prevent .env file writes during tests by redirecting to tmp directory."""
+    tmp_dir = tmp_path_factory.mktemp("dotenv")
+    test_env_path = tmp_dir / ".env.test"
+    os.environ["DOTENV_PATH"] = str(test_env_path)
+    yield
+    # Clean up after session
+    if "DOTENV_PATH" in os.environ:
+        del os.environ["DOTENV_PATH"]
 
 
 # ------------------------------------------------------------------------------

@@ -20,6 +20,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as sa_create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import NullPool
 
 logger = logging.getLogger(__name__)
 
@@ -33,8 +34,12 @@ if DATABASE_URL.split(":", 1)[0].lower() == "sqlite":
     raise RuntimeError("Legacy datastore path hit — not allowed in Postgres-only mode")
 
 # Validate PostgreSQL URL format
-if not DATABASE_URL.startswith("postgresql://"):
-    raise RuntimeError("DATABASE_URL must be a PostgreSQL URL (postgresql://...)")
+if not DATABASE_URL.startswith("postgresql://") and not DATABASE_URL.startswith(
+    "postgresql+"
+):
+    raise RuntimeError(
+        "DATABASE_URL must be a PostgreSQL URL (postgresql://... or postgresql+driver://...)"
+    )
 
 # Synchronous engine configuration
 sync_engine = create_engine(
@@ -47,16 +52,24 @@ sync_engine = create_engine(
     echo=False,
 )
 
-# Asynchronous engine configuration
-async_engine = sa_create_async_engine(
-    DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
-    pool_size=10,
-    max_overflow=20,
-    pool_pre_ping=True,
-    pool_recycle=1800,
-    future=True,
-    echo=False,
-)
+# Asynchronous engine configuration (test-aware pool)
+if os.getenv("DB_POOL", "enabled") == "disabled":
+    async_engine = sa_create_async_engine(
+        DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+        poolclass=NullPool,
+        future=True,
+        echo=False,
+    )
+else:
+    async_engine = sa_create_async_engine(
+        DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://"),
+        pool_size=10,
+        max_overflow=20,
+        pool_pre_ping=True,
+        pool_recycle=1800,
+        future=True,
+        echo=False,
+    )
 
 # Session factories
 SyncSessionLocal = sessionmaker(bind=sync_engine, future=True)

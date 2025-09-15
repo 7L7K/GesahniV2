@@ -135,6 +135,13 @@ async def _check_and_set_flag() -> None:
 
     now = time.monotonic()
 
+    # Check if LLaMA is explicitly disabled
+    llama_enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
+    if llama_enabled in ("0", "false", "no", "off"):
+        LLAMA_HEALTHY = False
+        logger.warning("LLAMA_ENABLED is disabled – marking unhealthy")
+        raise RuntimeError("LLaMA integration disabled via LLAMA_ENABLED=0")
+
     # Check if we should skip this health check due to throttling
     if llama_health_check_state["has_ever_succeeded"]:
         time_since_success = now - llama_health_check_state["last_success_ts"]

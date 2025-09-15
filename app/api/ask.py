@@ -620,7 +620,7 @@ async def _ask(request: Request, body: AskRequest):
                     PROMPT_ROUTER_FAILURES_TOTAL,
                 )
 
-                backend_label = os.getenv("PROMPT_BACKEND", "dryrun").lower()
+                backend_label = os.getenv("PROMPT_BACKEND", "live").lower()
                 PROMPT_ROUTER_CALLS_TOTAL.labels(backend_label).inc()
 
                 start = monotonic()

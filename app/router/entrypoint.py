@@ -28,6 +28,11 @@ async def route_prompt(*args, **kwargs) -> dict[str, Any]:
     available. Otherwise, resolve by configuration (mirrors startup) and
     call the concrete backend module directly.
     """
+    # Reset golden trace flag at start of request
+    from . import _reset_gtrace_flag
+
+    _reset_gtrace_flag()
+
     # Import here to avoid cycles and keep module light
     try:
         from app.api.ask_contract import AskRequest as _AskRequest  # type: ignore
@@ -116,14 +121,8 @@ async def route_prompt(*args, **kwargs) -> dict[str, Any]:
         # Skills are optional; on any error continue to LLM routing
         pass
 
-
-# Public hook runner (kept here for a stable import path)
-async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]:  # type: ignore[override]
-    try:
-        return await _run_post_hooks(result, request)
-    except Exception:
-        # Never propagate
-        return {"results": [], "ok": True}
+    # Extract user_id for cache and routing
+    user_id = payload.get("user_id") or kwargs.get("user_id")
 
     # In-process semantic cache (non-blocking)
     try:
@@ -352,9 +351,28 @@ async def run_post_hooks(result: dict[str, Any], request: Any) -> dict[str, Any]
             except Exception:
                 pass
             return result
+        elif backend == "live":
+            # For "live" backend, use the legacy router
+            from app import router_legacy
+
+            logger.info("compat.route_prompt: using legacy router for live backend")
+            result = await router_legacy.route_prompt(
+                payload.get("prompt", ""),
+                user_id=payload.get("user_id") or kwargs.get("user_id"),
+                model_override=payload.get("model_override"),
+                **{
+                    k: v
+                    for k, v in payload.items()
+                    if k not in ["prompt", "user_id", "model_override"]
+                },
+            )
+            return result
         else:
             logger.warning("compat.route_prompt: dryrun fallback used (legacy path)")
             return {"dry_run": True, "echo": payload}
     except Exception as e:
         logger.exception("compat.route_prompt: backend call failed: %s", e)
         raise BackendUnavailableError(str(e))
+
+    # Ensure clean golden trace flag for next call in same thread
+    _reset_gtrace_flag()

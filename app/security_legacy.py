@@ -837,8 +837,11 @@ _http_burst = http_burst
 _ws_burst = ws_burst
 
 
-def _current_key(request: Request) -> str:
+def _current_key(request: Request | None) -> str:
     """Get the current rate limiting key for the request."""
+    if request is None:
+        return "anon"
+
     # Prefer explicit user_id set by deps; otherwise pull from JWT payload
     uid = getattr(request.state, "user_id", None)
     if not uid:

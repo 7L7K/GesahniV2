@@ -17,6 +17,7 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..auth_protection import public_route
+from ..deps.scopes import require_scope
 from ..deps.user import get_current_user_id, require_user, resolve_session_id
 from ..security import jwt_decode
 
@@ -824,20 +825,24 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     except Exception:
         pass
 
-    # Return 401 if no authentication method was attempted or all failed
+    # For public whoami endpoint, return success even when unauthenticated
+    # This allows clients to check authentication status without requiring auth
     has_any_token = bool(token_header or token_cookie or clerk_token)
     if not has_any_token or (has_any_token and not session_ready):
-        # Structured 401 for contract
+        # Return successful response with unauthenticated state
         from fastapi.responses import JSONResponse as _JSON
 
         from ..logging_config import req_id_var as _rid
 
         body = {
-            "code": "auth.not_authenticated",
-            "detail": "not_authenticated",
+            "is_authenticated": False,
+            "session_ready": False,
+            "user": {"id": None, "email": None},
+            "source": "missing",
+            "version": 1,
             "request_id": _rid.get(),
         }
-        resp = _JSON(body, status_code=401)
+        resp = _JSON(body, status_code=200)
         resp.headers.setdefault("Cache-Control", "no-store, max-age=0")
         resp.headers.setdefault("Pragma", "no-cache")
         if _rid.get():
@@ -1313,6 +1318,7 @@ async def clerk_finish(request: Request) -> dict[str, Any]:
 
 @router.post(
     "/register",
+    dependencies=[Depends(require_scope("auth:register"))],
     responses={
         200: {
             "content": {
@@ -1326,7 +1332,6 @@ async def clerk_finish(request: Request) -> dict[str, Any]:
         400: {"description": "invalid or username_taken"},
     },
 )
-@public_route
 async def register_v1(request: Request, response: Response):
     """Create a local account and return tokens.
 

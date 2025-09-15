@@ -40,8 +40,27 @@ def generate_custom_openapi(
         tags=tags,
     )
 
-    # Add custom schema modifications here if needed
-    # For example, custom examples, descriptions, etc.
+    # Filter operation tags to only expose allowed set (excludes internal/test tags)
+    ALLOWED_TAGS = {"Admin", "Auth", "Calendar", "Care", "Music", "TV"}
+
+    # Filter tags from individual operations
+    if "paths" in schema:
+        for path_item in schema["paths"].values():
+            if isinstance(path_item, dict):
+                for operation in path_item.values():
+                    if isinstance(operation, dict) and "tags" in operation:
+                        # Filter out tags that aren't in the allowed set
+                        operation["tags"] = [
+                            tag for tag in operation["tags"] if tag in ALLOWED_TAGS
+                        ]
+
+    # Also filter the top-level tags list to only include allowed tags
+    if "tags" in schema:
+        schema["tags"] = [
+            tag
+            for tag in schema["tags"]
+            if isinstance(tag, dict) and tag.get("name") in ALLOWED_TAGS
+        ]
 
     # Add security schemes if needed
     if "components" not in schema:

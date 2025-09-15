@@ -4,9 +4,29 @@ from collections.abc import Mapping
 from typing import Any
 
 from fastapi import HTTPException
+from fastapi.responses import JSONResponse
 from pydantic import ValidationError
 
 from .error_envelope import build_error
+
+
+def error_response(
+    code: str,
+    message: str,
+    *,
+    status: int,
+    details: dict | None = None,
+    headers: Mapping[str, str] | None = None,
+):
+    """Return a standardized JSONResponse with structured error details.
+
+    Response format: {"code": code, "message": message, "details": details or {}}
+    """
+    hdrs = {"X-Error-Code": code}
+    if headers:
+        hdrs.update(dict(headers))
+    payload = {"code": code, "message": message, "details": details or {}}
+    return JSONResponse(payload, status_code=status, headers=hdrs)
 
 
 def unauthorized(
@@ -36,13 +56,12 @@ def forbidden(
     message: str = "Forbidden",
     hint: str = "insufficient permissions for this action",
     headers: Mapping[str, str] | None = None,
-) -> HTTPException:
-    """Return a standardized 403 HTTPException with structured detail."""
-    hdrs = {"X-Error-Code": code}
-    if headers:
-        hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 403})
-    return HTTPException(status_code=403, detail=env, headers=hdrs)
+) -> JSONResponse:
+    """Return a standardized 403 JSONResponse with structured error details."""
+    details = {"status_code": 403, "hint": hint}
+    return error_response(
+        code=code, message=message, status=403, details=details, headers=headers
+    )
 
 
 def not_found(
@@ -51,13 +70,12 @@ def not_found(
     message: str = "Not Found",
     hint: str = "the requested resource does not exist",
     headers: Mapping[str, str] | None = None,
-) -> HTTPException:
-    """Return a standardized 404 HTTPException with structured detail."""
-    hdrs = {"X-Error-Code": code}
-    if headers:
-        hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 404})
-    return HTTPException(status_code=404, detail=env, headers=hdrs)
+) -> JSONResponse:
+    """Return a standardized 404 JSONResponse with structured error details."""
+    details = {"status_code": 404, "hint": hint}
+    return error_response(
+        code=code, message=message, status=404, details=details, headers=headers
+    )
 
 
 def method_not_allowed(
@@ -66,13 +84,12 @@ def method_not_allowed(
     message: str = "Method Not Allowed",
     hint: str = "check the allowed methods for this endpoint",
     headers: Mapping[str, str] | None = None,
-) -> HTTPException:
-    """Return a standardized 405 HTTPException with structured detail."""
-    hdrs = {"X-Error-Code": code}
-    if headers:
-        hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 405})
-    return HTTPException(status_code=405, detail=env, headers=hdrs)
+) -> JSONResponse:
+    """Return a standardized 405 JSONResponse with structured error details."""
+    details = {"status_code": 405, "hint": hint}
+    return error_response(
+        code=code, message=message, status=405, details=details, headers=headers
+    )
 
 
 def payload_too_large(
@@ -81,13 +98,12 @@ def payload_too_large(
     message: str = "Payload Too Large",
     hint: str = "reduce the size of your request body",
     headers: Mapping[str, str] | None = None,
-) -> HTTPException:
-    """Return a standardized 413 HTTPException with structured detail."""
-    hdrs = {"X-Error-Code": code}
-    if headers:
-        hdrs.update(dict(headers))
-    env = build_error(code=code, message=message, hint=hint, meta={"status_code": 413})
-    return HTTPException(status_code=413, detail=env, headers=hdrs)
+) -> JSONResponse:
+    """Return a standardized 413 JSONResponse with structured error details."""
+    details = {"status_code": 413, "hint": hint}
+    return error_response(
+        code=code, message=message, status=413, details=details, headers=headers
+    )
 
 
 def validation_error(
@@ -97,18 +113,15 @@ def validation_error(
     message: str = "Validation Error",
     hint: str = "check your request data and try again",
     headers: Mapping[str, str] | None = None,
-) -> HTTPException:
-    """Return a standardized 422 HTTPException for validation errors."""
-    hdrs = {"X-Error-Code": code}
-    if headers:
-        hdrs.update(dict(headers))
-
-    meta = {"status_code": 422}
+) -> JSONResponse:
+    """Return a standardized 422 JSONResponse for validation errors."""
+    details = {"status_code": 422, "hint": hint}
     if errors:
-        meta["errors"] = errors
+        details["errors"] = errors
 
-    env = build_error(code=code, message=message, hint=hint, meta=meta)
-    return HTTPException(status_code=422, detail=env, headers=hdrs)
+    return error_response(
+        code=code, message=message, status=422, details=details, headers=headers
+    )
 
 
 def internal_error(
@@ -118,18 +131,15 @@ def internal_error(
     hint: str = "try again shortly",
     req_id: str | None = None,
     headers: Mapping[str, str] | None = None,
-) -> HTTPException:
-    """Return a standardized 500 HTTPException for internal errors."""
-    hdrs = {"X-Error-Code": code}
-    if headers:
-        hdrs.update(dict(headers))
-
-    meta = {"status_code": 500}
+) -> JSONResponse:
+    """Return a standardized 500 JSONResponse for internal errors."""
+    details = {"status_code": 500, "hint": hint}
     if req_id:
-        meta["req_id"] = req_id
+        details["req_id"] = req_id
 
-    env = build_error(code=code, message=message, hint=hint, meta=meta)
-    return HTTPException(status_code=500, detail=env, headers=hdrs)
+    return error_response(
+        code=code, message=message, status=500, details=details, headers=headers
+    )
 
 
 def http_error(
@@ -161,7 +171,20 @@ def translate_validation_error(exc: ValidationError) -> HTTPException:
             }
         )
 
-    return validation_error(errors=errors)
+    # Build the standardized error response structure
+    details = {"status_code": 422, "hint": "check your request data and try again"}
+    if errors:
+        details["errors"] = errors
+
+    detail = {
+        "code": "validation_error",
+        "message": "Validation Error",
+        "details": details,
+    }
+
+    return HTTPException(
+        status_code=422, detail=detail, headers={"X-Error-Code": "validation_error"}
+    )
 
 
 def translate_common_exception(exc: Exception) -> HTTPException:
@@ -176,63 +199,127 @@ def translate_common_exception(exc: Exception) -> HTTPException:
 
     # Authentication/Authorization errors
     if isinstance(exc, PermissionError):
-        return forbidden(code="permission_denied", message="Permission denied")
+        detail = {
+            "code": "permission_denied",
+            "message": "Permission denied",
+            "details": {
+                "status_code": 403,
+                "hint": "insufficient permissions for this action",
+            },
+        }
+        return HTTPException(
+            status_code=403,
+            detail=detail,
+            headers={"X-Error-Code": "permission_denied"},
+        )
 
     # Key/Value errors (often missing required fields)
     if isinstance(exc, KeyError):
         field = str(exc).strip("'\"")
-        return validation_error(
-            errors=[
-                {
-                    "field": field,
-                    "message": "Required field is missing",
-                    "type": "missing",
-                }
-            ],
-            code="missing_required_field",
-            message=f"Missing required field: {field}",
+        detail = {
+            "code": "missing_required_field",
+            "message": f"Missing required field: {field}",
+            "details": {
+                "status_code": 422,
+                "hint": "check your request data and try again",
+                "errors": [
+                    {
+                        "field": field,
+                        "message": "Required field is missing",
+                        "type": "missing",
+                    }
+                ],
+            },
+        }
+        return HTTPException(
+            status_code=422,
+            detail=detail,
+            headers={"X-Error-Code": "missing_required_field"},
         )
 
     # Type errors
     if isinstance(exc, TypeError):
-        return validation_error(
-            errors=[{"field": "request", "message": str(exc), "type": "type_error"}],
-            code="invalid_type",
-            message="Type error in request data",
+        detail = {
+            "code": "invalid_type",
+            "message": "Type error in request data",
+            "details": {
+                "status_code": 422,
+                "hint": "check your request data and try again",
+                "errors": [
+                    {"field": "request", "message": str(exc), "type": "type_error"}
+                ],
+            },
+        }
+        return HTTPException(
+            status_code=422, detail=detail, headers={"X-Error-Code": "invalid_type"}
         )
 
     # Value errors (often invalid data)
     if isinstance(exc, ValueError):
-        return validation_error(
-            errors=[{"field": "request", "message": str(exc), "type": "value_error"}],
-            code="invalid_input",
-            message="Invalid input data",
+        detail = {
+            "code": "invalid_input",
+            "message": "Invalid input data",
+            "details": {
+                "status_code": 422,
+                "hint": "check your request data and try again",
+                "errors": [
+                    {"field": "request", "message": str(exc), "type": "value_error"}
+                ],
+            },
+        }
+        return HTTPException(
+            status_code=422, detail=detail, headers={"X-Error-Code": "invalid_input"}
         )
 
     # Timeout errors
     if isinstance(exc, TimeoutError):
-        return http_error(
-            code="timeout",
-            message="Request timeout",
-            status=504,
-            hint="try again later",
+        detail = {
+            "code": "timeout",
+            "message": "Request timeout",
+            "details": {"status_code": 504, "hint": "try again later"},
+        }
+        return HTTPException(
+            status_code=504, detail=detail, headers={"X-Error-Code": "timeout"}
         )
 
     # Connection errors
     if isinstance(exc, ConnectionError):
-        return http_error(
-            code="service_unavailable",
-            message="Service temporarily unavailable",
-            status=503,
-            hint="try again shortly",
+        detail = {
+            "code": "service_unavailable",
+            "message": "Service temporarily unavailable",
+            "details": {"status_code": 503, "hint": "try again shortly"},
+        }
+        return HTTPException(
+            status_code=503,
+            detail=detail,
+            headers={"X-Error-Code": "service_unavailable"},
         )
 
     # File size exceeded
     if isinstance(exc, OSError) and "file too large" in str(exc).lower():
-        return payload_too_large()
+        detail = {
+            "code": "payload_too_large",
+            "message": "Payload Too Large",
+            "details": {
+                "status_code": 413,
+                "hint": "reduce the size of your request body",
+            },
+        }
+        return HTTPException(
+            status_code=413,
+            detail=detail,
+            headers={"X-Error-Code": "payload_too_large"},
+        )
 
     # Default to internal error for unhandled exceptions
-    return internal_error()
+    detail = {
+        "code": "internal_error",
+        "message": "Internal Server Error",
+        "details": {"status_code": 500, "hint": "try again shortly"},
+    }
+    return HTTPException(
+        status_code=500, detail=detail, headers={"X-Error-Code": "internal_error"}
+    )
 
 
 __all__ = [

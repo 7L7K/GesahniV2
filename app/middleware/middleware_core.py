@@ -1127,6 +1127,10 @@ async def silent_refresh_middleware(request: Request, call_next):
 
 
 async def reload_env_middleware(request: Request, call_next):
+    # Check if middleware is disabled (useful for tests)
+    if os.getenv("DISABLE_ENV_RELOAD_MW") == "1":
+        return await call_next(request)
+
     # Only reload env when explicitly enabled (e.g., in dev)
     try:
         if os.getenv(

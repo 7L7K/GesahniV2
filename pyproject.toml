@@ -22,4 +22,10 @@ markers = [
     "smoke: marks tests as smoke tests (run first, fast feedback)",
     "integration: marks tests as integration tests",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "contract: marks tests as contract/API tests",
+    "chaos: marks tests as chaos engineering tests",
+    "memory_limit: marks tests with memory limits",
+    "timeout: marks tests with custom timeouts",
+    "asyncio: marks tests as async tests",
 ]
+asyncio_mode = "auto"

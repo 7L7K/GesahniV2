@@ -48,7 +48,7 @@ show_usage() {
 
 # Function to backup current .env if it exists
 backup_env() {
-    if [ -f ".env" ]; then
+    if [ -f ".env" ] && [ -s ".env" ]; then
         local backup_name=".env.backup.$(date +%Y%m%d_%H%M%S)"
         cp .env "$backup_name"
         print_status "Backed up current .env to $backup_name"
@@ -72,6 +72,10 @@ switch_environment() {
 
     # Backup current .env
     backup_env
+
+    # Warn about overwriting
+    print_warning "⚠️  This will overwrite your current .env file!"
+    print_warning "Your backup: $backup_name"
 
     # Copy the environment file to .env
     cp "$source_file" .env

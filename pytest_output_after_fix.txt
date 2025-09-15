@@ -1,8 +1,0 @@
-................................F...........FF.F..F..FF.F..F...FFFFFFF.. [  3%]
-...............FFFF....F..F.F.F..F.FFFFFFFFFFFF.FF.FFFFFFFFFFF..FFFF.FFF [  6%]
-FFFFF.F..F.F.F.FFFFF..F....................FFFFFFFFFFF..............FF.. [  9%]
-.....F........FFFFFFFFFFFFFFFFFFFsFFF..FFFFF...FFF..FFFFF.F.F.EEEEEEEEEE [ 12%]
-EEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEFFFFFFFFFFFFFFFFFF.....F.FF.FFFFFFFF [ 15%]
-FFFFFFFF.FF...............FFFFFFFF.FF...F.FFFF..FFFFFF.......F.s...ss.F. [ 18%]
-........F.FFFF.FFFF...............................FF..FF.FFFF.F.FF.F.... [ 21%]
-.........F....

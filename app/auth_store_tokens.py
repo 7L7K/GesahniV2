@@ -26,6 +26,25 @@ from .settings import settings
 logger = logging.getLogger(__name__)
 
 
+def _default_db_path() -> str:
+    """Get the default database path for backward compatibility.
+
+    This function is kept for backward compatibility with tests that expect
+    a SQLite database path. Since this module now uses PostgreSQL, this
+    returns a default SQLite path for testing purposes.
+    """
+    import os
+    from pathlib import Path
+
+    # Check for environment override first
+    env_path = os.getenv("TOKEN_DB")
+    if env_path:
+        return env_path
+
+    # Default to a test database path
+    return str(Path(__file__).parent.parent / "tokens.db")
+
+
 class TokenDAO:
     """Data Access Object for third-party tokens using PostgreSQL."""
 

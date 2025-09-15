@@ -24,7 +24,7 @@ router = APIRouter(
 )
 
 # Public router for observability endpoints (no auth required)
-public_router = APIRouter(tags=["Observability"])
+public_router = APIRouter(tags=["Admin"])
 # Expose simple status endpoints used by tests and legacy clients
 
 

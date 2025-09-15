@@ -685,7 +685,7 @@ def resolve_session_id(
     # 1. Try __session cookie first (contains opaque session ID only)
     try:
         if isinstance(request, Request):
-            from ..cookies import read_session_cookie
+            from ..web.cookies import read_session_cookie
 
             session_id = read_session_cookie(request)
             if session_id:

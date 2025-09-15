@@ -35,7 +35,7 @@ This comprehensive refactoring delivered a **production-ready, observable, resil
 **Key features:**
 ```python
 # Backend routing logic
-backend = resolve_backend(model_override, PROMPT_BACKEND, "dryrun")
+backend = resolve_backend(model_override, PROMPT_BACKEND, "live")
 response = await backend(payload)
 # Returns: {"backend": "openai|llama|dryrun", "model": "...", "answer": "...", "usage": {...}, "latency_ms": 123, "req_id": "..."}
 ```

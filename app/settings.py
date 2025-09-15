@@ -207,7 +207,7 @@ def stream_stall_ms() -> int:
 
 
 def prompt_backend() -> str:
-    return os.getenv("PROMPT_BACKEND", "dryrun").lower()
+    return os.getenv("PROMPT_BACKEND", "live").lower()
 
 
 def google_client_id() -> str:

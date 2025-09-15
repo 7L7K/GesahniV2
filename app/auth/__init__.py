@@ -14,6 +14,9 @@ from .constants import (
     SESSION_COOKIE,
 )
 
+# Patch point for tests; real code sets this in startup
+user_store = None
+
 # Import legacy auth functions from the main auth module
 try:
     from ..api.auth import router
@@ -109,6 +112,7 @@ __all__ = [
     "JWT_ISS",
     "JWT_AUD",
     "CSRF_HEADER",
+    "user_store",  # Patch point for tests
     # Legacy auth functions
     "_should_apply_backoff",
     "_backoff_start_ms",

@@ -176,8 +176,10 @@ def load_env(force: bool | int | str = False) -> None:
     # 1) .env populates missing values only (do not clobber existing env vars)
     #    Tests and monkeypatches expect programmatic env overrides to take
     #    precedence over committed .env files.
+    #    Support DOTENV_PATH redirection for tests that need to write .env
+    dotenv_path = os.getenv("DOTENV_PATH", str(_ENV_PATH))
     if current["env"] >= 0:
-        for k, v in (dotenv_values(_ENV_PATH) or {}).items():
+        for k, v in (dotenv_values(dotenv_path) or {}).items():
             if not k or v is None:
                 continue
             # Respect any existing value (e.g., set by monkeypatch in tests)

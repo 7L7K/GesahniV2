@@ -6,9 +6,11 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import text
+from sqlalchemy import bindparam, text
+from sqlalchemy.dialects.postgresql import JSONB as JSON
 
 from .db.core import sync_engine
+from .util.ids import to_uuid
 
 STORAGE_DIR = Path(__file__).resolve().parents[1] / "storage"
 STORAGE_DIR.mkdir(parents=True, exist_ok=True)
@@ -31,14 +33,22 @@ RETENTION_SUMMARIES_DAYS = 365
 DEDUPE_WINDOW = int(os.getenv("LEDGER_DEDUPE_WINDOW_S", "10"))
 
 
-def _pg_exec(query: str, params: dict[str, Any] | None = None) -> None:
+def _pg_exec(query: str | text, params: dict[str, Any] | None = None) -> None:
     with sync_engine.begin() as conn:
-        conn.execute(text(query), params or {})
+        if isinstance(query, str):
+            conn.execute(text(query), params or {})
+        else:
+            # query is already a TextClause with bound params
+            conn.execute(query, params or {})
 
 
-def _pg_fetchone(query: str, params: dict[str, Any]) -> dict[str, Any] | None:
+def _pg_fetchone(query: str | text, params: dict[str, Any]) -> dict[str, Any] | None:
     with sync_engine.connect() as conn:
-        res = conn.execute(text(query), params)
+        if isinstance(query, str):
+            res = conn.execute(text(query), params)
+        else:
+            # query is already a TextClause with bound params
+            res = conn.execute(query, params)
         row = res.mappings().first()
         return dict(row) if row else None
 
@@ -89,31 +99,43 @@ def record_ledger(
     }
     now = datetime.now(UTC)
     # Attempt insert with ON CONFLICT DO NOTHING
-    _pg_exec(
+    stmt = text(
         """
         INSERT INTO storage.ledger (user_id, idempotency_key, operation, amount, metadata, created_at)
-        VALUES (:user_id, :idempotency_key, :operation, NULL, :metadata::jsonb, :created_at)
+        VALUES (:user_id, :idempotency_key, :operation, NULL, :metadata, :created_at)
         ON CONFLICT (user_id, idempotency_key) DO NOTHING
-        """,
+        """
+    ).bindparams(
+        bindparam("user_id"),
+        bindparam("idempotency_key"),
+        bindparam("operation"),
+        bindparam("metadata", type_=JSON),
+        bindparam("created_at"),
+    )
+    _pg_exec(
+        stmt,
         {
-            "user_id": user_id,
+            "user_id": str(to_uuid(user_id)) if user_id else user_id,
             "idempotency_key": idempotency_key,
             "operation": type,
-            "metadata": json.dumps(meta, ensure_ascii=False),
+            "metadata": meta,  # Pass the dict directly, not json.dumps()
             "created_at": now,
         },
     )
     # Fetch id
     row = _pg_fetchone(
         "SELECT id FROM storage.ledger WHERE user_id = :user_id AND idempotency_key = :idempotency_key",
-        {"user_id": user_id, "idempotency_key": idempotency_key},
+        {
+            "user_id": str(to_uuid(user_id)) if user_id else user_id,
+            "idempotency_key": idempotency_key,
+        },
     )
     inserted = True
     if row is None:
         # Rare: idempotency_key None or not provided -> best-effort insert then fetch
         row = _pg_fetchone(
             "SELECT id FROM storage.ledger WHERE user_id = :user_id ORDER BY created_at DESC LIMIT 1",
-            {"user_id": user_id or ""},
+            {"user_id": str(to_uuid(user_id)) if user_id else ""},
         )
     else:
         # If the row existed, then not inserted
@@ -155,11 +177,17 @@ def link_reverse(forward_id: int, reverse_id: int) -> None:
     the undo row.
     """
     try:
-        _pg_exec(
+        stmt = text(
             """
-            UPDATE storage.ledger SET metadata = jsonb_set(COALESCE(metadata,'{}'::jsonb), '{reverse_id}', to_jsonb(:reverse_id::int), true)
+            UPDATE storage.ledger SET metadata = jsonb_set(COALESCE(metadata,'{}'::jsonb), '{reverse_id}', to_jsonb(:reverse_id), true)
             WHERE id = :forward_id
-            """,
+            """
+        ).bindparams(
+            bindparam("reverse_id", type_=int),
+            bindparam("forward_id", type_=int),
+        )
+        _pg_exec(
+            stmt,
             {"reverse_id": reverse_id, "forward_id": forward_id},
         )
     except Exception:
@@ -233,7 +261,7 @@ def get_last_reversible_action(
     params: dict[str, Any] = {}
     if user_id:
         where.append("user_id = :user_id")
-        params["user_id"] = user_id
+        params["user_id"] = str(to_uuid(user_id))
     if action_types:
         where.append("operation = ANY(:ops)")
         params["ops"] = action_types

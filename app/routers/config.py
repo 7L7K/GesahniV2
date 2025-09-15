@@ -48,6 +48,7 @@ def build_plan() -> list[RouterSpec]:
             RouterSpec("app.api.ask:router", "/v1"),
             # Canonical auth router (use app.api.auth as source of truth)
             RouterSpec("app.api.auth:router", "/v1"),
+            RouterSpec("app.router.auth_legacy_aliases:router", "/v1"),
             RouterSpec("app.router.google_api:router", "/v1/google"),
             # Alias compatibility router provides legacy endpoints like /v1/list
             RouterSpec("app.router.alias_api:router", "/v1"),
@@ -70,6 +71,8 @@ def build_plan() -> list[RouterSpec]:
             RouterSpec("app.api.care_ws:router", "/v1"),
             RouterSpec("app.api.ha:router", "/v1"),
             RouterSpec("app.api.admin:router", "/v1/admin"),
+            RouterSpec("app.api.tv:router", "/v1"),  # TV endpoints
+            RouterSpec("app.api.tv_music_sim:router", "/v1"),  # TV music simulation
             RouterSpec("app.api.config_check:router", ""),  # Config check endpoint
             RouterSpec(
                 "app.router.compat_api:router", ""

@@ -4,10 +4,16 @@ from .jwt_config import JWTConfig, get_jwt_config
 from .jwt_utils import _payload_scopes
 from .webhooks import rotate_webhook_secret, sign_webhook, verify_webhook
 
-# Import jwt_decode from the main security module (app.security)
+# Import security functions directly from security_legacy to avoid circular imports
 try:
-    from .security import (
+    # Import _jwt_decode from spotify API module
+    from app.api.spotify import _jwt_decode
+    from app.security_legacy import (
         _apply_rate_limit,
+        _bucket_rate_limit,
+        _bucket_retry_after,
+        _bypass_scopes_env,
+        _current_key,
         _get_request_payload,
         _http_requests,
         decode_jwt,
@@ -65,12 +71,19 @@ except ImportError:
     rate_limit = None
     validate_websocket_origin = None
     _apply_rate_limit = None
+    _bucket_rate_limit = None
+    _bucket_retry_after = None
+    _bypass_scopes_env = None
+    _current_key = None
+    _jwt_decode = None
     rate_limit_problem = None
     http_burst = None
     _http_requests = None
     rate_limit_with = None
     require_nonce = None
     scope_rate_limit = None
+    decode_jwt = None
+    jwt_decode = None
 
 __all__ = [
     "get_jwt_config",
@@ -86,6 +99,11 @@ __all__ = [
     "_payload_scopes",
     "validate_websocket_origin",
     "_apply_rate_limit",
+    "_bucket_rate_limit",
+    "_bucket_retry_after",
+    "_bypass_scopes_env",
+    "_current_key",
+    "_jwt_decode",
     "rate_limit_problem",
     "http_burst",
     "_http_requests",

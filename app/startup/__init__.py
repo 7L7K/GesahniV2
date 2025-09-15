@@ -130,6 +130,7 @@ async def _run_components():
         "init_dev_user": C.init_dev_user,
         "init_chaos_mode": C.init_chaos_mode,
         "init_client_warmup": C.init_client_warmup,
+        "init_feature_flags_logging": C.init_feature_flags_logging,
     }
 
     for idx, comp_name in enumerate(profile.components, 1):

@@ -6,9 +6,9 @@ set -e
 
 echo "🔧 Setting up authentication environment..."
 
-# Create .env file if it doesn't exist
-if [ ! -f .env ]; then
-    echo "📝 Creating .env file with authentication defaults..."
+# Create minimal .env file if it doesn't exist or is empty
+if [ ! -f .env ] || [ ! -s .env ]; then
+    echo "📝 Creating minimal .env file with authentication defaults..."
     cat > .env << 'EOF'
 # Authentication Configuration
 CSRF_ENABLED=1
@@ -30,13 +30,13 @@ PORT=8000
 # Optional: Admin token for config endpoints
 ADMIN_TOKEN=dev-admin-token
 EOF
-    echo "✅ Created .env file"
+    echo "✅ Created minimal .env file"
 else
-    echo "ℹ️  .env file already exists, checking required settings..."
+    echo "ℹ️  .env file already exists with content, preserving it..."
 
-    # Check if required settings are present
-    if ! grep -q "CSRF_ENABLED=1" .env; then
-        echo "⚠️  CSRF_ENABLED not set to 1, adding..."
+    # Only add missing critical settings
+    if ! grep -q "CSRF_ENABLED=" .env; then
+        echo "⚠️  CSRF_ENABLED not set, adding..."
         echo "CSRF_ENABLED=1" >> .env
     fi
 
@@ -44,6 +44,13 @@ else
         echo "⚠️  JWT_SECRET not set, adding..."
         echo "JWT_SECRET=test-secret-key-for-development-only-change-in-production" >> .env
     fi
+
+    if ! grep -q "DEV_MODE=" .env; then
+        echo "⚠️  DEV_MODE not set, adding..."
+        echo "DEV_MODE=1" >> .env
+    fi
+
+    echo "✅ Preserved existing .env file with critical auth settings"
 fi
 
 echo "✅ Authentication environment setup complete!"

@@ -7,7 +7,7 @@ Environment variables (focused on migration-relevant)
 | ENV | dev | dev | prod | app/main.py:833–855 |
 | HOST | 0.0.0.0 | 127.0.0.1 | 0.0.0.0 | app/main.py:1348–1354 |
 | PORT | 8000 | 8000 | $PORT (Render) | app/main.py:1348–1354 |
-| PROMPT_BACKEND | dryrun | dryrun/openai/llama | openai/llama | app/main.py:889–914 |
+| PROMPT_BACKEND | live | dryrun/openai/llama | openai/llama | app/main.py:889–914 |
 | CORS_ORIGINS | (unset) | http://localhost:3000 | https://your-frontend.tld | app/main.py:900–915; app/middleware/loader.py:113–127 |
 | CORS_ALLOW_ORIGINS | (legacy alias) | http://localhost:3000 | avoid; prefer CORS_ORIGINS | app/main.py:900–915; app/api/music_ws.py:23–26 |
 | CSRF_ENABLED | 1 | 1 | 1 | app/main.py:900–915; app/middleware/loader.py (CSRFMiddleware) |

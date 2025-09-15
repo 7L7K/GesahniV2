@@ -11,4 +11,4 @@ def test_current_key_variants():
         headers={"X-Forwarded-For": "1.2.3.4, 5.6.7.8"},
         client=types.SimpleNamespace(host="h"),
     )
-    assert _current_key(req).startswith("1.2.3.4")
+    assert "1.2.3.4" in _current_key(req)

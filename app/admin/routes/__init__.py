@@ -45,7 +45,7 @@ def _is_test_mode() -> bool:
     )
 
 
-@router.get("/admin/retrieval/trace")
+@router.get("/retrieval/trace")
 async def retrieval_trace(
     request: Request,
     q: str,

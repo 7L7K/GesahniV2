@@ -727,25 +727,27 @@ def read_session_cookie(req):
     if canonical:
         return canonical
 
-    # Check for legacy cookie
-    legacy = req.cookies.get("__session")
-    if legacy:
-        try:
-            logger.info(
-                "auth.legacy_cookie_used",
-                extra={
-                    "meta": {
-                        "name": "__session",
-                        "canonical_name": NAMES.session,
-                        "action": "read",
-                        "success": True,
-                        "location": "web.cookies.read_session_cookie",
-                    }
-                },
-            )
-        except Exception:
-            pass  # Best effort logging
-        return legacy
+    # Check for legacy cookies in order of preference
+    legacy_names = ["__session", "session"]
+    for legacy_name in legacy_names:
+        legacy = req.cookies.get(legacy_name)
+        if legacy:
+            try:
+                logger.info(
+                    "auth.legacy_cookie_used",
+                    extra={
+                        "meta": {
+                            "name": legacy_name,
+                            "canonical_name": NAMES.session,
+                            "action": "read",
+                            "success": True,
+                            "location": "web.cookies.read_session_cookie",
+                        }
+                    },
+                )
+            except Exception:
+                pass  # Best effort logging
+            return legacy
 
     return None
 

@@ -22,7 +22,8 @@ import importlib
 from types import ModuleType
 from typing import Any
 
-__all__ = ["skills"]
+__version__ = "2.0.0"  # GesahniV2 version
+__all__ = ["skills", "__version__"]
 
 
 def __getattr__(name: str) -> Any:  # pragma: no cover - trivial

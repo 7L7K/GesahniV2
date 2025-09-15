@@ -13,7 +13,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
-from tests.test_helpers import (
+from tests.helpers.test_helpers import (
     assert_cookies_cleared,
     assert_cookies_present,
     assert_session_opaque,

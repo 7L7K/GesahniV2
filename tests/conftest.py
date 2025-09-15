@@ -1,7 +1,9 @@
 """Test-specific fixtures."""
 
 import json
+import logging
 import os
+import sys
 import tempfile
 import time
 
@@ -21,11 +23,16 @@ def _setup_test_db_and_init_tables():
     # Mark that we're running tests
     os.environ["PYTEST_RUNNING"] = "1"
 
+    # Disable database connection pooling for tests to prevent TooManyConnectionsError
+    # with parallel test execution (xdist)
+    os.environ["DB_POOL"] = "disabled"
+
     # Set critical test environment variables EARLY to override any defaults from env files
     os.environ["JWT_SECRET"] = (
         "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long"
     )
     os.environ["DEV_MODE"] = "1"
+    os.environ["DEV_AUTH"] = "0"  # Disable dev auth bypass for proper security testing
     os.environ["COOKIE_SAMESITE"] = "Lax"
     os.environ["COOKIE_SECURE"] = "false"
     os.environ["COOKIE_DOMAIN"] = ""  # Empty string = host-only cookies for tests
@@ -75,10 +82,48 @@ def _setup_test_db_and_init_tables():
     os.makedirs(test_db_dir, exist_ok=True)
 
     # Set DATABASE_URL for PostgreSQL tests (Phase 3 requirement)
-    os.environ["DATABASE_URL"] = "postgresql://app:app_pw@localhost:5432/gesahni_test"
+    # Use per-worker database to avoid conflicts in parallel execution
+    worker = os.getenv("PYTEST_XDIST_WORKER") or os.getenv("PYTEST_WORKER_ID") or "main"
+    if worker != "main":
+        os.environ["DATABASE_URL"] = (
+            f"postgresql://app:app_pw@localhost:5432/gesahni_test_{worker}"
+        )
+    else:
+        os.environ["DATABASE_URL"] = (
+            "postgresql://app:app_pw@localhost:5432/gesahni_test"
+        )
 
     # Database initialization will be handled by the async app fixture
     # which properly manages the event loop through pytest-asyncio
+
+
+@pytest.fixture(scope="session", autouse=True)
+def test_env_flags():
+    """Set environment flags to optimize test execution."""
+    os.environ["DISABLE_ENV_RELOAD_MW"] = "1"  # avoid logging during teardown
+    os.environ.setdefault("DB_POOL", "disabled")  # prevent TooManyConnections
+    os.environ.setdefault("PYTHONASYNCIODEBUG", "0")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def sane_logging():
+    """Force a simple stdout handler and flush safely for the whole test session."""
+    root = logging.getLogger()
+    for h in list(root.handlers):
+        root.removeHandler(h)
+    h = logging.StreamHandler(sys.stdout)
+    h.setLevel(logging.INFO)
+    root.addHandler(h)
+    root.setLevel(logging.INFO)
+    try:
+        yield
+    finally:
+        # Best-effort flush; swallow "I/O operation on closed file"
+        for h in list(root.handlers):
+            try:
+                h.flush()
+            except Exception:
+                pass
 
 
 @pytest.fixture(autouse=True)

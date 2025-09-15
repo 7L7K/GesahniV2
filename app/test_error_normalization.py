@@ -99,32 +99,32 @@ async def test_unauthorized():
 
 @router.get("/test/forbidden")
 async def test_forbidden():
-    """Test endpoint that raises forbidden error."""
-    raise forbidden()
+    """Test endpoint that returns forbidden error."""
+    return forbidden()
 
 
 @router.get("/test/not-found")
 async def test_not_found():
-    """Test endpoint that raises not found error."""
-    raise not_found()
+    """Test endpoint that returns not found error."""
+    return not_found()
 
 
 @router.get("/test/method-not-allowed")
 async def test_method_not_allowed():
-    """Test endpoint that raises method not allowed error."""
-    raise method_not_allowed()
+    """Test endpoint that returns method not allowed error."""
+    return method_not_allowed()
 
 
 @router.get("/test/payload-too-large")
 async def test_payload_too_large():
-    """Test endpoint that raises payload too large error."""
-    raise payload_too_large()
+    """Test endpoint that returns payload too large error."""
+    return payload_too_large()
 
 
 @router.get("/test/validation-error-helper")
 async def test_validation_error_helper():
     """Test endpoint that uses validation_error helper."""
-    raise validation_error(
+    return validation_error(
         errors=[
             {"field": "test_field", "message": "Test validation error", "type": "test"}
         ]
@@ -134,7 +134,7 @@ async def test_validation_error_helper():
 @router.get("/test/internal-error-helper")
 async def test_internal_error_helper():
     """Test endpoint that uses internal_error helper."""
-    raise internal_error(req_id="test-req-123")
+    return internal_error(req_id="test-req-123")
 
 
 @router.get("/test/translate-common-exception")

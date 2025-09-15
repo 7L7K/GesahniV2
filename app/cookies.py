@@ -41,6 +41,11 @@ from .cookie_config import format_cookie_header, get_cookie_config
 
 # Cookie name constants moved to web.cookies.NAMES
 
+# Legacy cookie names for backward compatibility warnings
+ACCESS_TOKEN = "access_token"
+REFRESH_TOKEN = "refresh_token"
+SESSION = "__session"
+
 log = logging.getLogger(__name__)
 
 

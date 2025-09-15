@@ -30,7 +30,7 @@ def get_prompt_router(request: Request) -> PromptRouter:
         logger.debug("get_prompt_router: app.state access failed: %s", e)
 
     # No router bound — choose a safe fallback based on config
-    backend = os.getenv("PROMPT_BACKEND", "dryrun").lower()
+    backend = os.getenv("PROMPT_BACKEND", "live").lower()
     if backend == "dryrun":
         return _default_dryrun()
 

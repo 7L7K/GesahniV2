@@ -10,6 +10,7 @@ if os.getenv("ENV", "dev").lower() in {"dev", "ci", "test"}:
 
 import hashlib
 import logging
+import sys
 import time
 import traceback
 from datetime import UTC, datetime
@@ -34,6 +35,13 @@ except Exception:  # pragma: no cover - optional
 
     def ha_startup():  # type: ignore
         return None
+
+
+try:
+    from app.api.ask import route_prompt as route_prompt  # re-export
+except Exception:
+    # fallback if module relocations during refactor
+    from app.router import route_prompt as route_prompt
 
 
 try:
@@ -175,6 +183,13 @@ def _anon_user_id(auth_header: str | None) -> str:
 
 
 # Configure logging first
+# Set up basic logging in entrypoint only (not in library code or tests)
+if os.getenv("ENV") != "test":
+    logging.basicConfig(
+        level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper()),
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        stream=sys.stdout,
+    )
 configure_logging()
 logger = logging.getLogger(__name__)
 
@@ -891,10 +906,10 @@ def create_app() -> FastAPI:
             from app.settings import settings
 
             backend = getattr(
-                settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "dryrun")
+                settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "live")
             ).lower()
         except Exception:
-            backend = os.getenv("PROMPT_BACKEND", "dryrun").lower()
+            backend = os.getenv("PROMPT_BACKEND", "live").lower()
 
         if backend == "openai":
             from app.routers.openai_router import openai_router
@@ -1220,11 +1235,24 @@ def create_app() -> FastAPI:
                 pair_to_handlers[(m, path)].append(qualname)
 
         # Find duplicates where more than one handler is registered for same (method,path)
-        duplicates = {
-            pair: handlers
-            for pair, handlers in pair_to_handlers.items()
-            if len(handlers) > 1
-        }
+        # Allow compat router to override other routers (compat endpoints take precedence)
+        duplicates = {}
+        for pair, handlers in pair_to_handlers.items():
+            if len(handlers) > 1:
+                # Check if any handler is from the compat router
+                compat_handlers = [h for h in handlers if "compat_api" in h]
+                non_compat_handlers = [h for h in handlers if "compat_api" not in h]
+
+                # If we have both compat and non-compat handlers, only report as duplicate
+                # if there are multiple non-compat handlers (compat should override)
+                if len(non_compat_handlers) > 1:
+                    duplicates[pair] = handlers
+                elif len(compat_handlers) > 0 and len(non_compat_handlers) == 1:
+                    # Compat router overriding another router - this is allowed
+                    continue
+                else:
+                    # Other cases of duplicates
+                    duplicates[pair] = handlers
 
         if duplicates:
             lines = [f"Duplicate route registrations detected ({len(duplicates)}):"]
@@ -1238,6 +1266,11 @@ def create_app() -> FastAPI:
         # Make collision failures explicit during startup so CI/tests fail fast
         logger.exception("Route collision check failed")
         raise
+
+    # Register standardized error handlers to enforce error response contract
+    from app.errors import register_error_handlers
+
+    register_error_handlers(app)
 
     logger.info("🎉 Application composition complete in create_app()")
     return app

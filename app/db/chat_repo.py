@@ -8,6 +8,8 @@ from collections.abc import Sequence
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.util.ids import to_uuid
+
 from .models import ChatMessage
 
 
@@ -31,7 +33,7 @@ async def save_messages(
     # Create ChatMessage objects
     chat_messages = [
         ChatMessage(
-            user_id=user_id,
+            user_id=str(to_uuid(user_id)),
             rid=rid,
             role=msg["role"],
             content=msg["content"],
@@ -62,7 +64,7 @@ async def get_messages_by_rid(
     """
     stmt = (
         select(ChatMessage)
-        .where(ChatMessage.user_id == user_id, ChatMessage.rid == rid)
+        .where(ChatMessage.user_id == str(to_uuid(user_id)), ChatMessage.rid == rid)
         .order_by(ChatMessage.created_at)
     )
 
@@ -87,7 +89,7 @@ async def get_recent_messages(
     """
     stmt = (
         select(ChatMessage)
-        .where(ChatMessage.user_id == user_id)
+        .where(ChatMessage.user_id == str(to_uuid(user_id)))
         .order_by(ChatMessage.created_at.desc())
         .limit(limit)
     )

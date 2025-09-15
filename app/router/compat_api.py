@@ -10,21 +10,46 @@ from __future__ import annotations
 import inspect
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse, Response
 
-router = APIRouter(tags=["Compat"])
+router = APIRouter(tags=["Admin"])
+
+
+class DeprecationRedirectResponse(RedirectResponse):
+    """Custom redirect response that includes deprecation signaling headers.
+
+    Used for legacy endpoint redirects to provide proper deprecation signaling
+    with successor version information and sunset dates.
+    """
+
+    def __init__(
+        self,
+        url: str,
+        *,
+        successor_version: str | None = None,
+        sunset_date: str | None = None,
+        **kwargs,
+    ):
+        # Set default status to 308 (permanent redirect) if not specified
+        kwargs.setdefault("status_code", 308)
+        super().__init__(url, **kwargs)
+
+        # Add deprecation signaling headers
+        self.headers["Deprecation"] = "true"
+
+        if sunset_date:
+            self.headers["Sunset"] = sunset_date
+
+        if successor_version:
+            self.headers["Link"] = f'<{successor_version}>; rel="successor-version"'
 
 
 @router.get("/whoami", deprecated=True)
 async def whoami_compat(request: Request):
     """Redirect legacy /whoami to canonical /v1/whoami with 308 and Deprecation header."""
-    from fastapi.responses import RedirectResponse
-
-    resp = RedirectResponse(url="/v1/whoami", status_code=308)
-    try:
-        resp.headers["Deprecation"] = "true"
-    except Exception:
-        pass
+    resp = DeprecationRedirectResponse(
+        url="/v1/whoami", successor_version="/v1/whoami", sunset_date="2025-12-31"
+    )
     return resp
 
 
@@ -172,6 +197,33 @@ async def google_status_compat():
         return _attach_deprecation(None, payload=res)
     except Exception:
         return _attach_deprecation(None, status=200, payload={"status": "ok"})
+
+
+@router.get("/health", deprecated=True)
+async def health_compat(request: Request):
+    """Redirect legacy /health to canonical /v1/health with 308 and Deprecation header."""
+    resp = DeprecationRedirectResponse(
+        url="/v1/health", successor_version="/v1/health", sunset_date="2025-12-31"
+    )
+    return resp
+
+
+@router.get("/healthz", deprecated=True)
+async def healthz_compat(request: Request):
+    """Redirect legacy /healthz to canonical /v1/healthz with 308 and Deprecation header."""
+    resp = DeprecationRedirectResponse(
+        url="/v1/healthz", successor_version="/v1/healthz", sunset_date="2025-12-31"
+    )
+    return resp
+
+
+@router.get("/status", deprecated=True)
+async def status_compat(request: Request):
+    """Redirect legacy /status to canonical /v1/status with 308 and Deprecation header."""
+    resp = DeprecationRedirectResponse(
+        url="/v1/status", successor_version="/v1/status", sunset_date="2025-12-31"
+    )
+    return resp
 
 
 # Auth redirects moved to app/auth.py and app/router/auth_api.py as canonical sources

@@ -211,7 +211,7 @@ def register_canonical_middlewares(
         "DedupMiddleware",
         "RateLimitMiddleware",  # conditional - AFTER auth, BEFORE handler
         "SilentRefreshMiddleware",
-        "SessionAttachMiddleware",  # conditional
+        "SessionAttachMiddleware",  # conditional - BEFORE HealthCheckFilterMiddleware
         "HealthCheckFilterMiddleware",
         "RedactHashMiddleware",
         "TraceRequestMiddleware",
@@ -236,7 +236,7 @@ def register_canonical_middlewares(
         elif name == "ReloadEnvMiddleware" and not (dev_mode and not in_ci):
             continue
         elif name == "SessionAttachMiddleware" and not _is_truthy(
-            os.getenv("SESSION_ATTACH_ENABLED", "0")
+            os.getenv("SESSION_ATTACH_ENABLED", "1")
         ):
             continue
         elif name == "LegacyHeadersMiddleware" and not legacy_headers_enabled:

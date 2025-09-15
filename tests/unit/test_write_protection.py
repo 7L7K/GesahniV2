@@ -49,40 +49,51 @@ TEST_PAYLOADS = {
     "admin_backup": {"destination": "/tmp/backup"},
 }
 
-# Protected endpoints to test
-PROTECTED_ENDPOINTS: list[tuple[str, str, str, str]] = [
-    # (method, path, payload_key, description)
-    ("POST", "/v1/ask", "ask", "Main ask endpoint"),
-    ("POST", "/v1/register", "register", "User registration endpoint"),
-    ("POST", "/v1/music", "music_command", "Music command endpoint"),
-    ("POST", "/v1/music/restore", "music_restore", "Music volume restore endpoint"),
-    ("POST", "/v1/music/vibe", "music_vibe", "Music set vibe endpoint"),
-    ("POST", "/v1/care/sessions", "care_session", "Create care session endpoint"),
+# Protected endpoints to test with their auth requirements
+# Endpoints that require CSRF return 403 (CSRF missing) before auth check
+# Endpoints that only require auth return 401 (unauthorized)
+PROTECTED_ENDPOINTS: list[tuple[str, str, str, str, bool]] = [
+    # (method, path, payload_key, description, requires_csrf)
+    ("POST", "/v1/ask", "ask", "Main ask endpoint", False),
+    ("POST", "/v1/register", "register", "User registration endpoint", True),
+    ("POST", "/v1/music", "music_command", "Music command endpoint", False),
+    (
+        "POST",
+        "/v1/music/restore",
+        "music_restore",
+        "Music volume restore endpoint",
+        False,
+    ),
+    ("POST", "/v1/music/vibe", "music_vibe", "Music set vibe endpoint", False),
+    ("POST", "/v1/care/sessions", "care_session", "Create care session endpoint", True),
     (
         "PATCH",
         "/v1/care/sessions/{session_id}",
         "care_session_patch",
         "Patch care session endpoint",
+        True,
     ),
-    ("POST", "/v1/tts/speak", "tts_speak", "TTS speak endpoint"),
-    ("POST", "/v1/ha/service", "ha_service", "Home Assistant service endpoint"),
+    ("POST", "/v1/tts/speak", "tts_speak", "TTS speak endpoint", False),
+    ("POST", "/v1/ha/service", "ha_service", "Home Assistant service endpoint", False),
     (
         "POST",
         "/v1/me/sessions/{sid}/revoke",
         "revoke_session",
         "Revoke user session endpoint",
+        False,
     ),
     (
         "DELETE",
         "/v1/spotify/disconnect",
         "spotify_disconnect",
         "Spotify disconnect endpoint",
+        False,
     ),
-    ("POST", "/dev/mint_access", "mint_access", "Mint access token endpoint"),
-    ("DELETE", "/v1/pats/{pat_id}", "revoke_pat", "Revoke PAT endpoint"),
+    ("POST", "/dev/mint_access", "mint_access", "Mint access token endpoint", False),
+    ("DELETE", "/v1/pats/{pat_id}", "revoke_pat", "Revoke PAT endpoint", True),
     # Admin endpoints
-    ("POST", "/v1/admin/flags", "admin_flags", "Admin flags"),
-    ("POST", "/v1/admin/backup", "admin_backup", "Admin backup endpoint"),
+    ("POST", "/v1/admin/flags", "admin_flags", "Admin flags", False),
+    ("POST", "/v1/admin/backup", "admin_backup", "Admin backup endpoint", False),
 ]
 
 
@@ -131,6 +142,21 @@ class TestWriteProtection:
         if csrf_token:
             headers["X-CSRF-Token"] = csrf_token
 
+        # Replace path parameters with test values
+        resolved_path = path
+        if "{session_id}" in path:
+            resolved_path = path.replace(
+                "{session_id}", "12345678-1234-1234-1234-123456789abc"
+            )
+        elif "{sid}" in path:
+            resolved_path = path.replace(
+                "{sid}", "12345678-1234-1234-1234-123456789abc"
+            )
+        elif "{pat_id}" in path:
+            resolved_path = path.replace(
+                "{pat_id}", "12345678-1234-1234-1234-123456789abc"
+            )
+
         # Convert method to lowercase for client calls
         method_lower = method.lower()
 
@@ -138,32 +164,41 @@ class TestWriteProtection:
         request_method = getattr(client, method_lower)
 
         return request_method(
-            path,
+            resolved_path,
             json=payload,
             headers=headers,
             cookies={"csrf_token": csrf_token} if csrf_token else None,
         )
 
-    @pytest.mark.parametrize("method,path,payload_key,description", PROTECTED_ENDPOINTS)
-    def test_no_token_returns_401(
+    @pytest.mark.parametrize(
+        "method,path,payload_key,description,requires_csrf", PROTECTED_ENDPOINTS
+    )
+    def test_no_token_returns_401_or_403(
         self,
         client: TestClient,
         method: str,
         path: str,
         payload_key: str,
         description: str,
+        requires_csrf: bool,
     ):
-        """Test that endpoints return 401 when no auth token is provided."""
+        """Test that endpoints return 401/403 when no auth token is provided."""
         payload = TEST_PAYLOADS[payload_key]
 
         response = self._make_request(client, method, path, payload)
 
-        assert response.status_code == 401, (
-            f"Expected 401 for {method} {path} without token, got {response.status_code}. "
+        # CSRF-required endpoints return 403 (CSRF missing) before auth check
+        # Auth-only endpoints return 401 (unauthorized)
+        expected_status = 403 if requires_csrf else 401
+
+        assert response.status_code == expected_status, (
+            f"Expected {expected_status} for {method} {path} without token, got {response.status_code}. "
             f"Response: {response.text}"
         )
 
-    @pytest.mark.parametrize("method,path,payload_key,description", PROTECTED_ENDPOINTS)
+    @pytest.mark.parametrize(
+        "method,path,payload_key,description,requires_csrf", PROTECTED_ENDPOINTS
+    )
     def test_token_without_csrf_returns_401_or_403(
         self,
         client: TestClient,
@@ -172,6 +207,7 @@ class TestWriteProtection:
         path: str,
         payload_key: str,
         description: str,
+        requires_csrf: bool,
     ):
         """Test that endpoints reject invalid tokens when CSRF is bypassed for Bearer auth."""
         payload = TEST_PAYLOADS[payload_key]
@@ -188,7 +224,9 @@ class TestWriteProtection:
             f"Response: {response.text}"
         )
 
-    @pytest.mark.parametrize("method,path,payload_key,description", PROTECTED_ENDPOINTS)
+    @pytest.mark.parametrize(
+        "method,path,payload_key,description,requires_csrf", PROTECTED_ENDPOINTS
+    )
     def test_token_with_csrf_returns_success(
         self,
         client: TestClient,
@@ -198,6 +236,7 @@ class TestWriteProtection:
         path: str,
         payload_key: str,
         description: str,
+        requires_csrf: bool,
     ):
         """Test that endpoints return 2xx when both token and CSRF are provided."""
         payload = TEST_PAYLOADS[payload_key]
@@ -231,31 +270,53 @@ class TestWriteProtectionReport:
         failures = []
         total_tests = 0
 
-        for method, path, payload_key, description in PROTECTED_ENDPOINTS:
+        for (
+            method,
+            path,
+            payload_key,
+            description,
+            requires_csrf,
+        ) in PROTECTED_ENDPOINTS:
             report_lines.append(f"\nTesting: {description}")
             report_lines.append(f"Endpoint: {method} {path}")
             report_lines.append("-" * 50)
 
             payload = TEST_PAYLOADS[payload_key]
 
+            # Replace path parameters with test values
+            resolved_path = path
+            if "{session_id}" in path:
+                resolved_path = path.replace(
+                    "{session_id}", "12345678-1234-1234-1234-123456789abc"
+                )
+            elif "{sid}" in path:
+                resolved_path = path.replace(
+                    "{sid}", "12345678-1234-1234-1234-123456789abc"
+                )
+            elif "{pat_id}" in path:
+                resolved_path = path.replace(
+                    "{pat_id}", "12345678-1234-1234-1234-123456789abc"
+                )
+
             # Test 1: No token
             total_tests += 1
-            response = client.request(method.lower(), path, json=payload)
-            if response.status_code != 401:
+            expected_status = 403 if requires_csrf else 401
+            response = client.request(method.lower(), resolved_path, json=payload)
+            if response.status_code != expected_status:
                 failures.append(
-                    f"❌ {method} {path} - No token: expected 401, got {response.status_code}"
+                    f"❌ {method} {path} - No token: expected {expected_status}, got {response.status_code}"
                 )
                 report_lines.append(
-                    f"  ❌ No token: expected 401, got {response.status_code}"
+                    f"  ❌ No token: expected {expected_status}, got {response.status_code}"
                 )
             else:
-                report_lines.append("  ✅ No token: 401 (correct)")
+                report_lines.append(f"  ✅ No token: {expected_status} (correct)")
 
             # Test 2: Token without CSRF (mock implementation)
             total_tests += 1
             headers = {"Authorization": "Bearer mock_token"}
             response = client.request(
-                method.lower(), path, json=payload, headers=headers
+                method.lower(), resolved_path, json=payload, headers=headers
             )
             if response.status_code != 403:
                 failures.append(
@@ -275,7 +336,11 @@ class TestWriteProtectionReport:
             }
             cookies = {"csrf_token": "mock_csrf_token"}
             response = client.request(
-                method.lower(), path, json=payload, headers=headers, cookies=cookies
+                method.lower(),
+                resolved_path,
+                json=payload,
+                headers=headers,
+                cookies=cookies,
             )
             if not (200 <= response.status_code < 300):
                 failures.append(

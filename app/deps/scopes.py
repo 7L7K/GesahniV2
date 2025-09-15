@@ -46,6 +46,8 @@ STANDARD_SCOPES = {
     "admin": "Full administrative access (legacy - use specific scopes instead)",
     "admin:read": "Administrative read operations: metrics, logs, system status, user list",
     "admin:write": "Administrative write operations: flags, metrics, backups, system config",
+    # Authentication scopes
+    "auth:register": "Register new user accounts",
     "admin:users:read": "Read user information and profiles",
     "admin:users:write": "Create, modify, or delete users",
     "admin:audit:read": "Access audit logs and security events",

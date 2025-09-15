@@ -52,6 +52,8 @@ perf_results/
 audit_*.json
 sample_audit_results.json
 grafana_security_dashboard.json
+reports/
+triage_summary.csv
 
 # Editors / envs
 .vscode/

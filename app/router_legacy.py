@@ -274,7 +274,6 @@ def _dry(engine: str, model: str) -> str:
     return msg
 
 
-import json
 import uuid
 from datetime import UTC, datetime
 
@@ -335,7 +334,14 @@ def _log_golden_trace(
     if routing_decision.keyword_hit:
         trace["keyword_hit"] = routing_decision.keyword_hit
 
-    logger.info("🎯 GOLDEN_TRACE: %s", json.dumps(trace))
+    # Use the new golden trace helper to ensure exactly once logging
+    from .router import _golden_trace_once
+
+    vendor = routing_decision.vendor
+    model = routing_decision.model
+    user_id = user_id
+    route = routing_decision.reason
+    _golden_trace_once(vendor, model, user_id, route)
 
     # Emit metrics
     try:

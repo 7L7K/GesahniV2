@@ -24,9 +24,16 @@ def configure_logging():
     import logging
     import sys
 
-    # Set up basic logging
-    logging.basicConfig(
-        level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper()),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        stream=sys.stdout,
-    )
+    logger = logging.getLogger("app.integrations")
+    # Don't re-add handlers repeatedly in tests
+    if not logger.handlers:
+        handler = logging.StreamHandler(sys.stdout)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    logger.setLevel(getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper()))
+    # Let logs propagate; no basicConfig here.
+    logger.propagate = True
+    return logger

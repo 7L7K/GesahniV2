@@ -22,6 +22,7 @@ from app.db.models import (
     MusicState,
     MusicToken,
 )
+from app.util.ids import to_uuid
 
 MASTER_KEY = os.getenv("MUSIC_MASTER_KEY")
 
@@ -43,7 +44,7 @@ async def get_music_token(user_id: str, provider: str) -> dict[str, Any] | None:
     session = await anext(session_gen)
     try:
         stmt = select(MusicToken).where(
-            MusicToken.user_id == user_id, MusicToken.provider == provider
+            MusicToken.user_id == str(to_uuid(user_id)), MusicToken.provider == provider
         )
         result = await session.execute(stmt)
         token = result.scalar_one_or_none()
@@ -109,7 +110,7 @@ async def set_music_token(
 
         # Upsert token
         stmt = select(MusicToken).where(
-            MusicToken.user_id == user_id, MusicToken.provider == provider
+            MusicToken.user_id == str(to_uuid(user_id)), MusicToken.provider == provider
         )
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
@@ -126,7 +127,7 @@ async def set_music_token(
             existing.updated_at = int(time.time())
         else:
             token = MusicToken(
-                user_id=user_id,
+                user_id=str(to_uuid(user_id)),
                 provider=provider,
                 access_token_enc=access_token_enc,
                 refresh_token_enc=refresh_token_enc,
@@ -231,7 +232,9 @@ async def get_music_preferences(user_id: str) -> dict[str, Any] | None:
     session_gen = get_async_db()
     session = await anext(session_gen)
     try:
-        stmt = select(MusicPreferences).where(MusicPreferences.user_id == user_id)
+        stmt = select(MusicPreferences).where(
+            MusicPreferences.user_id == str(to_uuid(user_id))
+        )
         result = await session.execute(stmt)
         prefs = result.scalar_one_or_none()
 
@@ -264,7 +267,9 @@ async def set_music_preferences(
     session_gen = get_async_db()
     session = await anext(session_gen)
     try:
-        stmt = select(MusicPreferences).where(MusicPreferences.user_id == user_id)
+        stmt = select(MusicPreferences).where(
+            MusicPreferences.user_id == str(to_uuid(user_id))
+        )
         result = await session.execute(stmt)
         existing = result.scalar_one_or_none()
 
@@ -281,7 +286,7 @@ async def set_music_preferences(
                 existing.allow_explicit = allow_explicit
         else:
             prefs = MusicPreferences(
-                user_id=user_id,
+                user_id=str(to_uuid(user_id)),
                 default_provider=default_provider or "spotify",
                 quiet_start=quiet_start or "22:00",
                 quiet_end=quiet_end or "07:00",
@@ -308,7 +313,7 @@ async def get_music_session(user_id: str) -> str | None:
         stmt = (
             select(MusicSession.session_id)
             .where(
-                MusicSession.user_id == user_id,
+                MusicSession.user_id == str(to_uuid(user_id)),
                 MusicSession.ended_at.is_(None),  # Active session
             )
             .order_by(MusicSession.started_at.desc())
@@ -361,7 +366,10 @@ async def load_music_state(user_id: str) -> dict | None:
         # Get the user's current active session
         session_stmt = (
             select(MusicSession.session_id)
-            .where(MusicSession.user_id == user_id, MusicSession.ended_at.is_(None))
+            .where(
+                MusicSession.user_id == str(to_uuid(user_id)),
+                MusicSession.ended_at.is_(None),
+            )
             .order_by(MusicSession.started_at.desc())
             .limit(1)
         )
