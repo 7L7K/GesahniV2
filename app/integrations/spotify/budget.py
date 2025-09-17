@@ -21,7 +21,11 @@ class SpotifyBudgetManager:
             return 0.0  # Immediate timeout if in backoff
 
         # Get base timeout from budget state
-        budget_state = get_budget_state(self.user_id)
+        try:
+            budget_state = get_budget_state(self.user_id)
+        except Exception:
+            # If budget state fails, use default timeout
+            return 30.0
 
         # Default timeout
         base_timeout = 30.0
@@ -34,8 +38,12 @@ class SpotifyBudgetManager:
 
     def is_budget_exceeded(self) -> bool:
         """Check if user is over budget limits."""
-        budget_state = get_budget_state(self.user_id)
-        return not budget_state.get("escalate_allowed", True)
+        try:
+            budget_state = get_budget_state(self.user_id)
+            return not budget_state.get("escalate_allowed", True)
+        except Exception:
+            # If budget state fails, assume budget is not exceeded
+            return False
 
     def apply_backoff(self, retry_after: int | None = None) -> None:
         """Apply exponential backoff after a failure."""

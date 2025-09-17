@@ -1,0 +1,255 @@
+{
+    "title": "Music Observability Dashboard",
+    "uid": "music-observability",
+    "version": 1,
+    "panels": [
+        {
+            "title": "Music API Request Volume",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 0,
+                "y": 0,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(spotify_devices_request_count_total[5m])) by (status, auth_state)",
+                    "legendFormat": "Devices {{status}} ({{auth_state}})"
+                },
+                {
+                    "expr": "sum(rate(spotify_status_requests_count_total[5m])) by (status, auth_state)",
+                    "legendFormat": "Status {{status}} ({{auth_state}})"
+                },
+                {
+                    "expr": "sum(rate(music_command_total[5m])) by (command, status, provider)",
+                    "legendFormat": "Cmd {{command}} {{status}} ({{provider}})"
+                },
+                {
+                    "expr": "sum(rate(music_state_request_total[5m])) by (status, cached)",
+                    "legendFormat": "State {{status}} (cached:{{cached}})"
+                },
+                {
+                    "expr": "sum(rate(music_set_device_total[5m])) by (status)",
+                    "legendFormat": "Set Device {{status}}"
+                },
+                {
+                    "expr": "sum(rate(tv_music_play_total[5m])) by (status)",
+                    "legendFormat": "TV Play {{status}}"
+                }
+            ]
+        },
+        {
+            "title": "Spotify Authentication State",
+            "type": "piechart",
+            "gridPos": {
+                "x": 12,
+                "y": 0,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(spotify_devices_request_count_total) by (auth_state)",
+                    "legendFormat": "{{auth_state}}"
+                }
+            ]
+        },
+        {
+            "title": "Music API Error Rates",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 0,
+                "y": 8,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(spotify_devices_request_count_total{status!=\"200\"}[5m])) by (status, auth_state)",
+                    "legendFormat": "Devices {{status}} ({{auth_state}})"
+                },
+                {
+                    "expr": "sum(rate(spotify_status_requests_count_total{status!=\"200\"}[5m])) by (status, auth_state)",
+                    "legendFormat": "Status {{status}} ({{auth_state}})"
+                }
+            ]
+        },
+        {
+            "title": "Cache Bypass Events",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 12,
+                "y": 8,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(spotify_devices_cache_bypass_count_total[5m]))",
+                    "legendFormat": "Cache bypass events"
+                }
+            ]
+        },
+        {
+            "title": "Spotify Device List Requests",
+            "type": "bargauge",
+            "gridPos": {
+                "x": 0,
+                "y": 16,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(spotify_device_list_count_total) by (status)",
+                    "legendFormat": "{{status}}"
+                }
+            ]
+        },
+        {
+            "title": "Spotify Play Requests",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 12,
+                "y": 16,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(spotify_play_count_total[5m])) by (status)",
+                    "legendFormat": "Play {{status}}"
+                }
+            ]
+        },
+        {
+            "title": "Music Command Latency (p95)",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 0,
+                "y": 24,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum(rate(music_cmd_latency_ms_bucket[5m])) by (le, verb, provider))",
+                    "legendFormat": "{{verb}}/{{provider}} p95"
+                },
+                {
+                    "expr": "histogram_quantile(0.95, sum(rate(music_command_latency_seconds_bucket[5m])) by (le, command, provider))",
+                    "legendFormat": "{{command}}/{{provider}} p95"
+                }
+            ]
+        },
+        {
+            "title": "Music Transfer Failures",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 12,
+                "y": 24,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(music_transfer_fail_total[5m])) by (reason)",
+                    "legendFormat": "Transfer fail: {{reason}}"
+                }
+            ]
+        },
+        {
+            "title": "Music Rate Limiting",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 0,
+                "y": 32,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(music_rate_limited_total[5m])) by (provider)",
+                    "legendFormat": "{{provider}} rate limited"
+                }
+            ]
+        },
+        {
+            "title": "Time to First Sound (p95)",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 12,
+                "y": 32,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "histogram_quantile(0.95, sum(rate(music_first_sound_ms_bucket[5m])) by (le, route))",
+                    "legendFormat": "{{route}} p95"
+                }
+            ]
+        },
+        {
+            "title": "WebSocket Activity",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 0,
+                "y": 40,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(ws_music_connections_total[5m])) by (action)",
+                    "legendFormat": "WS {{action}}"
+                },
+                {
+                    "expr": "sum(rate(ws_music_messages_total[5m])) by (direction, message_type)",
+                    "legendFormat": "WS {{direction}} {{message_type}}"
+                }
+            ]
+        },
+        {
+            "title": "Recommendation Cache Performance",
+            "type": "timeseries",
+            "gridPos": {
+                "x": 0,
+                "y": 40,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(rate(music_reco_hit_total[5m])) by (vibe)",
+                    "legendFormat": "{{vibe}} cache hit"
+                },
+                {
+                    "expr": "sum(rate(music_reco_miss_total[5m])) by (vibe)",
+                    "legendFormat": "{{vibe}} cache miss"
+                }
+            ]
+        },
+        {
+            "title": "Spotify Status Overview",
+            "type": "table",
+            "gridPos": {
+                "x": 12,
+                "y": 40,
+                "w": 12,
+                "h": 8
+            },
+            "targets": [
+                {
+                    "expr": "sum(spotify_status_connected_total) by (user)",
+                    "legendFormat": "{{user}}"
+                },
+                {
+                    "expr": "sum(spotify_tokens_expires_in_seconds) by (user)",
+                    "legendFormat": "{{user}} expires"
+                }
+            ]
+        }
+    ]
+}

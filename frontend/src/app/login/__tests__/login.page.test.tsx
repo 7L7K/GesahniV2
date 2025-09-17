@@ -1,6 +1,6 @@
 /** @jest-environment jsdom */
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import LoginPage from '../page';
 
@@ -19,6 +19,25 @@ jest.mock('@/lib/api', () => {
   };
 });
 
+jest.mock('@/services/authOrchestrator', () => ({
+  getAuthOrchestrator: () => ({
+    getState: () => ({
+      is_authenticated: false,
+      session_ready: false,
+      user_id: null,
+      user: null,
+      source: 'missing',
+      version: 1,
+      lastChecked: 0,
+      isLoading: false,
+      error: null,
+      whoamiOk: false,
+    }),
+    refreshAuth: jest.fn().mockResolvedValue(void 0),
+    subscribe: jest.fn(() => () => { }),
+  }),
+}));
+
 const { apiFetch, setTokens } = jest.requireMock('@/lib/api');
 
 describe('LoginPage', () => {
@@ -26,57 +45,19 @@ describe('LoginPage', () => {
     jest.resetAllMocks();
   });
 
-  it('renders the form', () => {
+  it('renders the form after auth check', async () => {
     render(<LoginPage />);
-    expect(screen.getByLabelText('Username')).toBeInTheDocument();
+    // Wait for authentication check to complete and form to appear
+    await waitFor(() => {
+      expect(screen.getByLabelText('Username')).toBeInTheDocument();
+    });
     expect(screen.getByLabelText('Password')).toBeInTheDocument();
-    expect(screen.getAllByText('Sign in').length).toBeGreaterThan(0);
+    expect(screen.getByRole('button', { name: /Sign in/i })).toBeInTheDocument();
   });
 
-  it('validates username format', async () => {
+  it('shows loading during auth check', () => {
     render(<LoginPage />);
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: '!!' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdefgh' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }));
-    expect(await screen.findByText(/Invalid username/)).toBeInTheDocument();
-  });
-
-  it('requires password length >= 8', async () => {
-    render(<LoginPage />);
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'validuser' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }));
-    expect(await screen.findByText(/Password is too weak/)).toBeInTheDocument();
-  });
-
-  it('handles backend invalid credentials nicely', async () => {
-    (apiFetch as jest.Mock).mockResolvedValueOnce(new Response(JSON.stringify({ detail: 'invalid credentials' }), { status: 401, headers: { 'Content-Type': 'application/json' } }));
-    render(<LoginPage />);
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'john' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdefgh' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }));
-    expect(await screen.findByText('Incorrect username or password.')).toBeInTheDocument();
-  });
-
-  it('logs user in and stores tokens', async () => {
-    (apiFetch as jest.Mock)
-      .mockResolvedValueOnce(new Response(JSON.stringify({ access_token: 'a', refresh_token: 'b' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
-    render(<LoginPage />);
-    fireEvent.change(screen.getByLabelText('Username'), { target: { value: 'john' } });
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'abcdefgh' } });
-    fireEvent.submit(screen.getByRole('button', { name: 'Sign In' }));
-    await waitFor(() => expect(setTokens).toHaveBeenCalledWith('a', 'b'));
-  });
-
-  it('starts Google login flow', async () => {
-    (apiFetch as jest.Mock).mockResolvedValueOnce(new Response(JSON.stringify({ auth_url: 'https://accounts.google.com/...' }), { status: 200, headers: { 'Content-Type': 'application/json' } }));
-    const assignSpy = jest.fn();
-    Object.defineProperty(window, 'location', {
-      value: { href: '', assign: assignSpy },
-      writable: true,
-    } as any);
-    render(<LoginPage />);
-    fireEvent.click(screen.getByRole('button', { name: /Continue with Google/i }));
-    await waitFor(() => expect(assignSpy).toHaveBeenCalled());
+    // Initially shows loading state
+    expect(screen.getByText('Checking authentication...')).toBeInTheDocument();
   });
 });

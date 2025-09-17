@@ -191,7 +191,7 @@ def test_phase2_missing_and_expired_tokens_and_rate_limits(monkeypatch):
     _ = client.get("/v1/me")  # should succeed and may rotate access
 
     # Rate-limit refresh: 61 attempts in 60s per sid; emulate by setting a stable sid header
-    client.cookies.set("refresh_token", "bogus")  # force 401 but exercise limiter path
+    client.cookies.set("GSNH_RT", "bogus")  # force 401 but exercise limiter path
     client.headers.update({"X-Session-ID": "sid-rl"})
     seen = 0
     got_429 = False

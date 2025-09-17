@@ -24,7 +24,9 @@ from typing import Any
 from fastapi import APIRouter, Request
 from starlette.responses import JSONResponse
 
+from app.errors import json_error
 from app.metrics import ALIAS_FALLBACK_TOTAL
+from app.security.module_loader import secure_import_attr
 
 # Runtime counters for quick post-test inspection
 ALIAS_HITS = Counter()
@@ -38,8 +40,7 @@ AliasHandler = Callable[..., Awaitable[Any]]
 
 def _safe_import(path: str, attr: str):
     try:
-        mod = __import__(path, fromlist=[attr])
-        return getattr(mod, attr)
+        return secure_import_attr(path, attr)
     except Exception:
         return None
 
@@ -51,8 +52,7 @@ def _wrap_path_param_handler(fn_name: str, module: str, param_name: str = "key")
 
     def _resolve():
         try:
-            mod = __import__(module, fromlist=[fn_name])
-            return getattr(mod, fn_name)
+            return secure_import_attr(module, fn_name)
         except Exception:
             return None
 
@@ -78,8 +78,7 @@ def _wrap_path_param_handler(fn_name: str, module: str, param_name: str = "key")
 
 def _wrap_ha_call_service(fn_name: str, module: str):
     try:
-        mod = __import__(module, fromlist=[fn_name])
-        base_fn = getattr(mod, fn_name)
+        base_fn = secure_import_attr(module, fn_name)
     except Exception:
         return None
 
@@ -93,8 +92,10 @@ def _wrap_ha_call_service(fn_name: str, module: str):
         service = body.get("service") or request.query_params.get("service")
         data = body.get("data") or (body if isinstance(body, dict) else {})
         if not domain or not service:
-            return JSONResponse(
-                {"detail": "missing domain or service"}, status_code=400
+            return json_error(
+                code="validation_error",
+                message="Missing domain or service",
+                http_status=400,
             )
         try:
             return await base_fn(domain, service, data)
@@ -106,15 +107,18 @@ def _wrap_ha_call_service(fn_name: str, module: str):
 
 def _wrap_query_param_handler(fn_name: str, module: str, param_name: str = "name"):
     try:
-        mod = __import__(module, fromlist=[fn_name])
-        base_fn = getattr(mod, fn_name)
+        base_fn = secure_import_attr(module, fn_name)
     except Exception:
         return None
 
     async def _adapter(request: Request):
         name = request.query_params.get(param_name)
         if not name:
-            return JSONResponse({"detail": f"missing {param_name}"}, status_code=400)
+            return json_error(
+                code="validation_error",
+                message=f"Missing {param_name}",
+                http_status=400,
+            )
         try:
             return await base_fn(name)
         except TypeError:
@@ -245,9 +249,11 @@ async def _fallback(request: Request, path: str, method: str):
     # normalized, non-404 fallback with lightweight behavior matching contract
     # whoami -> 401 not authenticated
     if path in ("/whoami", "/me"):
-        return JSONResponse(
-            {"user": None, "authenticated": False, "detail": "not_authenticated"},
-            status_code=401,
+        return json_error(
+            code="unauthorized",
+            message="Not authenticated",
+            http_status=401,
+            meta={"user": None, "authenticated": False},
         )
 
     # status endpoints -> 200 with connected false
@@ -294,7 +300,9 @@ async def _fallback(request: Request, path: str, method: str):
         if device_id:
             return JSONResponse({"device_id": device_id}, status_code=200)
         # Missing device id -> emulate client error
-        return JSONResponse({"detail": "missing device_id"}, status_code=400)
+        return json_error(
+            code="validation_error", message="Missing device_id", http_status=400
+        )
 
     # Transcribe -> accept and return 202
     if path.startswith("/transcribe"):
@@ -308,7 +316,9 @@ async def _fallback(request: Request, path: str, method: str):
             data = {}
         text = (data or {}).get("text")
         if not text:
-            return JSONResponse({"detail": "missing text"}, status_code=400)
+            return json_error(
+                code="validation_error", message="Missing text", http_status=400
+            )
         # Return normalized queued shape with audio_id
         try:
             import uuid
@@ -322,12 +332,16 @@ async def _fallback(request: Request, path: str, method: str):
     if path == "/admin/reload_env":
         return JSONResponse({"status": "ok"}, status_code=200)
     if path == "/admin/self_review":
-        return JSONResponse({"detail": "not_implemented"}, status_code=501)
+        return json_error(
+            code="not_implemented", message="Feature not implemented", http_status=501
+        )
     if path == "/admin/vector_store/bootstrap":
         return JSONResponse({"status": "accepted"}, status_code=202)
 
     # Fallback: not implemented
-    return JSONResponse({"detail": "not_implemented"}, status_code=501)
+    return json_error(
+        code="not_implemented", message="Feature not implemented", http_status=501
+    )
 
 
 def _register_alias(path: str, method: str):

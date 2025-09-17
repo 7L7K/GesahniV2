@@ -263,7 +263,7 @@ export function useRecorder(): RecorderExports {
         const started = Date.now();
         setElapsedMs(0);
         tickRef.current = setInterval(() => setElapsedMs(Date.now() - started), 1000);
-    }, [audioMime, videoMime, setupStream, state.status]);
+    }, [audioMime, videoMime, setupStream, state.status, muted]);
 
     const pause = useCallback(() => {
         audioRecorder.current?.pause();

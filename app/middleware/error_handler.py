@@ -36,17 +36,18 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
         """Handle exceptions and return standardized ErrorEnvelope responses."""
         req_id = req_id_var.get() or "-"
 
-        # If it's already an HTTPException with proper envelope, let it through
+        # If it's already an HTTPException with proper envelope, pass through
+        # canonical envelope: {code,message,meta}
         if isinstance(exc, HTTPException):
             detail = getattr(exc, "detail", None)
             if isinstance(detail, dict) and "code" in detail and "message" in detail:
-                # Already properly formatted, just ensure headers have error code
                 headers = dict(getattr(exc, "headers", {}))
                 code = detail.get("code")
                 if code and "X-Error-Code" not in headers:
                     headers["X-Error-Code"] = str(code)
-                exc.headers = headers
-                raise exc
+                return JSONResponse(
+                    status_code=exc.status_code, content=detail, headers=headers
+                )
 
         # Use the new error translator for common exceptions
         try:
@@ -119,4 +120,5 @@ class ErrorHandlerMiddleware(BaseHTTPMiddleware):
         if tid:
             headers["X-Trace-ID"] = tid
 
+        # Return canonical envelope at top-level
         return JSONResponse(status_code=status_code, content=envelope, headers=headers)

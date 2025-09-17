@@ -168,6 +168,53 @@ Add to your CI pipeline:
 3. **Metrics Endpoint**: `curl -sf http://localhost:8000/metrics`
 4. **Alertmanager Config**: Docker-based validation
 
+## Music Observability Dashboard
+
+A specialized dashboard for monitoring Spotify integration and music functionality has been added.
+
+### Accessing the Music Dashboard
+
+1. **Grafana Dashboard**: Import `monitoring/grafana/dashboards/music-observability.json`
+2. **Web UI**: Visit `/admin/metrics/music` in your Gesahni app for a simplified view
+3. **Direct Link**: Navigate to "🎵 Music Dashboard" from the main admin metrics page
+
+### Music Metrics Available
+
+**Core Functionality:**
+- `spotify_devices_request_count_total` - Device API requests by status and auth state
+- `spotify_status_requests_count_total` - Status endpoint requests by status and auth state
+- `spotify_devices_cache_bypass_count_total` - Cache bypass events
+- `music_command_total` - Music control commands (play/pause/next/volume) by command, status, provider
+- `music_state_request_total` - Music state requests with cache hit/miss tracking
+- `music_set_device_total` - Set music device requests
+- `tv_music_play_total` - TV music play requests
+
+**WebSocket Activity:**
+- `ws_music_connections_total` - WebSocket connections (connect/disconnect)
+- `ws_music_messages_total` - WebSocket messages by direction and type
+
+**Performance:**
+- `music_cmd_latency_ms` - Legacy command latency percentiles
+- `music_command_latency_seconds` - New command execution latency by command and provider
+- `music_first_sound_ms` - Time to first audible sound
+- `spotify_play_count_total` - Play request counts
+
+**Error Tracking:**
+- `music_transfer_fail_total` - Playback transfer failures
+- `music_rate_limited_total` - Rate limiting events by provider
+
+**Cache Performance:**
+- `music_reco_hit_total` - Recommendation cache hits by vibe
+- `music_reco_miss_total` - Recommendation cache misses by vibe
+
+### Frontend Console Logging
+
+The music hooks now log poll lifecycle events:
+```javascript
+console.info("music.poll:start", { pollMs, timestamp, hook: "useSpotifyStatus" });
+console.info("music.poll:stop", { reason: "connected", pollCount, timestamp, hook: "useSpotifyStatus" });
+```
+
 ## Files
 
 - `docker-compose.yml` - Services configuration
@@ -175,7 +222,8 @@ Add to your CI pipeline:
 - `prometheus/recording_rules.yml` - Metric rollups for performance + SLO success ratio
 - `prometheus/alert_rules.yml` - Alert definitions + SLO burn-rate alerts
 - `alertmanager/alertmanager.yml` - Alertmanager configuration with Slack routing
-- `grafana/dashboards/service-overview.json` - Grafana dashboard
+- `grafana/dashboards/service-overview.json` - General Grafana dashboard
+- `grafana/dashboards/music-observability.json` - Music-specific dashboard
 - `grafana/provisioning/` - Grafana auto-configuration
 - `.env.example` - Slack webhook configuration template
 - `Makefile` - CI validation commands

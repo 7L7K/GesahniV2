@@ -10,11 +10,13 @@ def _setup_app(monkeypatch):
     os.environ.setdefault("HOME_ASSISTANT_TOKEN", "token")
     # Enable per-request env reload for config endpoint smoke
     os.environ.setdefault("ENV_RELOAD_ON_REQUEST", "1")
-    from app import main
+    from app.main import create_app
 
-    monkeypatch.setattr(main, "ha_startup", lambda: None)
-    monkeypatch.setattr(main, "llama_startup", lambda: None)
-    return main.app
+    app = create_app()
+    # Mock startup functions to avoid real network calls
+    monkeypatch.setattr(app, "ha_startup", lambda: None)
+    monkeypatch.setattr(app, "llama_startup", lambda: None)
+    return app
 
 
 def test_health_and_headers(monkeypatch):

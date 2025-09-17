@@ -160,7 +160,8 @@ gesahni-stop() {
     echo "🛑 Stopping Gesahni Development Environment"
 
     # More specific patterns scoped to Gesahni directory and exact commands
-    patterns=("$GESAHNI_DIR.*uvicorn app.main:app" "$GESAHNI_DIR.*next dev" "$GESAHNI_DIR.*next-server")
+    # Avoid overly broad patterns that match unrelated processes
+    patterns=("uvicorn app.main:app" "next dev" "next-server" "npm run dev" "pnpm dev")
     ports=(8000 3000)
 
     found=false

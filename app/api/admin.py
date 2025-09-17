@@ -8,7 +8,7 @@ from datetime import UTC
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, conint
 
 from app.analytics import cache_hit_rate, get_metrics, get_top_skills, latency_p95
 from app.config_runtime import get_config
@@ -33,6 +33,67 @@ from app.jobs.migrate_chroma_to_qdrant import main as _migrate_cli  # type: igno
 from app.jobs.qdrant_lifecycle import bootstrap_collection as _q_bootstrap
 from app.jobs.qdrant_lifecycle import collection_stats as _q_stats
 from app.logging_config import get_errors
+
+
+def require_admin_with_token(request: Request):
+    """Require admin scope OR valid admin token.
+
+    Checks for admin scope first, then falls back to checking ADMIN_TOKEN
+    from query params or headers if no admin scope is present.
+    """
+    # First check if user has admin scope
+    try:
+        # This will raise HTTPException if scope check fails
+        require_admin()(request)
+        return  # Admin scope present, allow access
+    except HTTPException:
+        pass  # No admin scope, check token instead
+
+    # Check for admin token
+    token = (
+        request.query_params.get("token")
+        or request.query_params.get("admin_token")
+        or request.headers.get("X-Admin-Token")
+    )
+
+    admin_token = os.getenv("ADMIN_TOKEN")
+    if admin_token and token == admin_token:
+        return  # Valid admin token, allow access
+
+    # Neither admin scope nor valid token
+    raise HTTPException(
+        status_code=403,
+        detail="Admin access denied: missing admin scope or invalid admin token",
+    )
+
+
+class DecisionsQuery(BaseModel):
+    """Query parameters for admin router decisions endpoint."""
+
+    limit: conint(ge=1, le=1000) = Field(
+        default=500, description="Number of decisions to return"
+    )
+    cursor: int = Field(default=0, ge=0, description="Cursor for pagination")
+    engine: str | None = Field(
+        default=None, description="Filter by engine (gpt|llama|...)"
+    )
+    model: str | None = Field(default=None, description="Filter by model name contains")
+    cache_hit: bool | None = Field(
+        default=None, description="Filter by cache hit status"
+    )
+    escalated: bool | None = Field(
+        default=None, description="Filter by escalation status"
+    )
+    intent: str | None = Field(default=None, description="Filter by intent")
+    q: str | None = Field(default=None, description="Substring match in route_reason")
+    since: str | None = Field(
+        default=None, description="Filter decisions since timestamp"
+    )
+    before: str | None = Field(
+        default=None, description="Filter decisions before timestamp"
+    )
+
+
 from app.models.tv import QuietHours, TvConfig, TvConfigResponse, TVConfigUpdate
 from app.status import _admin_token
 from app.token_store import get_storage_stats
@@ -301,7 +362,7 @@ async def admin_user_identities(user_id: str):
                             if isinstance(token.updated_at, datetime)
                             else token.updated_at
                         ),
-                        "last_refresh_at": token.last_refresh_at,
+                        "last_refresh_at": getattr(token, "last_refresh_at", None),
                     }
 
                 out.append(
@@ -454,9 +515,11 @@ def _check_admin(token: str | None, request: Request | None = None) -> None:
     _tok = _admin_token()
     # In production-like runs, require ADMIN_TOKEN to be set
     if not _is_test_mode() and not _tok:
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(code="admin_token_required", message="admin token required")
+        raise http_error(
+            code="admin_token_required", message="admin token required", status=403
+        )
     # Extract from headers or cookies if not provided as query
     header_token: str | None = None
     cookie_token: str | None = None
@@ -474,9 +537,14 @@ def _check_admin(token: str | None, request: Request | None = None) -> None:
     if _is_test_mode() and candidate is None:
         return
     if _tok and candidate != _tok:
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="access forbidden")
+        raise http_error(
+            code="forbidden",
+            message="access forbidden",
+            status=403,
+            hint="provide a valid admin token",
+        )
 
 
 @router.get("/surface/index")
@@ -555,53 +623,41 @@ async def admin_metrics(
     return out
 
 
-@router.get("/router/decisions", dependencies=[Depends(require_scope("admin:read"))])
+@router.get("/router/decisions", dependencies=[Depends(require_admin_with_token)])
 async def admin_router_decisions(
-    limit: int = Query(default=500, ge=1, le=1000),
-    cursor: int = Query(default=0, ge=0),
-    engine: str | None = Query(
-        default=None, description="Filter by engine (gpt|llama|...)"
-    ),
-    model: str | None = Query(
-        default=None, description="Filter by model name contains"
-    ),
-    cache_hit: bool | None = Query(default=None),
-    escalated: bool | None = Query(default=None),
-    intent: str | None = Query(default=None),
-    q: str | None = Query(default=None, description="Substring match in route_reason"),
-    since: str | None = Query(
-        default=None, description="ISO timestamp lower bound (inclusive)"
-    ),
+    q_params: DecisionsQuery = Depends(),
     token: str | None = Query(default=None),
     request: Request = None,
     user_id: str = Depends(get_current_user_id),
 ) -> dict:
     from datetime import datetime
 
-    _check_admin(token, request)
+    # Authentication handled by require_admin_with_token dependency
     _raw = decisions_recent(1000)
     items = _raw if isinstance(_raw, list) else []
     # Apply filters
-    if engine:
+    if q_params.engine:
         items = [
-            it for it in items if (it.get("engine") or "").lower() == engine.lower()
+            it
+            for it in items
+            if (it.get("engine") or "").lower() == q_params.engine.lower()
         ]
-    if model:
-        s = model.lower()
+    if q_params.model:
+        s = q_params.model.lower()
         items = [it for it in items if s in (it.get("model") or "").lower()]
-    if cache_hit is not None:
-        items = [it for it in items if bool(it.get("cache_hit")) == cache_hit]
-    if escalated is not None:
-        items = [it for it in items if bool(it.get("escalated")) == escalated]
-    if intent:
-        s = intent.lower()
+    if q_params.cache_hit is not None:
+        items = [it for it in items if bool(it.get("cache_hit")) == q_params.cache_hit]
+    if q_params.escalated is not None:
+        items = [it for it in items if bool(it.get("escalated")) == q_params.escalated]
+    if q_params.intent:
+        s = q_params.intent.lower()
         items = [it for it in items if s in (it.get("intent") or "").lower()]
-    if q:
-        s = q.lower()
+    if q_params.q:
+        s = q_params.q.lower()
         items = [it for it in items if s in (it.get("route_reason") or "").lower()]
-    if since:
+    if q_params.since:
         try:
-            t0 = datetime.fromisoformat(since)
+            t0 = datetime.fromisoformat(q_params.since)
 
             def _parse(ts: str | None):
                 try:
@@ -614,8 +670,12 @@ async def admin_router_decisions(
             # ignore bad since parameter
             pass
     total = len(items)
-    sliced = items[cursor : cursor + limit]
-    next_cursor = cursor + len(sliced) if (cursor + len(sliced)) < total else None
+    sliced = items[q_params.cursor : q_params.cursor + q_params.limit]
+    next_cursor = (
+        q_params.cursor + len(sliced)
+        if (q_params.cursor + len(sliced)) < total
+        else None
+    )
     return {"items": sliced, "total": total, "next_cursor": next_cursor}
 
 

@@ -7,6 +7,7 @@ from fastapi.responses import JSONResponse
 
 from ..auth_store_tokens import get_token
 from ..deps.user import get_current_user_id
+from ..errors import json_error
 from ..integrations.google.oauth import calendar_next_event, gmail_unread_count
 from ..service_state import parse
 
@@ -18,11 +19,21 @@ async def verify_google_access(request: Request):
     """Ping Gmail and Calendar using stored token and update service_state with last successful ping."""
     user_id = get_current_user_id(request=request)
     if not user_id or user_id == "anon":
-        return JSONResponse({"ok": False, "error": "auth_required"}, status_code=401)
+        return json_error(
+            code="unauthorized",
+            message="Authentication required",
+            http_status=401,
+            meta={"ok": False, "error": "auth_required"},
+        )
 
     token = await get_token(user_id, "google")
     if not token or not token.access_token:
-        return JSONResponse({"ok": False, "error": "no_token"}, status_code=400)
+        return json_error(
+            code="bad_request",
+            message="No token available",
+            http_status=400,
+            meta={"ok": False, "error": "no_token"},
+        )
 
     services = {}
     try:

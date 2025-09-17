@@ -92,8 +92,11 @@ class GoogleOAuth:
                 GOOGLE_TOKEN_EXCHANGE_OK.labels(
                     user_id="unknown", scopes_hash=scopes_hash
                 ).inc()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "Google OAuth metrics error",
+                    extra={"meta": {"error": str(e)}},
+                )
             return td
         except OAuthError:
             # Integration layer will have sanitized the OAuthError; emit failure metric and re-raise
@@ -101,8 +104,11 @@ class GoogleOAuth:
                 GOOGLE_TOKEN_EXCHANGE_FAILED.labels(
                     user_id="unknown", reason="oauth_error"
                 ).inc()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "Google OAuth metrics error",
+                    extra={"meta": {"error": str(e)}},
+                )
             raise
         except Exception as e:
             logger.error(
@@ -112,8 +118,11 @@ class GoogleOAuth:
                 GOOGLE_TOKEN_EXCHANGE_FAILED.labels(
                     user_id="unknown", reason="internal_error"
                 ).inc()
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "Google OAuth metrics error",
+                    extra={"meta": {"error": str(e)}},
+                )
             from .constants import ERR_OAUTH_EXCHANGE_FAILED
             from .errors import OAuthError as _OAuthError
 
@@ -140,9 +149,9 @@ class GoogleOAuth:
             except (httpx.RequestError, httpx.TimeoutException) as exc:
                 try:
                     r = await client.post(token_url, data=data, headers=headers)
-                except Exception:
+                except Exception as retry_exc:
                     raise GoogleOAuthError(
-                        f"Token refresh failed: network error: {exc}"
+                        f"Token refresh failed: network error: {exc}, retry failed: {retry_exc}"
                     )
 
             if r.status_code != 200:
@@ -154,8 +163,12 @@ class GoogleOAuth:
                         raise InvalidGrantError(
                             f"Token refresh failed due to invalid_grant: {r.status_code} {r.text}"
                         )
-                except Exception:
-                    pass  # Fall through to generic error
+                except Exception as e:
+                    logger.debug(
+                        "Failed to parse Google OAuth error response",
+                        extra={"meta": {"error": str(e), "status_code": r.status_code}},
+                    )
+                    # Fall through to generic error
                 raise GoogleOAuthError(
                     f"Token refresh failed: {r.status_code} {r.text}"
                 )
@@ -213,7 +226,7 @@ async def exchange_code(
 ):
     """Exchange an authorization code for Google credentials.
 
-    If `state` is provided and `verify_state` is True, the state will be verified
+    If `state` is provided and `verify_state` evaluates True, the state will be verified
     (consuming nonce when applicable). Returns Google credentials object that
     the callback can use for further processing.
     """
@@ -271,7 +284,12 @@ async def exchange_code(
     if id_token_val:
         try:
             creds.id_token = id_token_val
-        except Exception:
+        except Exception as e:
+            logger.debug(
+                "Failed to set id_token on credentials object",
+                extra={"meta": {"error": str(e)}},
+            )
+
             # Create a lightweight proxy wrapper that exposes id_token and
             # forwards other attribute lookups to the underlying creds object.
             class _CredentialsProxy:
@@ -286,7 +304,11 @@ async def exchange_code(
                     # Try to set on inner if it has attribute, otherwise set on proxy
                     try:
                         setattr(self._inner, name, value)
-                    except Exception:
+                    except Exception as e:
+                        logger.debug(
+                            "Failed to set attribute on inner credentials object",
+                            extra={"meta": {"error": str(e), "attribute": name}},
+                        )
                         object.__setattr__(self, name, value)
 
                 def __repr__(self):
@@ -449,8 +471,11 @@ def build_auth_url(user_id: str, state_payload: dict | None = None) -> tuple[str
     # do not propagate redirect_uris from client config until explicitly set.
     try:  # best-effort; fall back silently if unavailable
         flow.redirect_uri = CLIENT_CONFIG["web"]["redirect_uris"][0]
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(
+            "Failed to set redirect_uri on Google flow",
+            extra={"meta": {"error": str(e)}},
+        )
     if state_payload:
         state = _sign_state(state_payload)
     else:
@@ -467,8 +492,11 @@ def refresh_if_needed(creds: Any) -> Any:
             expired and has_refresh and _GOOGLE_AVAILABLE and _Request is not None
         ):  # pragma: no cover
             creds.refresh(_Request())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(
+            "Failed to refresh Google credentials",
+            extra={"meta": {"error": str(e)}},
+        )
     return creds
 
 

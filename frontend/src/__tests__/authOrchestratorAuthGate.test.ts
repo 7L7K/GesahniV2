@@ -1,4 +1,5 @@
 import { getAuthOrchestrator, __resetAuthOrchestrator } from '@/services/authOrchestrator';
+import { apiFetch } from '@/lib/api';
 
 // Mock the apiFetch function
 jest.mock('@/lib/api', () => ({
@@ -32,7 +33,6 @@ describe('Auth Orchestrator Auth Gate', () => {
     });
 
     it('should treat isAuthenticated=true && !userId as not authenticated', async () => {
-        const { apiFetch } = require('@/lib/api');
 
         // Mock whoami response with isAuthenticated=true but no userId
         apiFetch.mockResolvedValueOnce({
@@ -65,7 +65,6 @@ describe('Auth Orchestrator Auth Gate', () => {
     });
 
     it('should accept valid userId with isAuthenticated=true', async () => {
-        const { apiFetch } = require('@/lib/api');
 
         // Mock whoami response with valid authentication
         apiFetch.mockResolvedValueOnce({
@@ -97,7 +96,6 @@ describe('Auth Orchestrator Auth Gate', () => {
     });
 
     it('should handle isAuthenticated=false regardless of userId', async () => {
-        const { apiFetch } = require('@/lib/api');
 
         // Mock whoami response with isAuthenticated=false
         apiFetch.mockResolvedValueOnce({
@@ -127,7 +125,6 @@ describe('Auth Orchestrator Auth Gate', () => {
     });
 
     it('should handle empty string userId as invalid', async () => {
-        const { apiFetch } = require('@/lib/api');
 
         // Mock whoami response with isAuthenticated=true but empty userId
         apiFetch.mockResolvedValueOnce({
@@ -160,7 +157,6 @@ describe('Auth Orchestrator Auth Gate', () => {
     });
 
     it('should handle whitespace-only userId as invalid', async () => {
-        const { apiFetch } = require('@/lib/api');
 
         // Mock whoami response with isAuthenticated=true but whitespace-only userId
         apiFetch.mockResolvedValueOnce({

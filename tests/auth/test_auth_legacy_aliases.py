@@ -49,7 +49,7 @@ class TestLegacyAuthAliases:
     def test_legacy_register_redirects_to_canonical(self, client):
         """Test that POST /register redirects to POST /v1/auth/register."""
         response = client.post(
-            "/register",
+            "/v1/auth/register",
             json={"username": "test", "password": "pass"},
             allow_redirects=False,
         )
@@ -81,7 +81,7 @@ class TestLegacyAuthAliases:
 
         # Test register
         response = client.post(
-            "/register",
+            "/v1/auth/register",
             json={"username": "test", "password": "pass"},
             allow_redirects=False,
         )
@@ -149,7 +149,7 @@ class TestLegacyAuthAliases:
 
         # Test register with follow redirects
         response = client.post(
-            "/register",
+            "/v1/auth/register",
             json={"username": "testuser2", "password": "secret123"},
             allow_redirects=True,
         )

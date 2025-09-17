@@ -16,17 +16,16 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from app.auth_core import require_scope as require_scope_core
 from app.db.chat_repo import get_messages_by_rid
 from app.db.core import get_db
-from app.deps.user import get_current_user_id, require_user
-from app.errors import BackendUnavailableError
+from app.deps.user import get_current_user_id
+from app.errors import BackendUnavailableError, json_error
 from app.otel_utils import get_trace_id_hex, start_span
 from app.policy import moderation_precheck
 from app.schemas.chat import AskRequest
 
-# OPENAI/OLLAMA timeouts are provided by the legacy router module in some
-# configurations. Import them lazily with safe fallbacks to avoid hard
-# import-time coupling to `app.router` (which may be a lightweight package).
+# OPENAI/OLLAMA timeouts are provided by the policy module.
+# Import them lazily with safe fallbacks to avoid hard import-time coupling.
 try:
-    from app.router import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
+    from app.router.policy import OLLAMA_TIMEOUT_MS, OPENAI_TIMEOUT_MS
 except Exception:
     OPENAI_TIMEOUT_MS = 6000
     OLLAMA_TIMEOUT_MS = 4500
@@ -431,7 +430,9 @@ async def _require_auth_dep(request: Request) -> None:
 @router.post(
     "/ask",
     dependencies=[
-        Depends(require_user),  # 401 on missing/invalid auth (WWW-Authenticate: Bearer)
+        Depends(
+            get_current_user_id
+        ),  # 401 on missing/invalid auth (WWW-Authenticate: Bearer)
         Depends(
             require_scope_core("chat:write")
         ),  # 403 on missing scope with structured detail
@@ -599,10 +600,20 @@ async def _ask(request: Request, body: AskRequest):
                     if "route_prompt" in kwargs
                     else getattr(request.app.state, "prompt_router", None)
                 )
-            except Exception:
+                logger.info(
+                    "🔍 ASK PROMPT_ROUTER RESOLVED: router=%s, type=%s, callable=%s",
+                    "injected" if kwargs.get("route_prompt") else "app.state",
+                    type(prompt_router).__name__ if prompt_router else "None",
+                    callable(prompt_router) if prompt_router else False,
+                )
+            except Exception as e:
+                logger.warning("⚠️ ASK PROMPT_ROUTER RESOLUTION FAILED: %s", e)
                 prompt_router = None
 
             if prompt_router is not None and not isinstance(prompt_router, Depends):
+                logger.info(
+                    "🚀 ASK PROMPT_ROUTER: prompt_router exists and is not Depends, proceeding with backend call"
+                )
                 # Build a minimal payload for backend callables
                 payload = {
                     "prompt": prompt_text,
@@ -621,33 +632,72 @@ async def _ask(request: Request, body: AskRequest):
                 )
 
                 backend_label = os.getenv("PROMPT_BACKEND", "live").lower()
+                logger.info(
+                    "🎯 ASK BACKEND LABEL: PROMPT_BACKEND=%s -> backend_label=%s",
+                    os.getenv("PROMPT_BACKEND", "live"),
+                    backend_label,
+                )
                 PROMPT_ROUTER_CALLS_TOTAL.labels(backend_label).inc()
 
                 start = monotonic()
+                logger.info(
+                    "🔄 ASK PROMPT_ROUTER CALL: Starting backend call to %s with payload keys=%s user_id=%s model_override=%s",
+                    backend_label,
+                    list(payload.keys()) if isinstance(payload, dict) else "non-dict",
+                    user_id,
+                    model_override,
+                    extra={
+                        "meta": {
+                            "prompt_len": len(prompt_text or ""),
+                            "stream": bool(stream_flag),
+                        }
+                    },
+                )
                 try:
                     # Timeout fence: don't let backend block for more than 10s
                     import asyncio
 
+                    logger.info(
+                        "⏳ ASK PROMPT_ROUTER: About to call prompt_router()..."
+                    )
                     result = await asyncio.wait_for(
                         prompt_router(payload), timeout=10.0
                     )
+                    logger.info(
+                        "✅ ASK PROMPT_ROUTER SUCCESS: Backend call completed in %.3fs, result type=%s",
+                        monotonic() - start,
+                        type(result).__name__,
+                    )
+                    # Handle different result types and put them in the queue
+                    if isinstance(result, dict):
+                        # Extract answer from dict (like dryrun router)
+                        answer = result.get("answer", str(result))
+                        await queue.put(answer)
+                    elif isinstance(result, str):
+                        await queue.put(result)
+                    else:
+                        await queue.put(str(result))
                 except TimeoutError:
                     elapsed = monotonic() - start
                     PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "timeout").inc()
                     logger.error(
-                        "Prompt backend timeout: backend=%s elapsed=%.3fs",
+                        "❌ ASK PROMPT_ROUTER TIMEOUT: Backend=%s timed out after %.3fs. Payload keys=%s, prompt_len=%d, stream=%s",
                         backend_label,
                         elapsed,
+                        (
+                            list(payload.keys())
+                            if isinstance(payload, dict)
+                            else "non-dict"
+                        ),
+                        len(prompt_text or ""),
+                        bool(stream_flag),
                         exc_info=True,
                     )
-                    raise HTTPException(
-                        status_code=503,
-                        detail={
-                            "code": "BACKEND_TIMEOUT",
-                            "message": "Prompt backend timed out",
-                            "cause": "timeout",
-                        },
+                    # Put error message in queue instead of raising exception
+                    await queue.put(
+                        "[error:backend_timeout: Prompt backend timed out after 10 seconds]"
                     )
+                    return
                 except BackendUnavailableError as e:
                     elapsed = monotonic() - start
                     PROMPT_ROUTER_FAILURES_TOTAL.labels(
@@ -660,14 +710,9 @@ async def _ask(request: Request, body: AskRequest):
                         e,
                         exc_info=True,
                     )
-                    raise HTTPException(
-                        status_code=503,
-                        detail={
-                            "code": "ROUTER_UNAVAILABLE",
-                            "message": "Prompt backend not configured",
-                            "cause": str(e),
-                        },
-                    )
+                    # Put error message in queue instead of raising exception
+                    await queue.put(f"[error:backend_unavailable: {str(e)}]")
+                    return
                 except Exception as e:
                     elapsed = monotonic() - start
                     PROMPT_ROUTER_FAILURES_TOTAL.labels(backend_label, "error").inc()
@@ -676,19 +721,22 @@ async def _ask(request: Request, body: AskRequest):
                         backend_label,
                         elapsed,
                     )
-                    raise HTTPException(
-                        status_code=503,
-                        detail={
-                            "code": "BACKEND_UNAVAILABLE",
-                            "message": "Prompt backend call failed",
-                            "cause": str(e),
-                        },
-                    )
+                    # Put error message in queue instead of raising exception
+                    await queue.put(f"[error:backend_error: {str(e)}]")
+                    return
             else:
+                logger.info(
+                    "🔄 ASK FALLBACK ROUTER: Using fallback router. prompt_router=%s (is Depends: %s)",
+                    "None" if prompt_router is None else type(prompt_router).__name__,
+                    isinstance(prompt_router, Depends) if prompt_router else False,
+                )
                 try:
                     # Prefer the lightweight router entrypoint to avoid importing heavy modules
                     entry_mod = import_module("app.router.entrypoint")
                     route_prompt = entry_mod.route_prompt
+                    logger.info(
+                        "✅ ASK FALLBACK ROUTER: Successfully imported route_prompt from app.router.entrypoint"
+                    )
                     params = inspect.signature(route_prompt).parameters
                 except (ImportError, AttributeError, RuntimeError) as e:
                     # Router import/wiring failed - return 503 Service Unavailable
@@ -702,7 +750,13 @@ async def _ask(request: Request, body: AskRequest):
                         },
                     )
                 try:
+                    logger.info(
+                        "🚀 ASK ROUTE_PROMPT CALL: About to call route_prompt with stream_cb=%s, params=%s",
+                        "stream_cb" in params,
+                        list(params.keys()),
+                    )
                     if "stream_cb" in params:
+                        logger.info("📡 ASK ROUTE_PROMPT: Calling with stream_cb...")
                         result = await route_prompt(
                             prompt_text,
                             user_id,
@@ -713,34 +767,39 @@ async def _ask(request: Request, body: AskRequest):
                             **gen_opts,
                         )
                     else:  # Compatibility with tests that monkeypatch route_prompt
+                        logger.info(
+                            "📡 ASK ROUTE_PROMPT: Calling without stream_cb (test compatibility)..."
+                        )
                         result = await route_prompt(
                             prompt_text,
                             user_id,
                             model_override=model_override,
                             **gen_opts,
                         )
+                    logger.info(
+                        "✅ ASK ROUTE_PROMPT SUCCESS: Call completed, result type=%s, len=%s",
+                        type(result).__name__,
+                        len(result) if hasattr(result, "__len__") else "N/A",
+                    )
+                    # Handle different result types and put them in the queue
+                    if isinstance(result, dict):
+                        # Extract answer from dict (like dryrun router)
+                        answer = result.get("answer", str(result))
+                        await queue.put(answer)
+                    elif isinstance(result, str):
+                        await queue.put(result)
+                    else:
+                        await queue.put(str(result))
                 except RuntimeError as e:
-                    # Router explicitly indicates it hasn't been configured; translate to 503
+                    # Router explicitly indicates it hasn't been configured; put error in queue
                     logger.error("Router not configured: %s", e, exc_info=True)
-                    raise HTTPException(
-                        status_code=503,
-                        detail={
-                            "code": "ROUTER_UNAVAILABLE",
-                            "message": "Router not configured",
-                            "cause": str(e),
-                        },
-                    )
+                    await queue.put(f"[error:router_unavailable: {str(e)}]")
+                    return
                 except Exception as e:
-                    # Router call failed - return 503 Service Unavailable
+                    # Router call failed - put error in queue
                     logger.error("Router call failed: %s", e, exc_info=True)
-                    raise HTTPException(
-                        status_code=503,
-                        detail={
-                            "code": "BACKEND_UNAVAILABLE",
-                            "message": "Router call failed",
-                            "cause": str(e),
-                        },
-                    )
+                    await queue.put(f"[error:router_error: {str(e)}]")
+                    return
             if streamed_any:
                 logger.info(
                     "ask.success",
@@ -780,15 +839,15 @@ async def _ask(request: Request, body: AskRequest):
                 if messages_to_save:
                     try:
                         from app.db.chat_repo import save_messages
-                        from app.db.core import get_async_db
+                        from app.db.core import get_async_session
+                        from app.user_store import user_store
+
+                        # Make sure the requesting user exists so FK constraints hold
+                        await user_store.ensure_user(user_id)
 
                         # Get database session
-                        session_gen = get_async_db()
-                        session = await anext(session_gen)
-                        try:
+                        async with get_async_session() as session:
                             await save_messages(session, user_id, rid, messages_to_save)
-                        finally:
-                            await session.close()
 
                         logger.debug(
                             "Chat messages persisted",
@@ -967,12 +1026,37 @@ async def _ask(request: Request, body: AskRequest):
         text_result = "".join(chunks)
         if status_code and status_code >= 400:
             # Error path: propagate detail with proper status
-            detail_payload = (
-                _error_detail
-                if (isinstance(_error_detail, dict) or isinstance(_error_detail, list))
-                else {"detail": str(_error_detail or _error_category or "error")}
+            if isinstance(_error_detail, dict) or isinstance(_error_detail, list):
+                # Use existing error structure if it's already a dict/list
+                error_content = _error_detail
+            else:
+                # Create standardized error structure
+                error_content = {
+                    "detail": str(_error_detail or _error_category or "error")
+                }
+
+            # Map status codes to error codes
+            status_to_code = {
+                400: "bad_request",
+                401: "unauthorized",
+                403: "forbidden",
+                404: "not_found",
+                422: "validation_error",
+                429: "rate_limited",
+                500: "internal_error",
+                502: "bad_gateway",
+                503: "service_unavailable",
+                504: "timeout",
+            }
+            error_code = status_to_code.get(status_code, "http_error")
+            error_message = error_content.get("detail", "Request failed")
+
+            resp = json_error(
+                code=error_code,
+                message=error_message,
+                http_status=status_code,
+                meta=error_content if isinstance(error_content, dict) else {},
             )
-            resp = JSONResponse(detail_payload, status_code=int(status_code))
         else:
             resp = JSONResponse({"response": text_result, "rid": rid}, status_code=200)
     # Ensure request id is present for correlation in clients

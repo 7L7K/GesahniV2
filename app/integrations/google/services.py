@@ -7,16 +7,26 @@ from googleapiclient.discovery import build
 
 def _refresh(creds: Credentials) -> Credentials:
     if creds.expired and creds.refresh_token:
-        creds.refresh(Request())
+        try:
+            creds.refresh(Request())
+        except Exception as e:
+            import logging
+
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                "Failed to refresh Google credentials",
+                extra={"meta": {"error": str(e)}},
+            )
+            # Return original creds - caller will handle expired tokens
     return creds
 
 
 def gmail_service(creds: Credentials):
-    _refresh(creds)
+    creds = _refresh(creds)
     # cache_discovery=False avoids file writes in server envs
     return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
 def calendar_service(creds: Credentials):
-    _refresh(creds)
+    creds = _refresh(creds)
     return build("calendar", "v3", credentials=creds, cache_discovery=False)

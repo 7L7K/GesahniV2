@@ -84,9 +84,11 @@ async def config(
     # Require admin token if set
     _tok = _admin_token()
     if _tok and token != _tok:
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="invalid admin token")
+        raise http_error(
+            code="invalid_admin_token", message="invalid admin token", status=403
+        )
     # Never expose sensitive secrets
     SENSITIVE_PREFIXES = (
         "API_KEY",

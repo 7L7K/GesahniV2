@@ -90,9 +90,11 @@ async def speak(
                     code="missing_csrf", message="CSRF token required", status=400
                 )
             if not token_hdr or not cookie or token_hdr != cookie:
-                from app.http_errors import forbidden
+                from app.http_errors import http_error
 
-                raise forbidden(code="invalid_csrf", message="invalid CSRF token")
+                raise http_error(
+                    code="invalid_csrf", message="invalid CSRF token", status=403
+                )
     except HTTPException:
         raise
     except Exception:

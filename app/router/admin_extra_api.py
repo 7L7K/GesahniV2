@@ -14,6 +14,7 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 
 from app import settings
+from app.errors import json_error
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +42,12 @@ async def reload_env(request: Request) -> JSONResponse:
     except Exception as e:
         logger.warning("admin.reload_env compatibility wrapper failed: %s", e)
         # Preserve original fallback behavior for unauthenticated/dev runs
-        return JSONResponse({"status": "error", "detail": str(e)}, status_code=500)
+        return json_error(
+            code="internal_error",
+            message="Something went wrong",
+            http_status=500,
+            meta={"status": "error", "detail": str(e)},
+        )
 
 
 async def self_review(request: Request) -> JSONResponse:
@@ -58,10 +64,20 @@ async def self_review(request: Request) -> JSONResponse:
                 return JSONResponse(res, status_code=200)
         except Exception:
             pass
-        return JSONResponse({"detail": "not_implemented"}, status_code=501)
+        return json_error(
+            code="not_implemented",
+            message="Feature not implemented",
+            http_status=501,
+            meta={"detail": "not_implemented"},
+        )
     except Exception as e:
         logger.exception("admin.self_review wrapper failed: %s", e)
-        return JSONResponse({"detail": "not_implemented"}, status_code=501)
+        return json_error(
+            code="not_implemented",
+            message="Feature not implemented",
+            http_status=501,
+            meta={"detail": "not_implemented"},
+        )
 
 
 async def bootstrap_vector_store(request: Request) -> JSONResponse:
@@ -79,7 +95,12 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
     except Exception as e:
         # _check_admin raises HTTPException on forbidden; mirror that as 403
         logger.warning("admin.bootstrap_vector_store: admin check failed: %s", e)
-        return JSONResponse({"detail": "forbidden"}, status_code=403)
+        return json_error(
+            code="forbidden",
+            message="Access denied",
+            http_status=403,
+            meta={"detail": "forbidden"},
+        )
 
     coll = request.query_params.get("name") or settings.qdrant_collection()
     strict = settings.strict_vector_store()
@@ -92,12 +113,17 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
         except Exception as e:
             logger.exception("admin.bootstrap_vector_store: store init failed: %s", e)
             if strict:
-                return JSONResponse(
-                    {"detail": "vector_store_misconfigured", "error": str(e)},
-                    status_code=400,
+                return json_error(
+                    code="bad_request",
+                    message="Vector store misconfigured",
+                    http_status=400,
+                    meta={"detail": "vector_store_misconfigured", "error": str(e)},
                 )
-            return JSONResponse(
-                {"status": "error", "detail": "init_failed"}, status_code=202
+            return json_error(
+                code="bad_request",
+                message="Vector store initialization failed",
+                http_status=202,
+                meta={"status": "error", "detail": "init_failed"},
             )
 
         # If store initialised, attempt bootstrap via admin helper if present
@@ -112,8 +138,11 @@ async def bootstrap_vector_store(request: Request) -> JSONResponse:
     except Exception as e:
         logger.exception("admin.bootstrap_vector_store: unexpected error: %s", e)
         if strict:
-            return JSONResponse(
-                {"detail": "vector_store_error", "error": str(e)}, status_code=500
+            return json_error(
+                code="internal_error",
+                message="Vector store error",
+                http_status=500,
+                meta={"detail": "vector_store_error", "error": str(e)},
             )
         return JSONResponse({"status": "accepted", "collection": coll}, status_code=202)
 

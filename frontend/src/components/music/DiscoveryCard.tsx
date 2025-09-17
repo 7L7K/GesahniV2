@@ -1,11 +1,18 @@
 "use client";
 
 import React from "react";
-import { getRecommendations } from "@/lib/api";
+import { getRecommendations, type Recommendation } from "@/lib/api";
 import { Button } from "@/components/ui/button";
 
+type DiscoveryItem = {
+    id: string;
+    name: string;
+    artists: string;
+    art_url?: string;
+};
+
 export default function DiscoveryCard() {
-    const [items, setItems] = React.useState<any[]>([]);
+    const [items, setItems] = React.useState<DiscoveryItem[]>([]);
     const [loading, setLoading] = React.useState(false);
     const prefersReduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -13,7 +20,14 @@ export default function DiscoveryCard() {
         setLoading(true);
         try {
             const r = await getRecommendations();
-            setItems(r.recommendations || []);
+            // Transform Recommendation[] to DiscoveryItem[]
+            const transformedItems: DiscoveryItem[] = (r.recommendations || []).map((rec: Recommendation) => ({
+                id: rec.id,
+                name: rec.title,
+                artists: rec.artist,
+                art_url: rec.album ? `/album-art/${rec.album}.jpg` : undefined // You may need to adjust this based on your album art handling
+            }));
+            setItems(transformedItems);
         } finally {
             setLoading(false);
         }

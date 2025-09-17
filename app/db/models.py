@@ -430,6 +430,7 @@ class CareSession(Base):
     )
     title: Mapped[str | None] = mapped_column(String(200))
     transcript_uri: Mapped[str | None] = mapped_column(Text)
+    status: Mapped[str | None] = mapped_column(String(50), default="active")
     created_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
 
@@ -485,6 +486,8 @@ class ChatMessage(Base):
     __tablename__ = "chat_messages"
     __table_args__ = (
         sa.Index("ix_chat_chat_messages_rid", "rid"),
+        sa.Index("ix_chat_messages_user_rid", "user_id", "rid"),
+        sa.Index("ix_chat_messages_created_at", "created_at"),
         {"schema": "chat"},
     )
 
@@ -503,12 +506,9 @@ class ChatMessage(Base):
         DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
     )
 
-    # Indexes for efficient queries
-    __table_args__ = (
-        sa.Index("ix_chat_messages_user_rid", "user_id", "rid"),
-        sa.Index("ix_chat_messages_created_at", "created_at"),
-        {"schema": "chat"},
-    )
+
+# Keep table args above in sync with chat schema migrations. Duplicate assignment
+# here would silently drop indexes, so keep everything in the tuple above.
 
 
 # =====================================================================
@@ -742,36 +742,82 @@ class Ledger(Base):
 class ThirdPartyToken(Base):
     __tablename__ = "third_party_tokens"
     __table_args__ = (
-        PrimaryKeyConstraint(
-            "user_id", "provider", "provider_sub", name="pk_third_party_tokens"
-        ),
-        sa.Index("idx_third_party_tokens_provider_sub", "provider_sub"),
         sa.Index("idx_tokens_third_party_user_provider", "user_id", "provider"),
+        sa.Index("idx_tokens_third_party_provider_sub", "provider_sub"),
+        sa.Index("idx_tokens_third_party_identity_id", "identity_id"),
         sa.Index(
             "idx_tokens_third_party_expires",
             "expires_at",
             postgresql_where=sqltext("expires_at IS NOT NULL"),
         ),
         sa.Index(
-            "idx_tokens_third_party_expires_at",
-            "expires_at",
-            postgresql_where=sqltext("expires_at IS NOT NULL"),
+            "idx_tokens_third_party_identity_provider_valid",
+            "identity_id",
+            "provider",
+            unique=True,
+            postgresql_where=sqltext("is_valid = 1"),
+        ),
+        sa.Index(
+            "idx_tokens_third_party_provider_sub_unique",
+            "provider",
+            "provider_sub",
+            unique=True,
+            postgresql_where=sqltext("provider_sub IS NOT NULL"),
+        ),
+        UniqueConstraint(
+            "user_id", "provider", name="uq_third_party_tokens_user_provider"
         ),
         {"schema": "tokens"},
     )
 
+    id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        primary_key=True,
+        server_default=sa.text("uuid_generate_v4()"),
+    )
     user_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
         ForeignKey("auth.users.id", ondelete="CASCADE"),
         nullable=False,
     )
+    identity_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
+        ForeignKey("auth.auth_identities.id", ondelete="CASCADE"),
+        nullable=False,
+    )
     provider: Mapped[str] = mapped_column(String(80), nullable=False)
-    provider_sub: Mapped[str] = mapped_column(Text, nullable=False)
-    access_token: Mapped[bytes] = mapped_column(sa.LargeBinary, nullable=False)
-    refresh_token: Mapped[bytes | None] = mapped_column(sa.LargeBinary)
-    scope: Mapped[str | None] = mapped_column(Text)
-    expires_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
-    updated_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    provider_sub: Mapped[str | None] = mapped_column(Text)
+    provider_iss: Mapped[str | None] = mapped_column(Text)
+    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token_enc: Mapped[bytes | None] = mapped_column(sa.LargeBinary)
+    refresh_token: Mapped[str | None] = mapped_column(Text)
+    refresh_token_enc: Mapped[bytes | None] = mapped_column(sa.LargeBinary)
+    envelope_key_version: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa.text("1")
+    )
+    last_refresh_at: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa.text("0")
+    )
+    refresh_error_count: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa.text("0")
+    )
+    scopes: Mapped[str | None] = mapped_column(Text)
+    service_state: Mapped[str | None] = mapped_column(Text)
+    scope_union_since: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa.text("0")
+    )
+    scope_last_added_from: Mapped[str | None] = mapped_column(Text)
+    replaced_by_id: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    )
+    updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=sa.text("now()")
+    )
+    is_valid: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=sa.text("1")
+    )
 
 
 # =====================================================================

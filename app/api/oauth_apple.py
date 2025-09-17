@@ -1,18 +1,22 @@
 from __future__ import annotations
 
+import logging
 import os
 import random
 import time
 from datetime import UTC, datetime
+from functools import lru_cache
 from urllib.parse import urlencode
 
 import httpx
+import jwt
 from fastapi import APIRouter, HTTPException, Request, Response
+from jwt import PyJWKClient
 
-from ..security import jwt_decode
 from ..sessions_store import sessions_store
 
 router = APIRouter(tags=["Auth"], include_in_schema=False)
+logger = logging.getLogger(__name__)
 
 
 def _allow_redirect(url: str) -> bool:
@@ -27,6 +31,59 @@ def _allow_redirect(url: str) -> bool:
         return any(host.endswith(a.lower()) for a in allowed)
     except Exception:
         return False
+
+
+def _truthy(value: str | None) -> bool:
+    return (value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+@lru_cache(maxsize=4)
+def _get_apple_jwk_client(jwks_url: str) -> PyJWKClient:
+    return PyJWKClient(jwks_url)
+
+
+def _decode_apple_id_token(id_token: str, client_id: str) -> dict:
+    """Verify and decode the Apple ID token using JWKS."""
+    jwks_url = (
+        os.getenv("APPLE_JWKS_URL") or "https://appleid.apple.com/auth/keys"
+    ).strip()
+    if not jwks_url:
+        jwks_url = "https://appleid.apple.com/auth/keys"
+
+    try:
+        client = _get_apple_jwk_client(jwks_url)
+        signing_key = client.get_signing_key_from_jwt(id_token)
+        algorithm = signing_key.algorithm or "RS256"
+        return jwt.decode(
+            id_token,
+            signing_key.key,
+            algorithms=[algorithm],
+            audience=client_id,
+            issuer="https://appleid.apple.com",
+        )
+    except Exception as exc:
+        env = (os.getenv("ENV") or "dev").strip().lower()
+        allow_fallback = (
+            _truthy(os.getenv("DEV_MODE"))
+            or _truthy(os.getenv("APPLE_ID_TOKEN_INSECURE_FALLBACK"))
+            or _truthy(os.getenv("PYTEST_RUNNING"))
+            or bool(os.getenv("PYTEST_CURRENT_TEST"))
+            or env not in {"prod", "production"}
+        )
+        if allow_fallback:
+            logger.warning(
+                "Apple ID token verification failed (%s); falling back to unsigned decode for dev mode",
+                exc,
+            )
+            try:
+                return jwt.decode(id_token, options={"verify_signature": False})
+            except Exception as fallback_exc:
+                logger.error(
+                    "Apple ID token fallback decode failed: %s",
+                    fallback_exc,
+                    exc_info=False,
+                )
+        raise HTTPException(status_code=400, detail="invalid_id_token") from exc
 
 
 def _sign_client_secret(
@@ -61,6 +118,8 @@ async def apple_start(request: Request) -> Response:
     # sanitize_redirect_path prevents open redirects by rejecting absolute/protocol-relative
     # URLs and auth paths that could cause redirect loops. This ensures users are only
     # redirected to safe, same-origin application pages after OAuth completion.
+    resp = Response(status_code=302)
+
     if request.query_params.get("next"):
         from ..redirect_utils import sanitize_redirect_path, set_gs_next_cookie
 
@@ -80,7 +139,6 @@ async def apple_start(request: Request) -> Response:
             "state": state,
         }
     )
-    resp = Response(status_code=302)
     resp.headers["Location"] = f"https://appleid.apple.com/auth/authorize?{qs}"
 
     # Use centralized cookie configuration
@@ -142,12 +200,7 @@ async def apple_callback(request: Request, response: Response) -> Response:
         id_token = tok.get("id_token")
         if not id_token:
             raise HTTPException(status_code=400, detail="no_id_token")
-        # Basic decode without verification to extract email/sub
-
-        try:
-            payload = jwt_decode(id_token, options={"verify_signature": False})
-        except Exception:
-            payload = {}
+        payload = _decode_apple_id_token(id_token, client_id)
 
     user_id = (
         str(payload.get("email"))
@@ -158,13 +211,11 @@ async def apple_callback(request: Request, response: Response) -> Response:
         raise HTTPException(status_code=400, detail="no_user")
 
     # Mint session and cookies
-    from ..auth import ALGORITHM, SECRET_KEY
-
     sess = await sessions_store.create_session(user_id)
     sid, did = sess["sid"], sess["did"]
     datetime.now(UTC)
     # Use tokens.py facade instead of direct JWT encoding
-    from ..tokens import make_access, make_refresh
+    from ..tokens import decode_jwt_token, make_access, make_refresh
 
     # Use default TTLs from tokens.py
     access = make_access({"user_id": user_id, "sid": sid, "did": did})
@@ -180,17 +231,15 @@ async def apple_callback(request: Request, response: Response) -> Response:
     try:
         from ..auth import _create_session_id
 
-        payload = jwt_decode(access, SECRET_KEY, algorithms=[ALGORITHM])
-        jti = payload.get("jti")
-        expires_at = payload.get("exp", time.time() + access_ttl)
+        access_payload = decode_jwt_token(access)
+        jti = access_payload.get("jti")
+        expires_at = access_payload.get("exp", time.time() + access_ttl)
         if jti:
             session_id = _create_session_id(jti, expires_at)
         else:
             session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
     except Exception as e:
-        import logging
-
-        logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+        logger.warning("Failed to create session ID from access token: %s", e)
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
     # Use centralized cookie functions
@@ -206,18 +255,27 @@ async def apple_callback(request: Request, response: Response) -> Response:
         request=request,
     )
 
-    # Clear OAuth state cookies after successful authentication
-    clear_oauth_state_cookies(response, request, provider="oauth")
-
+    # Maintain legacy cookie headers when enabled to support older clients/tests.
     try:
-        import logging
+        from .auth import _append_legacy_auth_cookie_headers as _legacy_cookie_headers
 
-        logging.getLogger(__name__).info(
-            "AUTH_OAUTH_LOGIN_SUCCESS",
-            extra={"meta": {"provider": "apple", "user_id": user_id}},
+        _legacy_cookie_headers(
+            response,
+            access=access,
+            refresh=refresh,
+            session_id=session_id,
+            request=request,
         )
-    except Exception:
-        pass
+    except Exception as legacy_exc:  # pragma: no cover - defensive logging
+        logger.debug("Failed to append legacy auth cookies: %s", legacy_exc)
+
+    # Clear OAuth state cookies after successful authentication
+    clear_oauth_state_cookies(response, provider="oauth")
+
+    logger.info(
+        "AUTH_OAUTH_LOGIN_SUCCESS",
+        extra={"meta": {"provider": "apple", "user_id": user_id}},
+    )
 
     # Use get_safe_redirect_target for gs_next cookie priority
     from ..redirect_utils import get_safe_redirect_target

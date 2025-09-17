@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { apiFetch } from '@/lib/api';
 import ServiceChip from '@/components/ServiceChip';
 import { useSpotifyStatus, useMusicDevices } from '@/hooks/useSpotify';
+import { FEATURES } from '@/config/features';
 
 type LogItem = { timestamp: string; level: string; component: string; msg: string };
 type LogsResponse = { logs?: LogItem[]; errors?: LogItem[] };
@@ -100,7 +101,22 @@ export default function IssueTray({ open, onClose }: { open: boolean; onClose: (
 
 function SpotifyStatusSection() {
   const { connected, reason } = useSpotifyStatus(60000);
-  const { hasDevice } = useMusicDevices(60000);
+  const { devices } = useMusicDevices();
+  const hasDevice = devices && devices.length > 0;
+
+  // Show disabled state if feature flag is off
+  if (!FEATURES.MUSIC_DEVICES_POLL_ENABLED) {
+    return (
+      <section>
+        <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Spotify</h3>
+        <div className="flex flex-wrap gap-2">
+          <ServiceChip name="polling" status="skipped" />
+        </div>
+        <div className="mt-1 text-xs text-muted-foreground">Device polling disabled</div>
+      </section>
+    );
+  }
+
   return (
     <section>
       <h3 className="text-xs font-semibold uppercase text-muted-foreground mb-2">Spotify</h3>

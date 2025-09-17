@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict
 
 from app.deps.user import get_current_user_id
 from app.memory.profile_store import profile_store
+from app.metrics import TV_MUSIC_PLAY_COUNT
 
 router = APIRouter(tags=["TV"])  # intentionally no auth deps for device-trusted kiosk
 
@@ -65,7 +66,7 @@ def _is_quiet_hours_active() -> bool:
 
 
 @router.get("/tv/photos")
-async def tv_photos(user_id: str = Depends(get_current_user_id)):
+async def tv_photos():
     """Return slideshow folder and items.
 
     Configure via:
@@ -139,7 +140,7 @@ async def tv_photos_favorite(name: str, user_id: str = Depends(get_current_user_
 
 
 @router.get("/tv/weather")
-async def tv_weather(user_id: str = Depends(get_current_user_id)):
+async def tv_weather():
     """Return a minimal weather payload.
 
     In production, wire to a weather provider; here we rely on environment overrides
@@ -195,14 +196,14 @@ async def tv_alert(
 
 
 @router.get("/tv/tips")
-async def tv_ambient_tips(user_id: str = Depends(get_current_user_id)):
+async def tv_ambient_tips():
     """Ambient tips via lightweight local RAG-style mashup.
 
     Example: "It's 72°F and cloudy; lo-fi playlist queued."
     """
     # Weather from existing endpoint (or env defaults)
     try:
-        w = await tv_weather(user_id)
+        w = await tv_weather()
     except Exception:
         w = {"now": {"temp": 72, "desc": "Cloudy"}}
     temp = int(round(float(w.get("now", {}).get("temp") or 72)))
@@ -224,10 +225,66 @@ async def tv_ambient_tips(user_id: str = Depends(get_current_user_id)):
 )
 async def tv_music_play(preset: str, user_id: str = Depends(get_current_user_id)):
     """Start playing a local preset playlist (placeholder)."""
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Enhanced logging with user_id, route, and auth_state
+    logger.info(
+        "🎵 TV MUSIC PLAY: Request started",
+        extra={
+            "user_id": user_id,
+            "route": "/v1/tv/music/play",
+            "auth_state": (
+                "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
+            ),
+            "meta": {"preset": preset},
+        },
+    )
+
     name = (preset or "").strip()
     if not name:
+        logger.warning(
+            "🎵 TV MUSIC PLAY: Empty preset",
+            extra={
+                "user_id": user_id,
+                "route": "/v1/tv/music/play",
+                "auth_state": (
+                    "spotify_linked=true"
+                    if user_id != "anon"
+                    else "spotify_linked=false"
+                ),
+            },
+        )
+
+        # Track metrics for validation errors
+        try:
+            TV_MUSIC_PLAY_COUNT.labels(status="400").inc()
+        except Exception:
+            pass
+
         raise HTTPException(status_code=400, detail="empty_preset")
+
     # TODO: integrate with local player (mpv/afplay) or Spotify/Apple connectors
+
+    # Track metrics for successful requests
+    try:
+        TV_MUSIC_PLAY_COUNT.labels(status="200").inc()
+    except Exception:
+        pass
+
+    logger.info(
+        "🎵 TV MUSIC PLAY: Request successful",
+        extra={
+            "user_id": user_id,
+            "route": "/v1/tv/music/play",
+            "auth_state": (
+                "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
+            ),
+            "meta": {"preset": preset, "playing": name},
+        },
+    )
+
     return {"status": "ok", "playing": name}
 
 

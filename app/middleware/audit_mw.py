@@ -32,9 +32,6 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     models = importlib.import_module("app.audit_new.models")
                     store = importlib.import_module("app.audit_new.store")
                     AuditEvent = models.AuditEvent
-                    print(
-                        f"AUDIT_MW: Using new audit system - models: {models}, store: {store}"
-                    )
 
                     event = AuditEvent(
                         user_id=uid,
@@ -52,14 +49,9 @@ class AuditMiddleware(BaseHTTPMiddleware):
                         meta={"path": request.url.path},
                     )
 
-                    print(f"AUDIT_MW: Created event: {event}")
-                    print(f"AUDIT_MW: Event JSON: {event.model_dump_json()}")
-
                     # Append via the new store API
                     if hasattr(store, "append"):
-                        print("AUDIT_MW: Calling store.append")
                         store.append(event)
-                        print("AUDIT_MW: store.append completed")
                     else:
                         # Fall back to legacy append_audit if needed
                         legacy = importlib.import_module("app.audit")
@@ -81,13 +73,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
                                 ip_address=ip,
                                 request_id=req_id,
                             )
-                except Exception as e:
-                    print(f"AUDIT_MW: New audit system failed: {e}")
+                except Exception:
                     # As a final fallback, call legacy append_audit if present
                     try:
                         legacy = importlib.import_module("app.audit")
                         if hasattr(legacy, "append_audit"):
-                            print("AUDIT_MW: Using legacy audit system")
                             legacy.append_audit(
                                 action="http_request",
                                 user_id_hashed=uid,

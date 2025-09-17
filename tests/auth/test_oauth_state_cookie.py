@@ -1,5 +1,4 @@
 # tests/test_oauth_state_cookie.py
-import importlib
 import os
 
 from starlette.testclient import TestClient
@@ -7,8 +6,6 @@ from starlette.testclient import TestClient
 
 def _spin():
     """Fresh app instance for testing with dev mode enabled."""
-    if "app.main" in importlib.sys.modules:
-        del importlib.sys.modules["app.main"]
     # Enable dev mode to bypass strict OAuth checks
     os.environ["ENV"] = "dev"
     os.environ["DEV_MODE"] = "1"
@@ -16,8 +13,9 @@ def _spin():
     os.environ["GOOGLE_CLIENT_ID"] = "test-client-id"
     os.environ["GOOGLE_CLIENT_SECRET"] = "test-client-secret"
     os.environ["GOOGLE_REDIRECT_URI"] = "http://localhost:8000/v1/google/auth/callback"
-    from app.main import app
+    from app.main import create_app
 
+    app = create_app()
     return TestClient(app)
 
 

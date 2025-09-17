@@ -19,6 +19,7 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
         scopes: list | None = (
             None  # None = unauthenticated, [] = authenticated but no scopes
         )
+        payload: dict | None = None  # JWT payload for scope checking functions
 
         try:
             # Try to get user_id using existing logic first
@@ -53,7 +54,8 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                         user_id = payload.get("sub") or payload.get("uid")
                         if user_id:
                             # Successfully authenticated - normalize scopes
-                            raw_scopes = payload.get("scopes")
+                            # Check for both "scopes" (plural) and "scope" (singular) for compatibility
+                            raw_scopes = payload.get("scopes") or payload.get("scope")
                             log.debug(
                                 "session_attach.jwt_decoded",
                                 extra={
@@ -82,7 +84,8 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
             if user_id and user_id != "anon" and scopes is None:
                 payload = _get_request_payload(request)
                 if isinstance(payload, dict):
-                    raw_scopes = payload.get("scopes")
+                    # Check for both "scopes" (plural) and "scope" (singular) for compatibility
+                    raw_scopes = payload.get("scopes") or payload.get("scope")
                     if isinstance(raw_scopes, str):
                         scopes = [s.strip() for s in raw_scopes.split() if s.strip()]
                     elif isinstance(raw_scopes, list | tuple | set):
@@ -112,13 +115,8 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
         )
 
         # Also set the JWT payload if we have it for scope checking functions
-        if user_id and user_id != "anon":
-            try:
-                payload = _get_request_payload(request)
-                if isinstance(payload, dict):
-                    request.state.jwt_payload = payload
-            except Exception:
-                pass
+        if user_id and user_id != "anon" and payload:
+            request.state.jwt_payload = payload
 
         # Record metrics for authenticated requests
         if user_id and user_id != "anon":

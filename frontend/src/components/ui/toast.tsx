@@ -10,9 +10,9 @@ export function RateLimitToast() {
       setSeconds(s)
       setVisible(true)
     }
-    window.addEventListener('rate-limit', onLimit as any)
+    window.addEventListener('rate-limit', onLimit as EventListener)
     const id = setInterval(() => setSeconds((x) => (x > 0 ? x - 1 : 0)), 1000)
-    return () => { window.removeEventListener('rate-limit', onLimit as any); clearInterval(id) }
+    return () => { window.removeEventListener('rate-limit', onLimit as EventListener); clearInterval(id) }
   }, [])
   if (!visible) return null
   return (
@@ -36,8 +36,8 @@ export function AuthMismatchToast() {
       setTimeout(() => setVisible(false), 5000)
     }
 
-    window.addEventListener('auth-mismatch', onAuthMismatch as any)
-    return () => { window.removeEventListener('auth-mismatch', onAuthMismatch as any) }
+    window.addEventListener('auth-mismatch', onAuthMismatch as EventListener)
+    return () => { window.removeEventListener('auth-mismatch', onAuthMismatch as EventListener) }
   }, [])
 
   if (!visible) return null

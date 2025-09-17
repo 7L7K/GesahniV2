@@ -1,5 +1,3 @@
-import os
-
 import jwt
 from fastapi.testclient import TestClient
 
@@ -7,18 +5,30 @@ from app.main import app
 
 
 def _bearer(user="u1", scopes=None):
-    payload = {"user_id": user}
+    import time
+
+    now = int(time.time())
+    payload = {
+        "user_id": user,
+        "sub": user,
+        "iat": now,
+        "exp": now + 3600,  # 1 hour
+    }
     if scopes:
         if isinstance(scopes, str):
-            payload["scope"] = scopes
+            payload["scopes"] = scopes
         else:
-            payload["scope"] = " ".join(scopes)
-    tok = jwt.encode(payload, os.getenv("JWT_SECRET", "secret"), algorithm="HS256")
+            payload["scopes"] = " ".join(scopes)
+    # Use a test-specific JWT secret that doesn't contain placeholder text
+    jwt_secret = "test-jwt-secret-key-for-testing-only-12345678901234567890"
+    tok = jwt.encode(payload, jwt_secret, algorithm="HS256")
     return {"Authorization": f"Bearer {tok}"}
 
 
 def test_music_routes_gate_by_scope(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "secret")
+    # Use a test-specific JWT secret
+    jwt_secret = "test-jwt-secret-key-for-testing-only-12345678901234567890"
+    monkeypatch.setenv("JWT_SECRET", jwt_secret)
     monkeypatch.setenv("ENFORCE_JWT_SCOPES", "1")
     c = TestClient(app)
     # Without scope -> 403 somewhere in music endpoints
@@ -42,7 +52,9 @@ def test_admin_routes_gate_by_scope(monkeypatch):
 
 
 def test_ha_routes_gate_by_care_scopes(monkeypatch):
-    monkeypatch.setenv("JWT_SECRET", "secret")
+    # Use a test-specific JWT secret
+    jwt_secret = "test-jwt-secret-key-for-testing-only-12345678901234567890"
+    monkeypatch.setenv("JWT_SECRET", jwt_secret)
     monkeypatch.setenv("ENFORCE_JWT_SCOPES", "1")
     c = TestClient(app)
     # A HA endpoint included in main under ha_router

@@ -10,7 +10,10 @@ from __future__ import annotations
 import inspect
 
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse, RedirectResponse, Response
+from fastapi.responses import JSONResponse, RedirectResponse
+from starlette.responses import Response
+
+from app.errors import json_error
 
 router = APIRouter(tags=["Admin"])
 
@@ -51,6 +54,18 @@ async def whoami_compat(request: Request):
         url="/v1/whoami", successor_version="/v1/whoami", sunset_date="2025-12-31"
     )
     return resp
+
+
+# Canonical /v1/auth/whoami is provided by app.api.auth router; no compat delegation needed.
+
+
+# Keep legacy /v1/whoami served by the canonical auth router; no redirect here.
+
+
+# Keep legacy /v1/register served by the canonical auth router; no redirect here.
+
+
+# Canonical /v1/auth/register is provided by app.api.auth router; no compat delegation needed.
 
 
 @router.get("/spotify/status", deprecated=True)
@@ -108,21 +123,25 @@ async def ask_compat(request: Request):
 
         router = get_router()
     except Exception:
-        return JSONResponse(
-            {"code": "ROUTER_UNAVAILABLE", "message": "router not configured"},
-            status_code=503,
-            headers={"Deprecation": "true"},
+        resp = json_error(
+            code="ROUTER_UNAVAILABLE",
+            message="Router not configured",
+            http_status=503,
         )
+        resp.headers["Deprecation"] = "true"
+        return resp
 
     # Call router; normalize any exception to 503 BACKEND_UNAVAILABLE
     try:
         result = await router.route_prompt(body if isinstance(body, dict) else {})
     except Exception:
-        return JSONResponse(
-            {"code": "BACKEND_UNAVAILABLE", "message": "backend unavailable"},
-            status_code=503,
-            headers={"Deprecation": "true"},
+        resp = json_error(
+            code="BACKEND_UNAVAILABLE",
+            message="Backend unavailable",
+            http_status=503,
         )
+        resp.headers["Deprecation"] = "true"
+        return resp
 
     # Return JSON result; attach Deprecation header for compat
     if isinstance(result, Response | JSONResponse):
@@ -149,11 +168,11 @@ async def ask_replay_compat(rid: str):
 
     # Check if legacy chat endpoints are enabled
     if os.getenv("LEGACY_CHAT", "").strip() not in {"1", "true", "yes", "on"}:
-        from fastapi.responses import JSONResponse
-
-        return JSONResponse(
-            {"error": "not_found", "message": "endpoint not available"},
-            status_code=404,
+        return json_error(
+            code="not_found",
+            message="Endpoint not available",
+            http_status=404,
+            meta={"error": "not_found"},
         )
 
     # Perform 307 redirect to canonical endpoint

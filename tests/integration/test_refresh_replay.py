@@ -52,7 +52,7 @@ def test_refresh_replay_sequential(monkeypatch):
     r1 = client.post("/v1/auth/refresh")
     assert r1.status_code == HTTPStatus.OK
     # Reuse the same refresh token that was just spent
-    client.cookies.set("refresh_token", orig_refresh)
+    client.cookies.set("GSNH_RT", orig_refresh)
     r2 = client.post("/v1/auth/refresh")
     assert r2.status_code == HTTPStatus.UNAUTHORIZED
 

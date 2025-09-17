@@ -26,6 +26,19 @@ from .settings import settings
 logger = logging.getLogger(__name__)
 
 
+def _epoch_seconds(value: int | float | datetime | None) -> int:
+    """Normalize various timestamp representations to epoch seconds."""
+    if value is None:
+        return 0
+    if isinstance(value, datetime):
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=UTC)
+        return int(value.timestamp())
+    if isinstance(value, float):
+        return int(value)
+    return int(value)
+
+
 def _default_db_path() -> str:
     """Get the default database path for backward compatibility.
 
@@ -77,6 +90,11 @@ class TokenDAO:
 
         req_id = f"upsert_{secrets.token_hex(4)}"
 
+        # Convert user_id to UUID for database operations
+        from app.util.ids import to_uuid
+
+        db_user_id = str(to_uuid(token.user_id))
+
         logger.info(
             "🔐 TOKEN STORE: Starting upsert operation",
             extra={
@@ -84,6 +102,7 @@ class TokenDAO:
                     "req_id": req_id,
                     "token_id": token.id,
                     "user_id": token.user_id,
+                    "db_user_id": db_user_id,
                     "provider": token.provider,
                     "identity_id": getattr(token, "identity_id", None),
                     "provider_sub": getattr(token, "provider_sub", None),
@@ -115,261 +134,261 @@ class TokenDAO:
                     pass
                 return False
 
-        try:
-            async with self._lock:
-                async with get_async_db() as session:
-                    # Check for existing token with same (user_id, provider, provider_sub)
-                    stmt = select(ThirdPartyTokenModel).where(
-                        and_(
-                            ThirdPartyTokenModel.user_id == token.user_id,
-                            ThirdPartyTokenModel.provider == token.provider,
-                            ThirdPartyTokenModel.provider_sub == token.provider_sub,
+        # Normalize scopes once
+        def _normalize_scopes(s: str | list | None) -> str | None:
+            if not s:
+                return None
+            if isinstance(s, list):
+                items = [str(x).strip().lower() for x in s if str(x).strip()]
+            elif isinstance(s, str):
+                items = (
+                    [x.strip().lower() for x in s.split(",") if x.strip()]
+                    if "," in s
+                    else [x.strip().lower() for x in s.split() if x.strip()]
+                )
+            else:
+                items = [x.strip().lower() for x in str(s).split() if x.strip()]
+            items = sorted(set(items))
+            return " ".join(items) if items else None
+
+        token.scopes = _normalize_scopes(token.scopes)
+
+        # Encrypt tokens (write only *_enc columns)
+        access_token_enc = (
+            encrypt_token(token.access_token) if token.access_token else None
+        )
+        refresh_token_enc = (
+            encrypt_token(token.refresh_token) if token.refresh_token else None
+        )
+
+        # Contract validation (Spotify) before persist (keeps tests honest)
+        if (
+            token.provider == "spotify"
+            and settings.STRICT_CONTRACTS
+            and not settings.TEST_MODE
+        ):
+            if not await self._validate_spotify_token_contract(token):
+                TOKEN_STORE_OPERATIONS.labels(
+                    operation="upsert",
+                    provider=token.provider,
+                    result="invalid_contract",
+                ).inc()  # type: ignore
+                return False
+
+        # Prepare values
+        now_dt = datetime.now(UTC)
+        exp_dt = (
+            datetime.fromtimestamp(token.expires_at, UTC)
+            if isinstance(token.expires_at, (int, float))
+            else token.expires_at
+        )
+
+        # Retry logic for IntegrityError (race conditions on unique constraints)
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                async with self._lock:
+                    async with get_async_db() as session:
+                        # Atomic upsert: write *_enc only, conflict on (user_id, provider), union scope in SQL
+                        from sqlalchemy import text
+
+                        upsert_stmt = text(
+                            """
+                            INSERT INTO tokens.third_party_tokens
+                            (user_id, provider, provider_sub, access_token_enc, refresh_token_enc,
+                             scope, expires_at, updated_at, is_valid)
+                            VALUES
+                            (:user_id, :provider, :provider_sub, :access_token_enc, :refresh_token_enc,
+                             :scope, :expires_at, :updated_at, TRUE)
+                            ON CONFLICT (user_id, provider) DO UPDATE SET
+                              access_token_enc  = EXCLUDED.access_token_enc,
+                              refresh_token_enc = EXCLUDED.refresh_token_enc,
+                              -- string union: existing scope + new scope, collapsed to single spaces
+                              scope = trim(both ' ' from regexp_replace(
+                                        (coalesce(tokens.third_party_tokens.scope,'') || ' ' || coalesce(EXCLUDED.scope,'')),
+                                        '(\\s+)', ' ', 'g')),
+                              provider_sub = coalesce(EXCLUDED.provider_sub, tokens.third_party_tokens.provider_sub),
+                              expires_at   = EXCLUDED.expires_at,
+                              is_valid     = TRUE,
+                              updated_at   = EXCLUDED.updated_at
+                        """
                         )
+
+                        await session.execute(
+                            upsert_stmt,
+                            {
+                                "user_id": db_user_id,
+                                "provider": token.provider,
+                                "provider_sub": token.provider_sub,  # may be None if unknown yet
+                                "access_token_enc": access_token_enc,
+                                "refresh_token_enc": refresh_token_enc,
+                                "scope": token.scopes,  # normalized string
+                                "expires_at": exp_dt,
+                                "updated_at": now_dt,
+                            },
+                        )
+                        await session.commit()
+
+                        logger.info(
+                            "🔐 TOKEN STORE: Token upsert successful",
+                            extra={
+                                "meta": {
+                                    "req_id": req_id,
+                                    "token_id": token.id,
+                                    "user_id": token.user_id,
+                                    "provider": token.provider,
+                                    "expires_at": token.expires_at,
+                                    "duration_ms": int(
+                                        (time.time() - start_time) * 1000
+                                    ),
+                                    "attempt": attempt + 1,
+                                }
+                            },
+                        )
+
+                        try:
+                            TOKEN_STORE_OPERATIONS.labels(
+                                operation="upsert",
+                                provider=token.provider,
+                                result="success",
+                            ).inc()  # type: ignore
+                        except Exception:
+                            pass
+
+                return True
+
+            except IntegrityError as e:
+                if attempt < max_retries - 1:
+                    logger.warning(
+                        "🔐 TOKEN STORE: IntegrityError on upsert attempt, retrying with read-then-update",
+                        extra={
+                            "meta": {
+                                "req_id": req_id,
+                                "token_id": token.id,
+                                "user_id": token.user_id,
+                                "provider": token.provider,
+                                "attempt": attempt + 1,
+                                "max_retries": max_retries,
+                                "error_message": str(e),
+                            }
+                        },
                     )
-                    result = await session.execute(stmt)
-                    existing = result.scalar_one_or_none()
 
-                    # Normalize scopes
-                    def _normalize_scope(s: str | list | None) -> str | None:
-                        if not s:
-                            return None
-                        if isinstance(s, list):
-                            # Convert list to normalized scopes
-                            items = [
-                                str(x).strip().lower()
-                                for x in s
-                                if x and str(x).strip()
-                            ]
-                        elif isinstance(s, str):
-                            # Handle comma-separated or space-separated strings
-                            # First try splitting by commas, then by spaces if no commas found
-                            if "," in s:
-                                items = [
-                                    x.strip().lower()
-                                    for x in s.split(",")
-                                    if x and x.strip()
-                                ]
-                            else:
-                                items = [
-                                    x.strip().lower()
-                                    for x in s.split()
-                                    if x and x.strip()
-                                ]
-                        else:
-                            # Convert other types to string then split
-                            items = [
-                                x.strip().lower()
-                                for x in str(s).split()
-                                if x and x.strip()
-                            ]
+                    # Read-then-update pattern for race condition handling
+                    try:
+                        async with self._lock:
+                            async with get_async_db() as session:
+                                # Try to find existing token by unique constraints
+                                existing_stmt = select(ThirdPartyTokenModel).where(
+                                    and_(
+                                        ThirdPartyTokenModel.user_id == db_user_id,
+                                        ThirdPartyTokenModel.provider == token.provider,
+                                    )
+                                )
+                                result = await session.execute(existing_stmt)
+                                existing_token = result.scalar_one_or_none()
 
-                        # Remove duplicates and sort
-                        items = sorted(set(items))
-                        return " ".join(items) if items else None
+                                if existing_token:
+                                    # Update existing token
+                                    existing_token.access_token_enc = access_token_enc
+                                    existing_token.refresh_token_enc = refresh_token_enc
 
-                    token.scopes = _normalize_scope(token.scopes)
+                                    # Union scopes
+                                    existing_scopes = (
+                                        existing_token.scopes.decode()
+                                        if isinstance(existing_token.scopes, bytes)
+                                        else existing_token.scopes
+                                    )
+                                    if existing_scopes and token.scopes:
+                                        combined_scopes = set(
+                                            (
+                                                existing_scopes + " " + token.scopes
+                                            ).split()
+                                        )
+                                        existing_token.scopes = " ".join(
+                                            sorted(combined_scopes)
+                                        )
+                                    elif token.scopes:
+                                        existing_token.scopes = token.scopes
 
-                    # Merge scopes if existing token found
-                    if existing and existing.scopes:
-                        # Decode bytes if necessary
-                        existing_scopes_str = (
-                            existing.scopes.decode()
-                            if isinstance(existing.scopes, bytes)
-                            else existing.scopes
-                        )
-                        # Handle comma-separated or space-separated existing scopes
-                        if "," in existing_scopes_str:
-                            existing_scopes = set(
-                                x.strip().lower()
-                                for x in existing_scopes_str.split(",")
-                                if x.strip()
-                            )
-                        else:
-                            existing_scopes = set(existing_scopes_str.split())
-                        new_scopes = (
-                            set(token.scopes.split()) if token.scopes else set()
-                        )
-                        merged_scopes = existing_scopes | new_scopes
-                        token.scopes = (
-                            " ".join(sorted(merged_scopes)) if merged_scopes else None
-                        )
+                                    # Prioritize new provider_sub if present
+                                    if token.provider_sub is not None:
+                                        existing_token.provider_sub = token.provider_sub
 
-                        if new_scopes - existing_scopes:
-                            token.scope_last_added_from = token.id
+                                    existing_token.expires_at = exp_dt
+                                    existing_token.is_valid = True
+                                    existing_token.updated_at = now_dt
 
-                        token.scope_union_since = (
-                            existing.scope_union_since or token.created_at
-                        )
+                                    await session.commit()
 
-                    # Encrypt tokens
-                    access_token_enc = None
-                    refresh_token_enc = None
-                    if token.access_token:
-                        try:
-                            access_token_enc = encrypt_token(token.access_token)
-                        except Exception:
-                            pass
-                    if token.refresh_token:
-                        try:
-                            refresh_token_enc = encrypt_token(token.refresh_token)
-                        except Exception:
-                            pass
+                                    logger.info(
+                                        "🔐 TOKEN STORE: Token upsert retry successful (read-then-update)",
+                                        extra={
+                                            "meta": {
+                                                "req_id": req_id,
+                                                "token_id": token.id,
+                                                "user_id": token.user_id,
+                                                "provider": token.provider,
+                                                "attempt": attempt + 1,
+                                            }
+                                        },
+                                    )
+                                    return True
+                                else:
+                                    # No existing token found, this shouldn't happen given the IntegrityError
+                                    # but continue to next retry attempt
+                                    continue
 
-                    # Perform Spotify validation if needed
-                    if (
-                        token.provider == "spotify"
-                        and settings.STRICT_CONTRACTS
-                        and not settings.TEST_MODE
-                    ):
-                        contract_valid = await self._validate_spotify_token_contract(
-                            token
-                        )
-                        if not contract_valid:
-                            logger.error(
-                                "🔐 TOKEN STORE: Contract validation failed for Spotify token",
-                                extra={
-                                    "meta": {
-                                        "req_id": req_id,
-                                        "token_id": token.id,
-                                        "user_id": token.user_id,
-                                    }
-                                },
-                            )
-                            return False
-
-                    now = datetime.now(UTC)
-
-                    if existing:
-                        # Update existing token
-                        existing.access_token = token.access_token
-                        existing.access_token_enc = access_token_enc
-                        existing.refresh_token = (
-                            None if refresh_token_enc else token.refresh_token
-                        )
-                        existing.refresh_token_enc = refresh_token_enc
-                        # Ensure scopes are in canonical format before persisting
-                        existing.scopes = _normalize_scope(token.scopes)
-                        existing.service_state = token.service_state
-                        existing.expires_at = token.expires_at
-                        existing.updated_at = now
-                        existing.last_refresh_at = (
-                            int(time.time())
-                            if refresh_token_enc
-                            else existing.last_refresh_at
-                        )
-                        await session.commit()
-
-                        logger.info(
-                            "🔐 TOKEN STORE: Token updated successfully",
+                    except Exception as retry_e:
+                        logger.warning(
+                            "🔐 TOKEN STORE: Read-then-update failed, continuing to retry",
                             extra={
                                 "meta": {
                                     "req_id": req_id,
                                     "token_id": token.id,
                                     "user_id": token.user_id,
                                     "provider": token.provider,
-                                    "operation": "update_success",
-                                    "expires_at": token.expires_at,
-                                    "duration_ms": int(
-                                        (time.time() - start_time) * 1000
-                                    ),
+                                    "attempt": attempt + 1,
+                                    "retry_error": str(retry_e),
                                 }
                             },
                         )
-                    else:
-                        # Insert new token
-                        # Ensure scopes are in canonical format before creating new token
-                        normalized_scopes = _normalize_scope(token.scopes)
+                        continue
+                else:
+                    # Final attempt failed
+                    logger.error(
+                        "🔐 TOKEN STORE: Token upsert failed after all retries",
+                        extra={
+                            "meta": {
+                                "req_id": req_id,
+                                "token_id": token.id,
+                                "user_id": token.user_id,
+                                "provider": token.provider,
+                                "error_type": "IntegrityError",
+                                "error_message": str(e),
+                                "max_retries": max_retries,
+                                "operation": "upsert_failed",
+                            }
+                        },
+                    )
+                    return False
 
-                        new_token = ThirdPartyTokenModel(
-                            id=token.id,
-                            user_id=token.user_id,
-                            identity_id=token.identity_id,
-                            provider=token.provider,
-                            provider_sub=token.provider_sub,
-                            provider_iss=token.provider_iss,
-                            access_token=token.access_token,
-                            access_token_enc=access_token_enc,
-                            refresh_token=(
-                                None if refresh_token_enc else token.refresh_token
-                            ),
-                            refresh_token_enc=refresh_token_enc,
-                            envelope_key_version=1,
-                            last_refresh_at=(
-                                int(time.time()) if refresh_token_enc else 0
-                            ),
-                            refresh_error_count=0,
-                            scopes=normalized_scopes,
-                            service_state=token.service_state,
-                            scope_union_since=token.scope_union_since
-                            or token.created_at,
-                            scope_last_added_from=token.scope_last_added_from
-                            or token.id,
-                            replaced_by_id=token.replaced_by_id,
-                            expires_at=token.expires_at,
-                            created_at=(
-                                datetime.fromtimestamp(token.created_at, UTC)
-                                if isinstance(token.created_at, int | float)
-                                else token.created_at
-                            ),
-                            updated_at=now,
-                            is_valid=token.is_valid,
-                        )
-
-                        session.add(new_token)
-                        await session.commit()
-
-                        logger.info(
-                            "🔐 TOKEN STORE: Token inserted successfully",
-                            extra={
-                                "meta": {
-                                    "req_id": req_id,
-                                    "token_id": token.id,
-                                    "user_id": token.user_id,
-                                    "provider": token.provider,
-                                    "operation": "insert_success",
-                                    "expires_at": token.expires_at,
-                                    "duration_ms": int(
-                                        (time.time() - start_time) * 1000
-                                    ),
-                                }
-                            },
-                        )
-
-                    result_success = True
-
-            return result_success
-
-        except IntegrityError as e:
-            logger.error(
-                "🔐 TOKEN STORE: Integrity constraint violation",
-                extra={
-                    "meta": {
-                        "req_id": req_id,
-                        "token_id": token.id,
-                        "user_id": token.user_id,
-                        "provider": token.provider,
-                        "error": str(e),
-                        "operation": "upsert_integrity_error",
-                    }
-                },
-            )
-            raise
-        except Exception as e:
-            logger.error(
-                "🔐 TOKEN STORE: Token upsert failed",
-                extra={
-                    "meta": {
-                        "req_id": req_id,
-                        "token_id": token.id,
-                        "user_id": token.user_id,
-                        "provider": token.provider,
-                        "error_type": type(e).__name__,
-                        "error_message": str(e),
-                        "operation": "upsert_failed",
-                    }
-                },
-            )
-            return False
+            except Exception as e:
+                logger.error(
+                    "🔐 TOKEN STORE: Token upsert failed",
+                    extra={
+                        "meta": {
+                            "req_id": req_id,
+                            "token_id": token.id,
+                            "user_id": token.user_id,
+                            "provider": token.provider,
+                            "error_type": type(e).__name__,
+                            "error_message": str(e),
+                            "operation": "upsert_failed",
+                        }
+                    },
+                )
+                return False
 
     async def get_token(
         self, user_id: str, provider: str, provider_sub: str | None = None
@@ -385,6 +404,11 @@ class TokenDAO:
         Returns:
             Token if found and valid, None otherwise
         """
+        # Convert user_id to UUID for database operations
+        from app.util.ids import to_uuid
+
+        db_user_id = str(to_uuid(user_id))
+
         async with get_async_db() as session:
             try:
                 if provider_sub is None:
@@ -392,9 +416,9 @@ class TokenDAO:
                         select(ThirdPartyTokenModel)
                         .where(
                             and_(
-                                ThirdPartyTokenModel.user_id == user_id,
+                                ThirdPartyTokenModel.user_id == db_user_id,
                                 ThirdPartyTokenModel.provider == provider,
-                                ThirdPartyTokenModel.is_valid is True,
+                                ThirdPartyTokenModel.is_valid.is_(True),
                             )
                         )
                         .order_by(desc(ThirdPartyTokenModel.created_at))
@@ -405,10 +429,10 @@ class TokenDAO:
                         select(ThirdPartyTokenModel)
                         .where(
                             and_(
-                                ThirdPartyTokenModel.user_id == user_id,
+                                ThirdPartyTokenModel.user_id == db_user_id,
                                 ThirdPartyTokenModel.provider == provider,
                                 ThirdPartyTokenModel.provider_sub == provider_sub,
-                                ThirdPartyTokenModel.is_valid is True,
+                                ThirdPartyTokenModel.is_valid.is_(True),
                             )
                         )
                         .order_by(desc(ThirdPartyTokenModel.created_at))
@@ -459,26 +483,18 @@ class TokenDAO:
                     ),
                     access_token=access_token,
                     refresh_token=refresh_token,
-                    expires_at=token_model.expires_at,
+                    expires_at=_epoch_seconds(token_model.expires_at),
                     scopes=(
                         token_model.scopes.decode()
                         if isinstance(token_model.scopes, bytes)
                         else token_model.scopes
                     ),
                     service_state=token_model.service_state,
-                    scope_union_since=token_model.scope_union_since,
+                    scope_union_since=_epoch_seconds(token_model.scope_union_since),
                     scope_last_added_from=token_model.scope_last_added_from,
                     replaced_by_id=token_model.replaced_by_id,
-                    created_at=(
-                        token_model.created_at.timestamp()
-                        if isinstance(token_model.created_at, datetime)
-                        else token_model.created_at
-                    ),
-                    updated_at=(
-                        token_model.updated_at.timestamp()
-                        if isinstance(token_model.updated_at, datetime)
-                        else token_model.updated_at
-                    ),
+                    created_at=_epoch_seconds(token_model.created_at),
+                    updated_at=_epoch_seconds(token_model.updated_at),
                     is_valid=token_model.is_valid,
                 )
 
@@ -497,17 +513,40 @@ class TokenDAO:
                 result_token = token
                 return result_token
             except Exception as e:
-                logger.error(
-                    "🔐 TOKEN STORE: get_token failed",
-                    extra={
-                        "meta": {
-                            "user_id": user_id,
-                            "provider": provider,
-                            "error_type": type(e).__name__,
-                            "error_message": str(e),
-                        }
-                    },
-                )
+                error_msg = str(e)
+                error_type = type(e).__name__
+
+                # Check if this is a database connectivity issue
+                if "connection" in error_msg.lower() or "psycopg" in error_type.lower():
+                    logger.error(
+                        "🚨 DATABASE CONNECTION FAILURE in get_token",
+                        extra={
+                            "meta": {
+                                "user_id": user_id,
+                                "provider": provider,
+                                "error_type": error_type,
+                                "error_message": error_msg,
+                                "severity": "CRITICAL",
+                                "cause": "PostgreSQL database not accessible",
+                                "solution": "Start PostgreSQL: pg_ctl -D /usr/local/var/postgresql@14 start",
+                            }
+                        },
+                    )
+                    logger.error(
+                        "💡 SOLUTION: Check if PostgreSQL is running and DATABASE_URL is correct"
+                    )
+                else:
+                    logger.error(
+                        "🔐 TOKEN STORE: get_token failed",
+                        extra={
+                            "meta": {
+                                "user_id": user_id,
+                                "provider": provider,
+                                "error_type": error_type,
+                                "error_message": error_msg,
+                            }
+                        },
+                    )
                 return None
 
     async def get_all_user_tokens(self, user_id: str) -> list[ThirdPartyToken]:
@@ -520,14 +559,19 @@ class TokenDAO:
         Returns:
             List of valid tokens for the user
         """
+        # Convert user_id to UUID for database operations
+        from app.util.ids import to_uuid
+
+        db_user_id = str(to_uuid(user_id))
+
         try:
             async with get_async_db() as session:
                 stmt = (
                     select(ThirdPartyTokenModel)
                     .where(
                         and_(
-                            ThirdPartyTokenModel.user_id == user_id,
-                            ThirdPartyTokenModel.is_valid is True,
+                            ThirdPartyTokenModel.user_id == db_user_id,
+                            ThirdPartyTokenModel.is_valid.is_(True),
                         )
                     )
                     .order_by(
@@ -578,26 +622,18 @@ class TokenDAO:
                         ),
                         access_token=access_token,
                         refresh_token=refresh_token,
-                        expires_at=token_model.expires_at,
+                        expires_at=_epoch_seconds(token_model.expires_at),
                         scopes=(
                             token_model.scopes.decode()
                             if isinstance(token_model.scopes, bytes)
                             else token_model.scopes
                         ),
                         service_state=token_model.service_state,
-                        scope_union_since=token_model.scope_union_since,
+                        scope_union_since=_epoch_seconds(token_model.scope_union_since),
                         scope_last_added_from=token_model.scope_last_added_from,
                         replaced_by_id=token_model.replaced_by_id,
-                        created_at=(
-                            token_model.created_at.timestamp()
-                            if isinstance(token_model.created_at, datetime)
-                            else token_model.created_at
-                        ),
-                        updated_at=(
-                            token_model.updated_at.timestamp()
-                            if isinstance(token_model.updated_at, datetime)
-                            else token_model.updated_at
-                        ),
+                        created_at=_epoch_seconds(token_model.created_at),
+                        updated_at=_epoch_seconds(token_model.updated_at),
                         is_valid=token_model.is_valid,
                     )
                     tokens.append(token)
@@ -618,6 +654,11 @@ class TokenDAO:
         Returns:
             True if successful, False otherwise
         """
+        # Convert user_id to UUID for database operations
+        from app.util.ids import to_uuid
+
+        db_user_id = str(to_uuid(user_id))
+
         try:
             async with self._lock:
                 async with get_async_db() as session:
@@ -625,9 +666,9 @@ class TokenDAO:
                         update(ThirdPartyTokenModel)
                         .where(
                             and_(
-                                ThirdPartyTokenModel.user_id == user_id,
+                                ThirdPartyTokenModel.user_id == db_user_id,
                                 ThirdPartyTokenModel.provider == provider,
-                                ThirdPartyTokenModel.is_valid is True,
+                                ThirdPartyTokenModel.is_valid.is_(True),
                             )
                         )
                         .values(is_valid=False, updated_at=datetime.now(UTC))
@@ -666,7 +707,7 @@ class TokenDAO:
                     base_conditions = [
                         ThirdPartyTokenModel.user_id == user_id,
                         ThirdPartyTokenModel.provider == provider,
-                        ThirdPartyTokenModel.is_valid is True,
+                        ThirdPartyTokenModel.is_valid.is_(True),
                     ]
 
                     # Add provider-specific constraints
@@ -737,7 +778,7 @@ class TokenDAO:
 
                     stmt = delete(ThirdPartyTokenModel).where(
                         and_(
-                            ThirdPartyTokenModel.is_valid is False,
+                            ThirdPartyTokenModel.is_valid.is_(False),
                             ThirdPartyTokenModel.updated_at < cutoff_time,
                         )
                     )
@@ -1179,6 +1220,13 @@ async def get_all_user_tokens(user_id: str) -> list[ThirdPartyToken]:
     return await token_dao.get_all_user_tokens(user_id)
 
 
+async def get_token_by_user_identities(
+    user_id: str, provider: str
+) -> ThirdPartyToken | None:
+    """Convenience function to get token by user identities (alias for get_token)."""
+    return await get_token(user_id, provider)
+
+
 async def mark_invalid(user_id: str, provider: str) -> bool:
     """Convenience function to mark tokens as invalid."""
     return await token_dao.mark_invalid(user_id, provider)
@@ -1200,7 +1248,7 @@ class TokenRefreshService:
         self._max_refresh_attempts = 3
         self._refresh_backoff_seconds = [1, 2, 4]  # Exponential backoff
         # In-memory backoff map to avoid aggressive refresh retries after failures
-        # keyed by '{user_id}:{provider}' -> unix timestamp when next refresh allowed
+        # keyed by '{user_id}:{provider}:{provider_sub}' -> unix timestamp when next refresh allowed
         self._next_refresh_after: dict[str, float] = {}
 
     async def _get_lock_for_key(self, key: str) -> asyncio.Lock:
@@ -1262,7 +1310,7 @@ class TokenRefreshService:
                 return token
 
             # Check refresh attempt limits
-            attempt_key = f"{user_id}:{provider}"
+            attempt_key = lock_key
             attempts = self._refresh_attempts.get(attempt_key, 0)
 
             # Respect light backoff if recently failed
@@ -1505,7 +1553,7 @@ class TokenRefreshService:
 
             # For other errors, use normal backoff
             try:
-                attempt_key = f"{token.user_id}:google"
+                attempt_key = f"{token.user_id}:google:{token.provider_sub or ''}"
                 self._next_refresh_after[attempt_key] = time.time() + 600
             except Exception:
                 pass
@@ -1528,9 +1576,11 @@ class TokenRefreshService:
             )
             return None
 
-    def reset_refresh_attempts(self, user_id: str, provider: str):
-        """Reset refresh attempt counter for a user/provider."""
-        attempt_key = f"{user_id}:{provider}"
+    def reset_refresh_attempts(
+        self, user_id: str, provider: str, provider_sub: str | None = None
+    ):
+        """Reset refresh attempt counter for a user/provider identity."""
+        attempt_key = f"{user_id}:{provider}:{provider_sub or ''}"
         self._refresh_attempts.pop(attempt_key, None)
         self._next_refresh_after.pop(attempt_key, None)
 
@@ -1588,7 +1638,7 @@ async def get_token_system_health() -> dict:
             stmt = (
                 select(func.count())
                 .select_from(ThirdPartyTokenModel)
-                .where(ThirdPartyTokenModel.is_valid is True)
+                .where(ThirdPartyTokenModel.is_valid.is_(True))
             )
             result = await session.execute(stmt)
             valid_tokens = result.scalar() or 0
@@ -1598,7 +1648,7 @@ async def get_token_system_health() -> dict:
                 select(
                     ThirdPartyTokenModel.provider, func.count(ThirdPartyTokenModel.id)
                 )
-                .where(ThirdPartyTokenModel.is_valid is True)
+                .where(ThirdPartyTokenModel.is_valid.is_(True))
                 .group_by(ThirdPartyTokenModel.provider)
             )
 
@@ -1606,14 +1656,14 @@ async def get_token_system_health() -> dict:
             provider_stats = {row[0]: row[1] for row in result.all()}
 
             # Expired tokens
-            now = int(time.time())
+            now = int(datetime.now(UTC).timestamp())
             stmt = (
                 select(func.count())
                 .select_from(ThirdPartyTokenModel)
                 .where(
                     and_(
                         ThirdPartyTokenModel.expires_at < now,
-                        ThirdPartyTokenModel.is_valid is True,
+                        ThirdPartyTokenModel.is_valid.is_(True),
                     )
                 )
             )

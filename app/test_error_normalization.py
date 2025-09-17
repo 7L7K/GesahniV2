@@ -6,6 +6,7 @@ to verify they get normalized to the correct status codes and JSON format.
 
 from fastapi import APIRouter
 from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # Tell pytest this module is not a test module so endpoints here are not collected
 # as test functions. The canonical tests live under `tests/`.
@@ -89,6 +90,26 @@ async def test_file_too_large():
 async def test_internal_error():
     """Test endpoint that raises a generic exception."""
     raise Exception("This is a generic internal error")
+
+
+@router.get("/raise-500")
+async def raise_500():
+    """Compatibility endpoint expected by smoke tests to trigger a 500.
+
+    Raise a StarletteHTTPException so it gets caught by the error handlers
+    and properly formatted into the standard error envelope.
+    """
+    raise StarletteHTTPException(status_code=500, detail="Test internal server error")
+
+
+@router.get("/raise-404")
+async def raise_404():
+    """Compatibility endpoint expected by smoke tests to trigger a 404.
+
+    Raise a StarletteHTTPException so it gets caught by the error handlers
+    and properly formatted into the standard error envelope.
+    """
+    raise StarletteHTTPException(status_code=404, detail="Test not found error")
 
 
 @router.get("/test/unauthorized")

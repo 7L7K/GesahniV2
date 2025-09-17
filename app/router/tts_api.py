@@ -11,6 +11,7 @@ from pathlib import Path
 
 from fastapi.responses import JSONResponse
 
+from app.errors import json_error
 from app.tts_orchestrator import synthesize
 
 
@@ -21,7 +22,12 @@ async def tts_speak(request) -> JSONResponse:
         data = {}
     text = (data or {}).get("text")
     if not text:
-        return JSONResponse({"detail": "missing text"}, status_code=400)
+        return json_error(
+            code="validation_error",
+            message="Missing text",
+            http_status=400,
+            meta={"detail": "missing text"},
+        )
 
     audio_id = uuid.uuid4().hex
     out_dir = Path("data/tts")
@@ -54,7 +60,12 @@ async def tts_speak(request) -> JSONResponse:
 async def get_tts_audio(audio_id: str):
     p = Path("data/tts") / f"{audio_id}.wav"
     if not p.exists():
-        return JSONResponse({"detail": "not_found"}, status_code=404)
+        return json_error(
+            code="not_found",
+            message="Audio file not found",
+            http_status=404,
+            meta={"detail": "not_found"},
+        )
     from fastapi.responses import FileResponse
 
     return FileResponse(p, media_type="audio/wav")

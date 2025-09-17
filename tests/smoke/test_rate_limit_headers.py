@@ -5,10 +5,11 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import create_app
 
 
 def test_rate_limit_headers_present():
+    app = create_app()
     c = TestClient(app)
     r = c.get("/v1/me")
     assert r.status_code == 200

@@ -49,53 +49,6 @@ function SettingsPageInner() {
     const [spotifyLogoutLoading, setSpotifyLogoutLoading] = useState(false);
     const [spotifyLogoutError, setSpotifyLogoutError] = useState<string | null>(null);
 
-    // Handle URL hash and auto-expand cards + Spotify OAuth bootstrap
-    useEffect(() => {
-        if (typeof window !== 'undefined') {
-            const hash = window.location.hash;
-            const urlParams = new URLSearchParams(window.location.search);
-
-            // Check for Spotify OAuth parameters
-            const spotifyConnected = urlParams.get('spotify') === 'connected';
-            const spotifyError = urlParams.get('spotify_error');
-
-            if (hasSpotifyParams) {
-                setActiveTab('integrations');
-                setExpandedCard('spotify');
-
-                // If Spotify OAuth parameters are present, do deterministic auth bootstrap
-                if (spotifyConnected || spotifyError) {
-                    console.log('🎵 SETTINGS: Spotify OAuth parameters detected, starting deterministic auth bootstrap');
-
-                    // Mark handled to prevent duplicate handling from other effects
-                    try {
-                        sessionStorage.setItem('spotify:handled', '1');
-                    } catch (e) {
-                        /* ignore */
-                    }
-
-                    deterministicAuth.ensureAuth().then(() => {
-                        // After auth bootstrap completes, clear URL parameters
-                        if (spotifyConnected) {
-                            toast.success("Successfully connected to Spotify!");
-                            if (typeof window !== 'undefined') {
-                                const url = new URL(window.location.href);
-                                url.searchParams.delete('spotify');
-                                url.hash = '#spotify';
-                                window.history.replaceState({}, '', url.toString());
-                            }
-                        } else if (spotifyError) {
-                            toast.warning(`Spotify connection failed: ${spotifyError}`);
-                        }
-                    });
-                }
-            }
-        }
-    }, [deterministicAuth]); // Include deterministicAuth to ensure the effect runs when it's available
-
-    // Old spotify parameter handling has been replaced with deterministic auth bootstrap
-    // The new logic is in the useEffect above that handles both hash and query params
-
     // Integration status state
     const [integrations, setIntegrations] = useState<Record<string, IntegrationInfo>>({
         spotify: {

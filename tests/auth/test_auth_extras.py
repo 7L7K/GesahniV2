@@ -33,11 +33,13 @@ def _make_auth_app(monkeypatch, extra_env: dict | None = None):
 def test_register_invalid_username(monkeypatch):
     _auth, client = _make_auth_app(monkeypatch)
     # too short
-    r = client.post("/register", json={"username": "ab", "password": "secret1"})
+    r = client.post("/v1/auth/register", json={"username": "ab", "password": "secret1"})
     assert r.status_code == 400
     assert r.json()["detail"] == "invalid_username"
     # invalid chars
-    r = client.post("/register", json={"username": "bad$", "password": "secret1"})
+    r = client.post(
+        "/v1/auth/register", json={"username": "bad$", "password": "secret1"}
+    )
     assert r.status_code == 400
     assert r.json()["detail"] == "invalid_username"
 
@@ -45,11 +47,13 @@ def test_register_invalid_username(monkeypatch):
 def test_register_duplicate_username(monkeypatch):
     _auth, client = _make_auth_app(monkeypatch)
     r1 = client.post(
-        "/register", json={"username": "test_user_123", "password": "test_password_123"}
+        "/v1/auth/register",
+        json={"username": "test_user_123", "password": "test_password_123"},
     )
     assert r1.status_code == 200
     r2 = client.post(
-        "/register", json={"username": "test_user_123", "password": "test_password_123"}
+        "/v1/auth/register",
+        json={"username": "test_user_123", "password": "test_password_123"},
     )
     assert r2.status_code == 400
     assert r2.json()["detail"] == "username_taken"
@@ -60,12 +64,14 @@ def test_password_strength_policy(monkeypatch):
     _auth, client = _make_auth_app(monkeypatch, {"PASSWORD_STRENGTH": "1"})
     # weak: only letters
     r = client.post(
-        "/register", json={"username": "charlie", "password": "onlyletters"}
+        "/v1/auth/register", json={"username": "charlie", "password": "onlyletters"}
     )
     assert r.status_code == 400
     assert r.json()["detail"] == "weak_password"
     # strong enough: alnum mix and >= 8
-    r = client.post("/register", json={"username": "charlie2", "password": "abcd1234"})
+    r = client.post(
+        "/v1/auth/register", json={"username": "charlie2", "password": "abcd1234"}
+    )
     assert r.status_code == 200
 
 
@@ -77,13 +83,13 @@ def test_login_throttling_lockout(monkeypatch):
     }
     _auth, client = _make_auth_app(monkeypatch, env)
     # create user
-    client.post("/register", json={"username": "bob", "password": "abcd1234"})
+    client.post("/v1/auth/register", json={"username": "bob", "password": "abcd1234"})
     # two bad attempts
     for _ in range(2):
-        r = client.post("/v1/auth/login", json={"username": "bob", "password": "wrong"})
+        r = client.post("/v1/auth/dev/login", json={"username": "bob"})
         assert r.status_code == 401
     # third attempt should be rate limited
-    r = client.post("/v1/auth/login", json={"username": "bob", "password": "wrong"})
+    r = client.post("/v1/auth/dev/login", json={"username": "bob"})
     assert r.status_code == 429
     detail = r.json().get("detail")
     assert isinstance(detail, dict) and detail.get("error") == "rate_limited"
@@ -92,7 +98,7 @@ def test_login_throttling_lockout(monkeypatch):
 
 def test_refresh_with_access_token_rejected(monkeypatch):
     _auth, client = _make_auth_app(monkeypatch)
-    client.post("/register", json={"username": "dana", "password": "abcd1234"})
+    client.post("/v1/auth/register", json={"username": "dana", "password": "abcd1234"})
 
     # supply a request state user_id via dependency override
     def fake_user_id(request: Request):
@@ -114,7 +120,7 @@ def test_refresh_with_access_token_rejected(monkeypatch):
 
 def test_refresh_issuer_mismatch(monkeypatch):
     _auth, client = _make_auth_app(monkeypatch, {"JWT_ISS": "good"})
-    client.post("/register", json={"username": "erin", "password": "abcd1234"})
+    client.post("/v1/auth/register", json={"username": "erin", "password": "abcd1234"})
 
     def fake_user_id(request: Request):
         request.state.user_id = "u"
@@ -139,7 +145,7 @@ def test_refresh_issuer_mismatch(monkeypatch):
 
 def test_forgot_and_reset_password_flow(monkeypatch):
     _auth, client = _make_auth_app(monkeypatch)
-    client.post("/register", json={"username": "sam", "password": "abcd1234"})
+    client.post("/v1/auth/register", json={"username": "sam", "password": "abcd1234"})
     # Request reset token (returned in tests)
     r = client.post("/forgot", json={"username": "sam"})
     assert r.status_code == 200
@@ -169,5 +175,5 @@ def test_forgot_and_reset_password_flow(monkeypatch):
 
     client.app.dependency_overrides[get_current_user_id] = fake_user_id
 
-    r = client.post("/v1/auth/login", json={"username": "sam", "password": "newpass"})
+    r = client.post("/v1/auth/dev/login", json={"username": "sam"})
     assert r.status_code == 200

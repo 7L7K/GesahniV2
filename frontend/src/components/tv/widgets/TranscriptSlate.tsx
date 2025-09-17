@@ -42,13 +42,14 @@ export function TranscriptSlate() {
       ws = new WebSocket(wsUrl("/v1/transcribe"));
       ws.onopen = () => { retry = 0; };
       ws.onmessage = (e) => {
-        let msg: any = null;
+        let msg: unknown = null;
         try { msg = JSON.parse(String(e.data || "")); } catch { msg = { text: String(e.data || "") }; }
-        const t = String(msg.text || msg.partial || msg.final || "");
-        const is_final = Boolean(msg.final || msg.is_final);
+        const msgObj = msg as Record<string, unknown>;
+        const t = String(msgObj.text || msgObj.partial || msgObj.final || "");
+        const is_final = Boolean(msgObj.final || msgObj.is_final);
         setText(t);
         setIsFinal(is_final);
-        (window as any).__lastTranscriptAt = Date.now();
+        (window as { __lastTranscriptAt?: number }).__lastTranscriptAt = Date.now();
         if (!is_final) {
           scene.toInteractive("stt_partial");
         } else {

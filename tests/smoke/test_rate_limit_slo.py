@@ -7,11 +7,12 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
 
 from fastapi.testclient import TestClient
 
-from app.main import app
+from app.main import create_app
 
 
 def test_basic_route_latency_budget():
     # Soft SLO: median latency for /v1/me under 200ms on this machine
+    app = create_app()
     c = TestClient(app)
     samples = []
     for _ in range(10):

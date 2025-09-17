@@ -20,6 +20,33 @@ from typing import Any, Optional
 _factory: Callable[[str], Callable[[dict], Awaitable[dict]]] | None = None
 
 
+def normalize_backend_name(name: str) -> str:
+    """Normalize backend aliases to concrete backend identifiers.
+
+    The runtime defaults to ``PROMPT_BACKEND=live`` which should map to a real
+    backend when possible. This helper inspects the environment to decide which
+    backend implementation should back the ``live`` alias so other components
+    can treat it like a concrete backend name.
+    """
+
+    normalized = (name or "").strip().lower()
+    if normalized != "live":
+        return normalized
+
+    # Prefer OpenAI when an API key is configured. Trim whitespace so empty
+    # strings do not count as configured secrets.
+    if (os.getenv("OPENAI_API_KEY") or "").strip():
+        return "openai"
+
+    # Otherwise fall back to the local LLaMA/Ollama runtime if configured.
+    llama_url = (os.getenv("OLLAMA_URL") or os.getenv("LLAMA_URL") or "").strip()
+    if llama_url:
+        return "llama"
+
+    # No live backend configured – return the safe dry-run backend.
+    return "dryrun"
+
+
 def register_backend_factory(
     factory: Callable[[str], Callable[[dict], Awaitable[dict]]]
 ) -> None:

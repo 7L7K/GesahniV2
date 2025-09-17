@@ -1,3 +1,4 @@
+import importlib
 import os
 import pathlib
 import socket
@@ -7,6 +8,15 @@ import uuid
 import warnings
 
 import pytest
+
+# Ensure test fixtures in tests/_fixtures are imported early so their
+# autouse/session fixtures run before app composition and migrations.
+try:
+    importlib.import_module("tests._fixtures.db")
+    importlib.import_module("tests._fixtures.app")
+except Exception:
+    # If imports fail, continue; the fixtures may not be present in some contexts
+    pass
 
 
 # Session-scoped fixtures for live server testing
@@ -74,12 +84,17 @@ def pytest_load_initial_conftests(early_config, parser):
         # Mark pytest running so modules that compute DB paths at import see it
         os.environ.setdefault("PYTEST_RUNNING", "1")
 
+        # Force CI/test profile so startup uses the lightweight 'ci' profile
+        # and avoids starting background daemons that conflict with pytest event loop.
+        os.environ.setdefault("CI", "1")
+
         # Per-worker test database configuration (xdist sets PYTEST_XDIST_WORKER or PYTEST_WORKER_ID)
         worker = (
             os.getenv("PYTEST_XDIST_WORKER") or os.getenv("PYTEST_WORKER_ID") or "main"
         )
 
-        # Use separate PostgreSQL databases per worker to avoid conflicts
+        # Use PostgreSQL for tests since container is running
+        # Create per-worker test databases to ensure isolation
         if worker != "main":
             os.environ.setdefault(
                 "DATABASE_URL",
@@ -90,10 +105,6 @@ def pytest_load_initial_conftests(early_config, parser):
                 "DATABASE_URL", "postgresql://app:app_pw@localhost:5432/gesahni_test"
             )
 
-        # Fallback: per-worker SQLite directory (if PostgreSQL not available)
-        test_dir = f"/tmp/gesahni_tests/{worker}"
-        os.environ.setdefault("GESAHNI_TEST_DB_DIR", test_dir)
-
         # Test-friendly configuration overrides
         # JWT: Allow short secrets in tests
         os.environ.setdefault("DEV_MODE", "1")  # Allows weak JWT secrets
@@ -102,7 +113,8 @@ def pytest_load_initial_conftests(early_config, parser):
         )  # Set environment to test for proper isolation
         # Provide a deterministic dev JWT secret to enable token minting
         os.environ.setdefault(
-            "JWT_SECRET", "dev-secret-key-please-change-0123456789abcdef0123456789abcd"
+            "JWT_SECRET",
+            "x" * 64,  # Use a secure 64-character secret for tests
         )
 
         # Rate limiting: Disable for tests by default
@@ -176,8 +188,9 @@ def client():
     - Proper database initialization
     """
     # Import the FastAPI app after test env vars are set
-    from app.main import app
+    from app.main import create_app
 
+    app = create_app()
     return TestClient(app)
 
 
@@ -206,25 +219,26 @@ def prompt_router(monkeypatch):
 @pytest.fixture(scope="session")
 def app_client():
     """Alias for client fixture to maintain backward compatibility."""
-    from app.main import app
+    from app.main import create_app
 
+    app = create_app()
     return TestClient(app)
 
 
 @pytest.fixture
 def app():
     """Provide the FastAPI app instance for tests that need direct access."""
-    from app.main import app
+    from app.main import create_app
 
-    return app
+    return create_app()
 
 
 @pytest.fixture(scope="session")
 async def async_app():
     """Provide the FastAPI app instance for async tests."""
-    from app.main import app
+    from app.main import create_app
 
-    return app
+    return create_app()
 
 
 @pytest.fixture(scope="session")
@@ -442,7 +456,7 @@ import pytest
 # ──────────────────────────────────────────────────────────────────────────────
 # 🔐  Hard-set critical env vars before anything else imports app code
 # ──────────────────────────────────────────────────────────────────────────────
-os.environ.setdefault("JWT_SECRET", "secret")
+os.environ.setdefault("JWT_SECRET", "x" * 64)
 os.environ.setdefault("DEBUG_MODEL_ROUTING", "0")  # disable dry-run by default
 os.environ.setdefault("DEBUG", "0")
 

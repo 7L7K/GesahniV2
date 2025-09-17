@@ -16,12 +16,83 @@ function LoginPageInner() {
     const [mode, setMode] = useState<'login' | 'register'>('login');
     const [error, setError] = useState<string>('');
     const [loading, setLoading] = useState(false);
+    const [checkingAuth, setCheckingAuth] = useState(true);
     const router = useRouter();
     const params = useSearchParams();
     // sanitizeNextPath prevents open redirects by rejecting absolute/protocol-relative
     // URLs and auth paths that could cause redirect loops. This ensures users are only
     // redirected to safe, same-origin application pages after login completion.
     const next = sanitizeNextPath(params?.get('next') || null);
+
+    // Check if user is already authenticated and redirect if so
+    useEffect(() => {
+        const checkExistingAuth = async () => {
+            try {
+                console.info('LOGIN auth.check.start', {
+                    timestamp: new Date().toISOString(),
+                });
+
+                const authOrchestrator = getAuthOrchestrator();
+                const authState = authOrchestrator.getState();
+
+                // If already authenticated, redirect immediately
+                if (authState.is_authenticated && authState.session_ready) {
+                    console.info('LOGIN auth.check.already_authenticated', {
+                        userId: authState.user_id,
+                        source: authState.source,
+                        timestamp: new Date().toISOString(),
+                    });
+
+                    // Use safeNext to prevent redirect loops
+                    const redirectTo = safeNext(params?.get('next')) || '/';
+                    console.info('LOGIN auth.check.redirect', {
+                        redirectTo,
+                        timestamp: new Date().toISOString(),
+                    });
+                    router.replace(redirectTo);
+                    return;
+                }
+
+                // If not authenticated, trigger a fresh auth check
+                console.info('LOGIN auth.check.trigger_refresh', {
+                    timestamp: new Date().toISOString(),
+                });
+                await authOrchestrator.refreshAuth();
+
+                // Check again after refresh
+                const refreshedState = authOrchestrator.getState();
+                if (refreshedState.is_authenticated && refreshedState.session_ready) {
+                    console.info('LOGIN auth.check.refresh_success', {
+                        userId: refreshedState.user_id,
+                        source: refreshedState.source,
+                        timestamp: new Date().toISOString(),
+                    });
+
+                    const redirectTo = safeNext(params?.get('next')) || '/';
+                    console.info('LOGIN auth.check.redirect_after_refresh', {
+                        redirectTo,
+                        timestamp: new Date().toISOString(),
+                    });
+                    router.replace(redirectTo);
+                    return;
+                }
+
+                console.info('LOGIN auth.check.not_authenticated', {
+                    timestamp: new Date().toISOString(),
+                });
+
+            } catch (error) {
+                console.error('LOGIN auth.check.error', {
+                    error: error instanceof Error ? error.message : String(error),
+                    timestamp: new Date().toISOString(),
+                });
+            } finally {
+                setCheckingAuth(false);
+            }
+        };
+
+        checkExistingAuth();
+    }, [router, params]);
 
     // Capture next parameter to backend gs_next cookie and normalize URL
     useEffect(() => {
@@ -275,6 +346,18 @@ function LoginPageInner() {
             });
         }
     };
+
+    // Show loading spinner while checking authentication
+    if (checkingAuth) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">
+                <div className="text-center">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+                    <p className="mt-4 text-gray-600 dark:text-gray-400">Checking authentication...</p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800">

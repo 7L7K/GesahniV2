@@ -1,0 +1,1604 @@
+{
+  "config": {
+    "configFile": "/Users/kingal/2025/GesahniV2/frontend/playwright.config.ts",
+    "rootDir": "/Users/kingal/2025/GesahniV2/frontend/e2e",
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": "/Users/kingal/2025/GesahniV2/frontend/e2e/global-setup.ts",
+    "globalTeardown": "/Users/kingal/2025/GesahniV2/frontend/e2e/global-teardown.ts",
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 5
+    },
+    "preserveOutput": "always",
+    "reporter": [
+      [
+        "html",
+        {
+          "outputFolder": "playwright-report"
+        }
+      ],
+      [
+        "json",
+        {
+          "outputFile": "playwright-results.json"
+        }
+      ],
+      [
+        "junit",
+        {
+          "outputFile": "playwright-junit.xml"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "quiet": false,
+    "projects": [
+      {
+        "outputDir": "/Users/kingal/2025/GesahniV2/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "chromium",
+        "name": "chromium",
+        "testDir": "/Users/kingal/2025/GesahniV2/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/Users/kingal/2025/GesahniV2/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "firefox",
+        "name": "firefox",
+        "testDir": "/Users/kingal/2025/GesahniV2/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/Users/kingal/2025/GesahniV2/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "webkit",
+        "name": "webkit",
+        "testDir": "/Users/kingal/2025/GesahniV2/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/Users/kingal/2025/GesahniV2/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "Mobile Chrome",
+        "name": "Mobile Chrome",
+        "testDir": "/Users/kingal/2025/GesahniV2/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      },
+      {
+        "outputDir": "/Users/kingal/2025/GesahniV2/frontend/test-results",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 5
+        },
+        "id": "Mobile Safari",
+        "name": "Mobile Safari",
+        "testDir": "/Users/kingal/2025/GesahniV2/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+        ],
+        "timeout": 30000
+      }
+    ],
+    "shard": null,
+    "updateSnapshots": "missing",
+    "updateSourceMethod": "patch",
+    "version": "1.55.0",
+    "workers": 6,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "basic-functionality.spec.ts",
+      "file": "basic-functionality.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [],
+      "suites": [
+        {
+          "title": "Basic Functionality",
+          "file": "basic-functionality.spec.ts",
+          "line": 3,
+          "column": 6,
+          "specs": [
+            {
+              "title": "page loads and shows basic content",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "passed",
+                      "duration": 8359,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "Page content after loading: ((e, i, s, u, m, a, l, h)=>{\n    let d = document.documentElement, w = [\n        \"light\",\n        \"dark\"\n    ];\n    function p(n) {\n        (Array.isArray(e) ? e : [\n            e\n        ]).forEach((y)=>{\n            let k = y === \"class\", S = k && a ? m.map((f)=>a[f] || f) : m;\n            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);\n        }), R(n);\n    }\n    function R(n) {\n        h && w.includes(n) && (d.style.colorScheme = n);\n    }\n    function c() {\n        return window.matchMedia(\"(prefers-color-scheme: dark)\").matches ? \"dark\" : \"light\";\n    }\n    if (u) p(u);\n    else try {\n        let n = localStorage.getItem(i) || s, y = l && n === \"system\" ? c() : n;\n        p(y);\n    } catch (n) {}\n})(\"class\",\"theme\",\"system\",null,[\"light\",\"dark\"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a\n"
+                        },
+                        {
+                          "text": "Page has substantial content: \u001b[33mtrue\u001b[39m\n"
+                        },
+                        {
+                          "text": "React root found: \u001b[33mfalse\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:15.808Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-88028c3384b8cbb2743d",
+              "file": "basic-functionality.spec.ts",
+              "line": 4,
+              "column": 7
+            },
+            {
+              "title": "authentication works end-to-end",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 0,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 1060,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 32,
+                          "line": 35
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 32,
+                            "line": 35
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:25.171Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 32,
+                        "line": 35
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-d0b213dd20417b9b2d99",
+              "file": "basic-functionality.spec.ts",
+              "line": 32,
+              "column": 7
+            },
+            {
+              "title": "can access basic routes",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 7,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 965,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 34,
+                          "line": 71
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 34,
+                            "line": 71
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing route: /\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:30.510Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 34,
+                        "line": 71
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-3cc57cc9c090804af50b",
+              "file": "basic-functionality.spec.ts",
+              "line": 62,
+              "column": 7
+            },
+            {
+              "title": "API endpoints respond correctly",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "chromium",
+                  "projectName": "chromium",
+                  "results": [
+                    {
+                      "workerIndex": 10,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 1642,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 31,
+                          "line": 102
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 31,
+                            "line": 102
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n\n\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing endpoint: /v1/health\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/health status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/whoami\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/whoami status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/auth/csrf\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/auth/csrf status: \u001b[33m405\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:36.094Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 31,
+                        "line": 102
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-50024f4fc446caf0d1c0",
+              "file": "basic-functionality.spec.ts",
+              "line": 88,
+              "column": 7
+            },
+            {
+              "title": "page loads and shows basic content",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "passed",
+                      "duration": 13640,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "Page content after loading: ((e, i, s, u, m, a, l, h)=>{\n    let d = document.documentElement, w = [\n        \"light\",\n        \"dark\"\n    ];\n    function p(n) {\n        (Array.isArray(e) ? e : [\n            e\n        ]).forEach((y)=>{\n            let k = y === \"class\", S = k && a ? m.map((f)=>a[f] || f) : m;\n            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);\n        }), R(n);\n    }\n    function R(n) {\n        h && w.includes(n) && (d.style.colorScheme = n);\n    }\n    function c() {\n        return window.matchMedia(\"(prefers-color-scheme: dark)\").matches ? \"dark\" : \"light\";\n    }\n    if (u) p(u);\n    else try {\n        let n = localStorage.getItem(i) || s, y = l && n === \"system\" ? c() : n;\n        p(y);\n    } catch (n) {}\n})(\"class\",\"theme\",\"system\",null,[\"light\",\"dark\"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a\n"
+                        },
+                        {
+                          "text": "Page has substantial content: \u001b[33mtrue\u001b[39m\n"
+                        },
+                        {
+                          "text": "React root found: \u001b[33mfalse\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:15.897Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-8f38d2bf8755fc7ef900",
+              "file": "basic-functionality.spec.ts",
+              "line": 4,
+              "column": 7
+            },
+            {
+              "title": "authentication works end-to-end",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 1,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 1582,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 32,
+                          "line": 35
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 32,
+                            "line": 35
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:33.896Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 32,
+                        "line": 35
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-fe0b87045bd13bdbd6ff",
+              "file": "basic-functionality.spec.ts",
+              "line": 32,
+              "column": 7
+            },
+            {
+              "title": "can access basic routes",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 13,
+                      "parallelIndex": 1,
+                      "status": "failed",
+                      "duration": 3322,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 34,
+                          "line": 71
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 34,
+                            "line": 71
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing route: /\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:40.641Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 34,
+                        "line": 71
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-e1c315c59eab0aee0a6b",
+              "file": "basic-functionality.spec.ts",
+              "line": 62,
+              "column": 7
+            },
+            {
+              "title": "API endpoints respond correctly",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "firefox",
+                  "projectName": "firefox",
+                  "results": [
+                    {
+                      "workerIndex": 14,
+                      "parallelIndex": 0,
+                      "status": "failed",
+                      "duration": 2652,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 31,
+                          "line": 102
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 31,
+                            "line": 102
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n\n\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing endpoint: /v1/health\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/health status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/whoami\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/whoami status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/auth/csrf\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/auth/csrf status: \u001b[33m405\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:48.660Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 31,
+                        "line": 102
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-6cb44ae5bb9539b6418e",
+              "file": "basic-functionality.spec.ts",
+              "line": 88,
+              "column": 7
+            },
+            {
+              "title": "page loads and shows basic content",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "passed",
+                      "duration": 9424,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "Page content after loading: ((e, i, s, u, m, a, l, h)=>{\n    let d = document.documentElement, w = [\n        \"light\",\n        \"dark\"\n    ];\n    function p(n) {\n        (Array.isArray(e) ? e : [\n            e\n        ]).forEach((y)=>{\n            let k = y === \"class\", S = k && a ? m.map((f)=>a[f] || f) : m;\n            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);\n        }), R(n);\n    }\n    function R(n) {\n        h && w.includes(n) && (d.style.colorScheme = n);\n    }\n    function c() {\n        return window.matchMedia(\"(prefers-color-scheme: dark)\").matches ? \"dark\" : \"light\";\n    }\n    if (u) p(u);\n    else try {\n        let n = localStorage.getItem(i) || s, y = l && n === \"system\" ? c() : n;\n        p(y);\n    } catch (n) {}\n})(\"class\",\"theme\",\"system\",null,[\"light\",\"dark\"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a\n"
+                        },
+                        {
+                          "text": "Page has substantial content: \u001b[33mtrue\u001b[39m\n"
+                        },
+                        {
+                          "text": "React root found: \u001b[33mfalse\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:15.762Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-a03dcd4a26d365318924",
+              "file": "basic-functionality.spec.ts",
+              "line": 4,
+              "column": 7
+            },
+            {
+              "title": "authentication works end-to-end",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 2,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 1402,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 32,
+                          "line": 35
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 32,
+                            "line": 35
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:26.119Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 32,
+                        "line": 35
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-dbd306dbbadb1f55314c",
+              "file": "basic-functionality.spec.ts",
+              "line": 32,
+              "column": 7
+            },
+            {
+              "title": "can access basic routes",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 8,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 1904,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 34,
+                          "line": 71
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 34,
+                            "line": 71
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing route: /\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:31.069Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 34,
+                        "line": 71
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-fa434b476ef79211b54f",
+              "file": "basic-functionality.spec.ts",
+              "line": 62,
+              "column": 7
+            },
+            {
+              "title": "API endpoints respond correctly",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "webkit",
+                  "projectName": "webkit",
+                  "results": [
+                    {
+                      "workerIndex": 12,
+                      "parallelIndex": 2,
+                      "status": "failed",
+                      "duration": 2731,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 31,
+                          "line": 102
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 31,
+                            "line": 102
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n\n\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing endpoint: /v1/health\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/health status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/whoami\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/whoami status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/auth/csrf\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/auth/csrf status: \u001b[33m405\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:36.921Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 31,
+                        "line": 102
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-38eaad1b83760f12639f",
+              "file": "basic-functionality.spec.ts",
+              "line": 88,
+              "column": 7
+            },
+            {
+              "title": "page loads and shows basic content",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "passed",
+                      "duration": 8162,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "Page content after loading: ((e, i, s, u, m, a, l, h)=>{\n    let d = document.documentElement, w = [\n        \"light\",\n        \"dark\"\n    ];\n    function p(n) {\n        (Array.isArray(e) ? e : [\n            e\n        ]).forEach((y)=>{\n            let k = y === \"class\", S = k && a ? m.map((f)=>a[f] || f) : m;\n            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);\n        }), R(n);\n    }\n    function R(n) {\n        h && w.includes(n) && (d.style.colorScheme = n);\n    }\n    function c() {\n        return window.matchMedia(\"(prefers-color-scheme: dark)\").matches ? \"dark\" : \"light\";\n    }\n    if (u) p(u);\n    else try {\n        let n = localStorage.getItem(i) || s, y = l && n === \"system\" ? c() : n;\n        p(y);\n    } catch (n) {}\n})(\"class\",\"theme\",\"system\",null,[\"light\",\"dark\"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a\n"
+                        },
+                        {
+                          "text": "Page has substantial content: \u001b[33mtrue\u001b[39m\n"
+                        },
+                        {
+                          "text": "React root found: \u001b[33mfalse\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:15.931Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-4f906769c11bbdc97c98",
+              "file": "basic-functionality.spec.ts",
+              "line": 4,
+              "column": 7
+            },
+            {
+              "title": "authentication works end-to-end",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 3,
+                      "parallelIndex": 3,
+                      "status": "failed",
+                      "duration": 1020,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 32,
+                          "line": 35
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 32,
+                            "line": 35
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:24.979Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 32,
+                        "line": 35
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-10a21bca84d305119675",
+              "file": "basic-functionality.spec.ts",
+              "line": 32,
+              "column": 7
+            },
+            {
+              "title": "can access basic routes",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 5,
+                      "parallelIndex": 3,
+                      "status": "failed",
+                      "duration": 1021,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 34,
+                          "line": 71
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 34,
+                            "line": 71
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing route: /\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:30.187Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 34,
+                        "line": 71
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-2403cd511026935ac686",
+              "file": "basic-functionality.spec.ts",
+              "line": 62,
+              "column": 7
+            },
+            {
+              "title": "API endpoints respond correctly",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Chrome",
+                  "projectName": "Mobile Chrome",
+                  "results": [
+                    {
+                      "workerIndex": 9,
+                      "parallelIndex": 3,
+                      "status": "failed",
+                      "duration": 2026,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 31,
+                          "line": 102
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 31,
+                            "line": 102
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n\n\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing endpoint: /v1/health\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/health status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/whoami\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/whoami status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/auth/csrf\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/auth/csrf status: \u001b[33m405\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:35.757Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 31,
+                        "line": 102
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-52f2a1746becd6390c07",
+              "file": "basic-functionality.spec.ts",
+              "line": 88,
+              "column": 7
+            },
+            {
+              "title": "page loads and shows basic content",
+              "ok": true,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 4,
+                      "status": "passed",
+                      "duration": 8732,
+                      "errors": [],
+                      "stdout": [
+                        {
+                          "text": "Page content after loading: ((e, i, s, u, m, a, l, h)=>{\n    let d = document.documentElement, w = [\n        \"light\",\n        \"dark\"\n    ];\n    function p(n) {\n        (Array.isArray(e) ? e : [\n            e\n        ]).forEach((y)=>{\n            let k = y === \"class\", S = k && a ? m.map((f)=>a[f] || f) : m;\n            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);\n        }), R(n);\n    }\n    function R(n) {\n        h && w.includes(n) && (d.style.colorScheme = n);\n    }\n    function c() {\n        return window.matchMedia(\"(prefers-color-scheme: dark)\").matches ? \"dark\" : \"light\";\n    }\n    if (u) p(u);\n    else try {\n        let n = localStorage.getItem(i) || s, y = l && n === \"system\" ? c() : n;\n        p(y);\n    } catch (n) {}\n})(\"class\",\"theme\",\"system\",null,[\"light\",\"dark\"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a\n"
+                        },
+                        {
+                          "text": "Page has substantial content: \u001b[33mtrue\u001b[39m\n"
+                        },
+                        {
+                          "text": "React root found: \u001b[33mfalse\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:15.904Z",
+                      "annotations": [],
+                      "attachments": []
+                    }
+                  ],
+                  "status": "expected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-51ca8cff088422e8f6f4",
+              "file": "basic-functionality.spec.ts",
+              "line": 4,
+              "column": 7
+            },
+            {
+              "title": "authentication works end-to-end",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 4,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 1160,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 32,
+                          "line": 35
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 32,
+                            "line": 35
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 33 |\u001b[39m     \u001b[90m// First authenticate via API\u001b[39m\n \u001b[90m 34 |\u001b[39m     \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 35 |\u001b[39m     expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 36 |\u001b[39m\n \u001b[90m 37 |\u001b[39m     \u001b[36mconst\u001b[39m loginData \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m loginResponse\u001b[33m.\u001b[39mjson()\u001b[33m;\u001b[39m\n \u001b[90m 38 |\u001b[39m     console\u001b[33m.\u001b[39mlog(\u001b[32m'Login successful:'\u001b[39m\u001b[33m,\u001b[39m loginData\u001b[33m.\u001b[39mstatus)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32\u001b[22m"
+                        }
+                      ],
+                      "stdout": [],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:25.500Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 32,
+                        "line": 35
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-830bbf8d6627b9b6a4ef",
+              "file": "basic-functionality.spec.ts",
+              "line": 32,
+              "column": 7
+            },
+            {
+              "title": "can access basic routes",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 6,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 1721,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 34,
+                          "line": 71
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 34,
+                            "line": 71
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoBe\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // Object.is equality\u001b[22m\n\nExpected: \u001b[32mtrue\u001b[39m\nReceived: \u001b[31mfalse\u001b[39m\n\n\u001b[0m \u001b[90m 69 |\u001b[39m       \u001b[90m// Authenticate first\u001b[39m\n \u001b[90m 70 |\u001b[39m       \u001b[36mconst\u001b[39m loginResponse \u001b[33m=\u001b[39m \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mrequest\u001b[33m.\u001b[39mpost(\u001b[32m'/v1/auth/login?username=testuser'\u001b[39m)\u001b[33m;\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 71 |\u001b[39m       expect(loginResponse\u001b[33m.\u001b[39mok())\u001b[33m.\u001b[39mtoBe(\u001b[36mtrue\u001b[39m)\u001b[33m;\u001b[39m\n \u001b[90m    |\u001b[39m                                  \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 72 |\u001b[39m\n \u001b[90m 73 |\u001b[39m       \u001b[90m// Visit the route\u001b[39m\n \u001b[90m 74 |\u001b[39m       \u001b[36mawait\u001b[39m page\u001b[33m.\u001b[39mgoto(route)\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing route: /\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:30.417Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 34,
+                        "line": 71
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-6b4ecf939535f59f4456",
+              "file": "basic-functionality.spec.ts",
+              "line": 62,
+              "column": 7
+            },
+            {
+              "title": "API endpoints respond correctly",
+              "ok": false,
+              "tags": [],
+              "tests": [
+                {
+                  "timeout": 30000,
+                  "annotations": [],
+                  "expectedStatus": "passed",
+                  "projectId": "Mobile Safari",
+                  "projectName": "Mobile Safari",
+                  "results": [
+                    {
+                      "workerIndex": 11,
+                      "parallelIndex": 4,
+                      "status": "failed",
+                      "duration": 2413,
+                      "error": {
+                        "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m",
+                        "stack": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31",
+                        "location": {
+                          "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                          "column": 31,
+                          "line": 102
+                        },
+                        "snippet": "\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m"
+                      },
+                      "errors": [
+                        {
+                          "location": {
+                            "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                            "column": 31,
+                            "line": 102
+                          },
+                          "message": "Error: \u001b[2mexpect(\u001b[22m\u001b[31mreceived\u001b[39m\u001b[2m).\u001b[22mtoContain\u001b[2m(\u001b[22m\u001b[32mexpected\u001b[39m\u001b[2m) // indexOf\u001b[22m\n\nExpected value: \u001b[32m405\u001b[39m\nReceived array: \u001b[31m[200, 401, 403]\u001b[39m\n\n\u001b[0m \u001b[90m 100 |\u001b[39m\n \u001b[90m 101 |\u001b[39m       \u001b[90m// Most endpoints should return some response\u001b[39m\n\u001b[31m\u001b[1m>\u001b[22m\u001b[39m\u001b[90m 102 |\u001b[39m       expect([\u001b[35m200\u001b[39m\u001b[33m,\u001b[39m \u001b[35m401\u001b[39m\u001b[33m,\u001b[39m \u001b[35m403\u001b[39m])\u001b[33m.\u001b[39mtoContain(response\u001b[33m.\u001b[39mstatus())\u001b[33m;\u001b[39m\n \u001b[90m     |\u001b[39m                               \u001b[31m\u001b[1m^\u001b[22m\u001b[39m\n \u001b[90m 103 |\u001b[39m     }\n \u001b[90m 104 |\u001b[39m   })\u001b[33m;\u001b[39m\n \u001b[90m 105 |\u001b[39m })\u001b[33m;\u001b[39m\u001b[0m\n\u001b[2m    at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31\u001b[22m"
+                        }
+                      ],
+                      "stdout": [
+                        {
+                          "text": "Testing endpoint: /v1/health\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/health status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/whoami\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/whoami status: \u001b[33m200\u001b[39m\n"
+                        },
+                        {
+                          "text": "Testing endpoint: /v1/auth/csrf\n"
+                        },
+                        {
+                          "text": "Endpoint /v1/auth/csrf status: \u001b[33m405\u001b[39m\n"
+                        }
+                      ],
+                      "stderr": [],
+                      "retry": 0,
+                      "startTime": "2025-09-16T23:44:36.532Z",
+                      "annotations": [],
+                      "attachments": [
+                        {
+                          "name": "screenshot",
+                          "contentType": "image/png",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/test-failed-1.png"
+                        },
+                        {
+                          "name": "video",
+                          "contentType": "video/webm",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/video.webm"
+                        },
+                        {
+                          "name": "trace",
+                          "contentType": "application/zip",
+                          "path": "/Users/kingal/2025/GesahniV2/frontend/test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/trace.zip"
+                        }
+                      ],
+                      "errorLocation": {
+                        "file": "/Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts",
+                        "column": 31,
+                        "line": 102
+                      }
+                    }
+                  ],
+                  "status": "unexpected"
+                }
+              ],
+              "id": "3e1fed252e99486c803c-a59519d4364fa503e13f",
+              "file": "basic-functionality.spec.ts",
+              "line": 88,
+              "column": 7
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2025-09-16T23:44:13.567Z",
+    "duration": 40370.649999999994,
+    "expected": 5,
+    "skipped": 0,
+    "unexpected": 15,
+    "flaky": 0
+  }
+}

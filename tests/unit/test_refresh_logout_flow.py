@@ -20,8 +20,8 @@ def test_logout_clears_cookies(monkeypatch):
     client = TestClient(app)
     with client:
         # simulate cookies
-        client.cookies.set("access_token", "x")
-        client.cookies.set("refresh_token", "y")
+        client.cookies.set("GSNH_AT", "x")
+        client.cookies.set("GSNH_RT", "y")
         # CSRF enabled path
         client.cookies.set("csrf_token", "abc")
         r = client.post("/v1/auth/logout", headers={"X-CSRF-Token": "abc"})

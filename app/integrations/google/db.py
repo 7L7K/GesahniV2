@@ -82,9 +82,21 @@ def init_db():
                 """
                     )
                 )
-            except Exception:
+            except Exception as e:
                 # best-effort: ignore if individual ALTERs fail (columns may already exist)
-                pass
-    except Exception:
+                import logging
+
+                logger = logging.getLogger(__name__)
+                logger.debug(
+                    "Google OAuth DB migration ALTER failed (likely column already exists)",
+                    extra={"meta": {"error": str(e)}},
+                )
+    except Exception as e:
         # best-effort; if migration fails, tests may recreate DB via env override
-        pass
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.debug(
+            "Google OAuth DB migration failed",
+            extra={"meta": {"error": str(e)}},
+        )

@@ -1,4 +1,5 @@
 import { getAuthOrchestrator, __resetAuthOrchestrator } from '../authOrchestrator';
+import { apiFetch } from '@/lib/api';
 
 // Mock apiFetch for testing
 jest.mock('@/lib/api', () => ({
@@ -121,7 +122,6 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
         mockConsoleWarn.mockClear();
 
         // Get the mocked apiFetch
-        const { apiFetch } = require('@/lib/api');
         apiFetch.mockClear();
 
         // Mock successful whoami response
@@ -144,7 +144,6 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
     describe('Legitimate whoami calls', () => {
         it('should not warn when whoami is called through AuthOrchestrator.checkAuth()', async () => {
             const orchestrator = getAuthOrchestrator();
-            const { apiFetch } = require('@/lib/api');
 
             // Set up a token to prevent early return
             localStorage.setItem('auth:access', 'test-token');
@@ -181,7 +180,6 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
         it('should not warn when whoami is called through AuthOrchestrator.refreshAuth()', async () => {
             const orchestrator = getAuthOrchestrator();
-            const { apiFetch } = require('@/lib/api');
 
             // Set up a token to prevent early return
             localStorage.setItem('auth:access', 'test-token');
@@ -218,7 +216,6 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
         it('should not warn when whoami is called through getAuthOrchestrator()', async () => {
             const orchestrator = getAuthOrchestrator();
-            const { apiFetch } = require('@/lib/api');
 
             // Set up a token to prevent early return
             localStorage.setItem('auth:access', 'test-token');

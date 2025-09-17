@@ -1,4 +1,3 @@
-import asyncio
 import os
 from typing import Any
 
@@ -6,10 +5,9 @@ _client = None
 
 
 def _init_client():
-    """Lazy initialize OpenAI client placeholder.
+    """Lazy initialize OpenAI client.
 
     Keep import/initialization out of top-level so module import is cheap.
-    Replace this with real client creation and caching as needed.
     """
     global _client
     if _client is not None:
@@ -20,9 +18,13 @@ def _init_client():
     if not key:
         raise RuntimeError("OpenAI API key not configured")
 
-    # TODO: replace with real async client creation and caching
-    _client = object()
-    return _client
+    try:
+        from openai import AsyncOpenAI
+
+        _client = AsyncOpenAI(api_key=key)
+        return _client
+    except ImportError:
+        raise RuntimeError("OpenAI package not installed. Run: pip install openai")
 
 
 async def openai_router(payload: dict[str, Any]) -> dict[str, Any]:
@@ -38,20 +40,48 @@ async def openai_router(payload: dict[str, Any]) -> dict[str, Any]:
 
     Raises RuntimeError if backend unavailable (will be caught as 503).
     """
-    # Ensure client exists (synchronous init allowed here)
+    # Ensure client exists
     try:
-        _init_client()
+        client = _init_client()
     except Exception as e:
         raise RuntimeError(f"OpenAI backend unavailable: {e}")
 
-    # TODO: perform real async call using the cached client
-    # For now, return standardized dry-run response
-    await asyncio.sleep(0)  # keep function truly async
+    # Extract parameters from payload
+    prompt = payload.get("prompt", "")
+    model = payload.get("model_override") or payload.get("model") or "gpt-4o"
+    gen_opts = payload.get("gen_opts", {})
 
-    model = payload.get("model", "gpt-4o")
-    return {
-        "backend": "openai",
-        "model": model,
-        "answer": "(dry-run OpenAI response)",
-        "usage": {"input_tokens": 0, "output_tokens": 0},
-    }
+    # Prepare messages for chat completion
+    messages = []
+    if isinstance(prompt, list):
+        # Handle message array format
+        messages = prompt
+    else:
+        # Handle string prompt format
+        messages = [{"role": "user", "content": str(prompt)}]
+
+    try:
+        # Make the actual OpenAI API call
+        response = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            max_tokens=gen_opts.get("max_tokens", 1000),
+            temperature=gen_opts.get("temperature", 0.7),
+        )
+
+        # Extract the response
+        answer = response.choices[0].message.content
+        usage = {
+            "input_tokens": response.usage.prompt_tokens if response.usage else 0,
+            "output_tokens": response.usage.completion_tokens if response.usage else 0,
+        }
+
+        return {
+            "backend": "openai",
+            "model": model,
+            "answer": answer,
+            "usage": usage,
+        }
+
+    except Exception as e:
+        raise RuntimeError(f"OpenAI API call failed: {e}")

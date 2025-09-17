@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import ThemeToggle from '@/components/ThemeToggle';
 // Clerk removed - using cookie authentication only
 import { useAuthState } from '@/hooks/useAuth';
-import { getToken, clearTokens, getBudget, bumpAuthEpoch, apiFetch } from '@/lib/api';
+import { clearTokens, getBudget, apiFetch } from '@/lib/api';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 import ClientOnly from './ClientOnly';
 import SessionBadge from '@/components/SessionBadge';
@@ -26,7 +26,7 @@ export default function Header() {
     const authed = authState.is_authenticated;
 
     // Cookie mode only - show auth buttons if not authenticated
-    const shouldShowAuthButtons = !authed;
+    const _shouldShowAuthButtons = !authed;
 
     const doLogout = async () => {
         // Clear tokens and state immediately for better UX

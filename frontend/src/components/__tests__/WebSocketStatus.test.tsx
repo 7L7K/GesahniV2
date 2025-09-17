@@ -11,7 +11,7 @@ describe('WebSocketStatus', () => {
         jest.clearAllMocks();
 
         // Mock getConnectionStatus to return default values
-        mockWsHub.getConnectionStatus.mockImplementation((name) => ({
+        mockWsHub.getConnectionStatus.mockImplementation((_name) => ({
             isOpen: false,
             isConnecting: false,
             failureReason: null,
@@ -27,7 +27,7 @@ describe('WebSocketStatus', () => {
     });
 
     it('shows connected status when WebSocket is open', () => {
-        mockWsHub.getConnectionStatus.mockImplementation((name) => ({
+        mockWsHub.getConnectionStatus.mockImplementation((_name) => ({
             isOpen: true,
             isConnecting: false,
             failureReason: null,
@@ -41,7 +41,7 @@ describe('WebSocketStatus', () => {
     });
 
     it('shows connecting status when WebSocket is connecting', () => {
-        mockWsHub.getConnectionStatus.mockImplementation((name) => ({
+        mockWsHub.getConnectionStatus.mockImplementation((_name) => ({
             isOpen: false,
             isConnecting: true,
             failureReason: null,
@@ -55,7 +55,7 @@ describe('WebSocketStatus', () => {
     });
 
     it('shows failed status when WebSocket has failed', () => {
-        mockWsHub.getConnectionStatus.mockImplementation((name) => ({
+        mockWsHub.getConnectionStatus.mockImplementation((_name) => ({
             isOpen: false,
             isConnecting: false,
             failureReason: 'Connection timeout',
@@ -84,7 +84,7 @@ describe('WebSocketStatus', () => {
     });
 
     it('does not show detailed status when showDetails is false', () => {
-        mockWsHub.getConnectionStatus.mockImplementation((name) => ({
+        mockWsHub.getConnectionStatus.mockImplementation((_name) => ({
             isOpen: false,
             isConnecting: false,
             failureReason: 'Connection timeout',
@@ -225,7 +225,7 @@ describe('WebSocketStatus', () => {
 
     it('formats failure time correctly', () => {
         const failureTime = new Date('2024-01-01T12:00:00').getTime();
-        mockWsHub.getConnectionStatus.mockImplementation((name) => ({
+        mockWsHub.getConnectionStatus.mockImplementation((_name) => ({
             isOpen: false,
             isConnecting: false,
             failureReason: 'Connection timeout',

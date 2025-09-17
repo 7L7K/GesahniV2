@@ -14,10 +14,11 @@ Imports from this module:
 
 import logging
 import os
-from collections.abc import Generator
+from collections.abc import AsyncIterator, Generator
+from contextlib import asynccontextmanager
 
 from sqlalchemy import create_engine, text
-from sqlalchemy.ext.asyncio import async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.ext.asyncio import create_async_engine as sa_create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
@@ -74,6 +75,18 @@ else:
 # Session factories
 SyncSessionLocal = sessionmaker(bind=sync_engine, future=True)
 AsyncSessionLocal = async_sessionmaker(bind=async_engine, future=True)
+
+
+@asynccontextmanager
+async def get_async_session() -> AsyncIterator[AsyncSession]:
+    """Yield an async SQLAlchemy session that always closes cleanly."""
+
+    async with AsyncSessionLocal() as session:
+        try:
+            yield session
+        except Exception:
+            await session.rollback()
+            raise
 
 
 def get_db() -> Generator[Session, None, None]:
@@ -167,6 +180,7 @@ __all__ = [
     "async_engine",
     "get_db",
     "get_async_db",
+    "get_async_session",
     "health_check",
     "health_check_async",
     "dispose_engines",

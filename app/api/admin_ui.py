@@ -15,9 +15,11 @@ router = APIRouter(
 def _guard(token: str | None) -> None:
     tok = _admin_token()
     if tok and token != tok:
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="access forbidden")
+        raise http_error(
+            code="access_forbidden", message="access forbidden", status=403
+        )
 
 
 def _html_page(title: str, body: str) -> str:

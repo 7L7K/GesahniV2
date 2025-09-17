@@ -27,6 +27,8 @@ from typing import Set
 
 from fastapi import FastAPI
 
+from app.routers import normalize_backend_name
+from app.security.module_loader import secure_import_attr, secure_load_router
 from app.startup import components as C
 from app.startup.config import detect_profile
 from app.startup.config_guard import assert_strict_prod
@@ -67,6 +69,7 @@ async def lifespan(app: FastAPI):
     - Ensure DB schemas are created once via ``init_db_once``.
     - Run environment-aware startup components with per-step timeouts.
     - Launch optional background daemons (best-effort).
+    - Bind prompt backend and perform app-specific startup tasks.
     - Perform graceful shutdown/cleanup.
     """
     # 1) DB schema once, before component inits
@@ -86,13 +89,122 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning("⚠️ WebSocket LRU cache initialization failed: %s", e)
 
-    # 4) Fire-and-forget daemons that are optional
+    # 4) Bind prompt backend to app.state
+    await _bind_prompt_backend(app)
+
+    # 5) Diagnostic startup event (only when DEBUG=1)
+    await _diag_start(app)
+
+    # 6) Auth cookie config dump (only when AUTH_DEBUG=1)
+    await _auth_cookie_cfg_dump(app)
+
+    # 7) Fire-and-forget daemons that are optional
     _start_daemons()
 
     try:
         yield
     finally:
+        # Diagnostic shutdown event (only when DEBUG=1)
+        await _diag_stop(app)
         await _shutdown(app)
+
+
+async def _bind_prompt_backend(app: FastAPI):
+    """Bind prompt backend to app.state."""
+    try:
+        # Defer settings import to avoid side-effects at module import
+        from app.settings import settings
+
+        backend = getattr(
+            settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "live")
+        ).lower()
+    except Exception:
+        backend = os.getenv("PROMPT_BACKEND", "live").lower()
+
+    raw_backend = backend
+    backend = normalize_backend_name(backend)
+
+    if raw_backend == "live":
+        if backend == "dryrun":
+            logger.warning(
+                "PROMPT_BACKEND=live but no vendor configured; using dryrun backend"
+            )
+        else:
+            logger.info("PROMPT_BACKEND=live resolved to %s backend", backend)
+
+    if backend == "openai":
+        from app.routers.openai_router import openai_router
+
+        app.state.prompt_router = openai_router
+        logger.info("prompt backend bound: openai")
+    elif backend == "llama":
+        from app.routers.llama_router import llama_router
+
+        app.state.prompt_router = llama_router
+        logger.info("prompt backend bound: llama")
+    elif backend == "dryrun":
+
+        async def dryrun_router(payload: dict) -> dict:
+            return {"dry_run": True, "echo": payload}
+
+        app.state.prompt_router = dryrun_router
+        logger.info("prompt backend bound: dryrun (safe default)")
+    else:
+        # For "live" or other backends, try to dynamically resolve the router
+        try:
+            # Try to import the router module securely
+            router = secure_load_router(
+                f"app.routers.{backend}_router:{backend}_router"
+            )
+            app.state.prompt_router = router
+            logger.info(f"prompt backend bound: {backend}")
+        except Exception:
+            # If dynamic import fails, fall back to dryrun
+            async def dryrun_router(payload: dict) -> dict:
+                return {
+                    "dry_run": True,
+                    "echo": payload,
+                    "error": f"Unknown backend: {backend}",
+                }
+
+            app.state.prompt_router = dryrun_router
+            logger.warning(
+                f"Unknown PROMPT_BACKEND={backend!r}, falling back to dryrun"
+            )
+
+
+async def _diag_start(app: FastAPI):
+    """Diagnostic startup event (only when DEBUG=1)."""
+    if os.getenv("GSN_DEBUG_STARTUP") == "1":
+        try:
+            from app.diagnostics.state import record_event
+
+            record_event("startup", "application startup")
+        except Exception:
+            pass
+
+
+async def _auth_cookie_cfg_dump(app: FastAPI):
+    """Auth cookie config dump (only when AUTH_DEBUG=1)."""
+    try:
+        if os.getenv("AUTH_DEBUG") == "1":
+            from app.startup.auth_config_dump import dump_cookie_config
+
+            dump_cookie_config()
+    except Exception:
+        # Never fail startup due to debug logging
+        pass
+
+
+async def _diag_stop(app: FastAPI):
+    """Diagnostic shutdown event (only when DEBUG=1)."""
+    if os.getenv("GSN_DEBUG_STARTUP") == "1":
+        try:
+            from app.diagnostics.state import record_event
+
+            record_event("shutdown", "application shutdown")
+        except Exception:
+            pass
 
 
 async def _init_db_once():
@@ -155,6 +267,16 @@ async def _run_components():
 
 def _start_daemons():
     # These are best-effort; never fatal
+    # Skip starting long-running daemons when running in CI/test to avoid
+    # event-loop conflicts with the test harness.
+    try:
+        profile = detect_profile()
+        if profile.name == "ci" or os.getenv("PYTEST_RUNNING"):
+            logger.debug("Skipping background daemons in CI/test profile")
+            return
+    except Exception:
+        # If detect_profile fails for any reason, fall back to proceeding
+        pass
     try:
         from app.care_daemons import heartbeat_monitor_loop
 
@@ -170,7 +292,7 @@ def _start_daemons():
         logger.debug("sms_worker not started", exc_info=True)
 
     try:
-        from app.router import start_openai_health_background_loop
+        from app.router_legacy import start_openai_health_background_loop
 
         start_openai_health_background_loop()
     except Exception:
@@ -194,9 +316,7 @@ async def _shutdown(app: FastAPI):
         "app.transcription:close_whisper_client",
     ):
         try:
-            mod, name = closer_path.split(":")
-            m = __import__(mod, fromlist=[name])
-            closer = getattr(m, name)
+            closer = secure_import_attr(*closer_path.split(":", 1))
             res = closer()
             if asyncio.iscoroutine(res):
                 await res
@@ -219,6 +339,13 @@ async def _shutdown(app: FastAPI):
         await cancel_background_tasks()
     except Exception:
         logger.debug("background task cancellation failed", exc_info=True)
+
+    try:
+        from app.application.startup import cancel_startup_tasks
+
+        await cancel_startup_tasks()
+    except Exception:
+        logger.debug("startup task cancellation failed", exc_info=True)
 
     # Token store cleanup
     try:

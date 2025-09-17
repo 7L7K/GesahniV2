@@ -10,6 +10,79 @@ from app.web.cookies import clear_all_auth
 
 log = logging.getLogger("auth")
 
+
+async def _ensure_jwt_user_exists(user_id: str, request: Request) -> None:
+    """Ensure JWT-authenticated users exist in the database.
+
+    This is a critical gap-filler: JWT authentication works but doesn't provision users.
+    We create users on-demand when they authenticate successfully.
+    """
+    # Only provision for JWT-authenticated users (not password users)
+    # JWT user_ids are typically usernames, not UUIDs
+    if not user_id or user_id == "anon":
+        return
+
+    # Skip if user already exists (fast path)
+    # We check by trying to query the user - if it exists, we're done
+
+    # Create the user (idempotent - handles existing users gracefully)
+    try:
+        from sqlalchemy.exc import IntegrityError
+
+        from ..auth_store import create_user
+        from ..util.ids import to_uuid
+
+        # Convert username to UUID for database
+        user_uuid = str(to_uuid(user_id))
+
+        # Extract email from JWT claims if available
+        email = f"{user_id}@jwt.local"  # Fallback email
+        claims = getattr(request.state, "jwt_payload", None)
+        if claims and isinstance(claims, dict):
+            jwt_email = claims.get("email") or claims.get("preferred_username")
+            if jwt_email and "@" in jwt_email:
+                email = jwt_email
+
+        await create_user(
+            id=user_uuid,
+            email=email,
+            username=user_id,
+            name=user_id,  # Use username as display name
+        )
+
+        log.info(
+            "✅ JWT user provisioned",
+            extra={
+                "meta": {
+                    "user_id": user_id,
+                    "user_uuid": user_uuid,
+                    "email": email,
+                    "source": "jwt_provisioning",
+                }
+            },
+        )
+
+    except IntegrityError:
+        # User already exists - this is expected and fine
+        log.debug(
+            "JWT user already exists",
+            extra={"meta": {"user_id": user_id, "source": "jwt_provisioning"}},
+        )
+    except Exception as e:
+        log.error(
+            "❌ JWT user provisioning failed",
+            extra={
+                "meta": {
+                    "user_id": user_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                }
+            },
+        )
+        # Don't fail the request - log and continue
+        # This allows the app to work even if provisioning fails
+
+
 try:
     from jose import jwt as jose_jwt
 except Exception:
@@ -320,7 +393,7 @@ def get_current_user_id(
     is_test_mode = (
         os.getenv("ENV", "").lower() == "test"
         or optional_in_tests
-        or os.getenv("PYTEST_RUNNING")
+        or os.getenv("PYTEST_RUNNING", "").strip().lower() in {"1", "true", "yes", "on"}
         or os.getenv("PYTEST_MODE") in {"1", "true", "yes", "on"}
         or os.getenv("PYTEST_CURRENT_TEST")
     )
@@ -628,6 +701,9 @@ async def require_user(request: Request) -> str:
                 hint="login or include Authorization header",
             )
 
+        # Ensure JWT-authenticated users exist in database
+        await _ensure_jwt_user_exists(user_id, request)
+
         return user_id
     except HTTPException:
         # Re-raise with consistent error message
@@ -811,7 +887,7 @@ def resolve_auth_source_conflict(request: Request) -> tuple[str, bool]:
     - "session" when only a session cookie is present
     - "missing" when no auth material present
 
-    Conflict is True when both Authorization header and any auth cookie are present.
+    Conflict flag returns True when both Authorization header and any auth cookie are present.
     """
     try:
         from ..web.cookies import NAMES as _COOKIE_NAMES

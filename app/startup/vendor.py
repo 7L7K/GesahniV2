@@ -92,7 +92,7 @@ async def _check_openai_health(timeout: int) -> dict[str, str]:
 
         try:
             from app.gpt_client import ask_gpt
-            from app.router import RoutingDecision
+            from app.router.model_router import RoutingDecision
 
             model = os.getenv("OPENAI_MODEL", "gpt-4o")
             routing_decision = RoutingDecision(

@@ -35,9 +35,10 @@ def _parse_json_env(name: str) -> dict[str, str] | None:
 
 
 def _require_strong_secret(secret: str, *, allow_dev: bool) -> None:
-    # In dev/test modes, allow shorter secrets to support unit/integration tests
+    # In dev/test modes, allow shorter secrets and placeholder text to support development
     if not allow_dev and len(secret) < 32:
         raise RuntimeError("JWT_SECRET too short (<32 chars).")
+    # Skip placeholder validation in dev/test modes to allow placeholder text
     if not allow_dev and _PLACEHOLDER_PAT.search(secret):
         raise RuntimeError("JWT_SECRET contains placeholder text; replace immediately.")
     if not allow_dev and re.fullmatch(
@@ -46,6 +47,10 @@ def _require_strong_secret(secret: str, *, allow_dev: bool) -> None:
         raise RuntimeError(
             "JWT_SECRET looks like a low-entropy label; use a random value."
         )
+
+    # In dev/test modes, allow placeholder text to avoid breaking existing setups
+    if allow_dev:
+        return
 
 
 def get_jwt_config(*, allow_dev_weak=None) -> JWTConfig:

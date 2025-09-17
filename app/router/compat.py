@@ -7,6 +7,9 @@ These shims import from leaf modules only - no circular dependencies.
 """
 
 # Import from leaf modules (safe, no circular imports)
+# Import legacy functions that tests might expect
+from app.gpt_client import ask_gpt
+
 from .budget import get_remaining_budget
 from .entrypoint import route_prompt
 from .policy import (
@@ -43,6 +46,7 @@ __all__ = [
     # Core functions
     "route_prompt",
     "get_remaining_budget",
+    "ask_gpt",
     # Model allowlists
     "ALLOWED_GPT_MODELS",
     "ALLOWED_LLAMA_MODELS",

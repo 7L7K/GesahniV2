@@ -9,8 +9,8 @@ interface WebSocketStatusProps {
 }
 
 export function WebSocketStatus({ className = '', showDetails = false }: WebSocketStatusProps) {
-    const [musicStatus, setMusicStatus] = useState(() => wsHub.getConnectionStatus('music'));
-    const [careStatus, setCareStatus] = useState(() => wsHub.getConnectionStatus('care'));
+    const [musicStatus, _setMusicStatus] = useState(() => wsHub.getConnectionStatus('music'));
+    const [careStatus, _setCareStatus] = useState(() => wsHub.getConnectionStatus('care'));
     const [showFailureHint, setShowFailureHint] = useState(false);
     const [failureDetails, setFailureDetails] = useState<{ name: string; reason: string; timestamp: number } | null>(null);
 

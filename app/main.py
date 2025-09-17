@@ -1,1401 +1,231 @@
+"""FastAPI application entrypoint.
+
+This module now focuses on wiring the top-level application together while
+leaning on the ``app.application`` package for configuration, diagnostics, and
+startup helpers. The goal is to keep this file lightweight and primarily
+responsible for exposing ``create_app``/``get_app`` along with a lazy app
+instance used throughout tests and tooling.
+"""
+
+from __future__ import annotations
+
+# Pre-flight database connectivity check
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def _perform_database_preflight_check():
+    """Perform a synchronous database connectivity check before app creation."""
+    try:
+        # Import here to avoid circular dependencies
+
+        from app.db.core import health_check
+
+        logger.info("🔍 Performing pre-flight database connectivity check...")
+
+        if health_check():
+            logger.info(
+                "✅ Database connectivity confirmed - proceeding with app startup"
+            )
+            return True
+        else:
+            logger.error("🚨 CRITICAL: Database connectivity check FAILED!")
+            logger.error("   PostgreSQL is not accessible or DATABASE_URL is incorrect")
+            logger.error(
+                "   The application will start but many features will NOT work:"
+            )
+            logger.error("   ❌ User authentication will fail")
+            logger.error("   ❌ OAuth integrations will fail")
+            logger.error("   ❌ Token storage will fail")
+            logger.error("   ❌ Music integration will fail")
+            logger.error("")
+            logger.error("   🔧 IMMEDIATE ACTION REQUIRED:")
+            logger.error(
+                "   1. Start PostgreSQL: pg_ctl -D /usr/local/var/postgresql@14 start"
+            )
+            logger.error("   2. Check DATABASE_URL in .env file")
+            logger.error(
+                "   3. Verify database exists: psql -U app -d gesahni -c 'SELECT 1'"
+            )
+            logger.error("")
+            return False
+    except Exception as e:
+        logger.error("🚨 Database pre-flight check failed: %s", e)
+        logger.error("   Application may not function properly without database access")
+        return False
+
+
+# Perform the check
+_preflight_result = _perform_database_preflight_check()
+
+import hashlib
+import logging
 import os
+import sys
+from typing import Any
 
-from app.env_utils import load_env
+from fastapi import FastAPI
 
-load_env()
+# Populate skill registry side effects
+import app.skills  # noqa: F401
 
 # Activate dev-only tracer for middleware registration (dev/ci/test only)
 if os.getenv("ENV", "dev").lower() in {"dev", "ci", "test"}:
     import app.middleware._trace_add  # noqa: F401
 
-import hashlib
-import logging
-import sys
-import time
-import traceback
-from datetime import UTC, datetime
-from pathlib import Path
+from app.application import (
+    build_application,
+    enforce_jwt_strength,
+    proactive_startup,
+)
+from app.application import (
+    enhanced_startup as _enhanced_startup,
+)
+from app.application import (
+    record_error as _record_error_impl,
+)
+from app.application import (
+    runtime_errors as _runtime_errors,
+)
+from app.application import (
+    startup_errors as _startup_errors,
+)
+from app.application.config import load_openapi_config
+from app.logging_config import configure_logging
+from app.middleware.middleware_core import set_store_providers
+from app.session_manager import SESSIONS_DIR
+from app.user_store import user_store
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, ConfigDict, Field
-
-# CORS configuration
-# Router setup moved to create_app() to avoid import-time cycles
-import app.skills  # populate SKILLS
-
-from .errors import BackendUnavailableError
-from .logging_config import configure_logging, req_id_var
-
-# Backward-compat shims: some tests expect these names on app.main
+# Backwards compatibility exports expected by tests/fixtures
 try:  # optional import for tests/monkeypatching
     from .home_assistant import startup_check as ha_startup  # type: ignore
 except Exception:  # pragma: no cover - optional
 
-    def ha_startup():  # type: ignore
+    def ha_startup() -> None:  # type: ignore
         return None
-
-
-try:
-    from app.api.ask import route_prompt as route_prompt  # re-export
-except Exception:
-    # fallback if module relocations during refactor
-    from app.router import route_prompt as route_prompt
 
 
 try:
     from .llama_integration import startup_check as llama_startup  # type: ignore
 except Exception:  # pragma: no cover - optional
 
-    def llama_startup():  # type: ignore
+    def llama_startup() -> None:  # type: ignore
         return None
 
 
-# Central note: Do NOT monkey‑patch PyJWT globally.
-# All JWT decoding is centralized in app.security.jwt_decode.
-# Router imports moved to create_app() to avoid import-time cycles
-
 try:
-    from .api.preflight import router as preflight_router
-except Exception:
-    preflight_router = None  # type: ignore
-
-try:
-    from .api.oauth_apple import router as _oauth_apple_router
-except Exception:
-    _oauth_apple_router = None  # type: ignore
-
-"""Optional Apple auth stub import (router mounted later once app exists)."""
-try:
-    from app.auth_providers import apple_enabled  # type: ignore
-except Exception:
-    # In environments without auth providers, default to disabled
-    def apple_enabled() -> bool:  # type: ignore
-        return False
-
-
-# Try to import the stub router but do NOT mount it before `app` exists
-try:
-    from app.api.oauth_apple_stub import router as apple_stub_router  # type: ignore
-except Exception:
-    apple_stub_router = None  # type: ignore
-try:
-    from .api.auth_password import router as auth_password_router
-except Exception:
-    auth_password_router = None  # type: ignore
-music_router = None  # legacy placeholder; music_http/music_ws are mounted explicitly
-try:
-    from .auth_device import router as device_auth_router
-except Exception:
-    device_auth_router = None  # type: ignore
-
-try:
-    from .auth_monitoring import record_ws_reconnect_attempt
+    from app.router.entrypoint import route_prompt as route_prompt  # re-export
 except Exception:  # pragma: no cover - optional
 
-    def record_ws_reconnect_attempt(*a, **k):
-        return None
+    def route_prompt(_: Any) -> Any:  # type: ignore
+        raise RuntimeError("route_prompt unavailable")
 
 
-from .session_manager import SESSIONS_DIR as SESSIONS_DIR  # re-export for tests
-from .storytime import schedule_nightly_jobs
+# Configure logging early in the process
+if os.getenv("ENV") != "test":
+    root_logger = logging.getLogger()
+    if not root_logger.handlers:
+        logging.basicConfig(
+            level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper()),
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            stream=sys.stdout,
+        )
+configure_logging()
+logger = logging.getLogger(__name__)
 
-try:
-    from .proactive_engine import get_self_review as _get_self_review  # type: ignore
-except Exception:  # pragma: no cover - optional
+# Snapshot docs configuration for downstream consumers
+_openapi_config = load_openapi_config()
+_DEV_SERVERS_SNAPSHOT = _openapi_config.get("dev_servers_snapshot")
+_IS_DEV_ENV = os.getenv("ENV", "dev").strip().lower() == "dev"
 
-    def _get_self_review():  # type: ignore
-        return None
-
-
-# Optional proactive engine hooks (disabled in tests if unavailable)
-def proactive_startup():
-    try:
-        from .proactive_engine import startup as _start
-
-        _start()
-    except Exception:
-        return None
-
-
-def _set_presence(*args, **kwargs):  # type: ignore
-    return None
-
-
-def _on_ha_event(*args, **kwargs):  # type: ignore
-    return None
-
-
-try:
-    from .deps.scopes import (
-        docs_security_with,
-        optional_require_any_scope,
-        optional_require_scope,
-        require_any_scopes,
-        require_scope,
-        require_scopes,
-    )
-except Exception:  # pragma: no cover - optional
-
-    def require_scope(scope: str):  # type: ignore
-        async def _noop(*args, **kwargs):
-            return None
-
-        return _noop
-
-    optional_require_scope = require_scope  # type: ignore
-
-    def optional_require_any_scope(scopes):  # type: ignore
-        return require_scope(next(iter(scopes), ""))
-
-    def require_scopes(scopes):  # type: ignore
-        return require_scope(next(iter(scopes), ""))
-
-    def require_any_scopes(scopes):  # type: ignore
-        return require_scope(next(iter(scopes), ""))
-
-    def docs_security_with(scopes):  # type: ignore
-        async def _noop2(*args, **kwargs):
-            return None
-
-        return _noop2
-
-
-# ensure optional import does not crash in test environment
-try:
-    from .proactive_engine import on_ha_event, set_presence
-except Exception:  # pragma: no cover - optional
-
-    def set_presence(*args, **kwargs):  # type: ignore
-        return None
-
-    def on_ha_event(*args, **kwargs):  # type: ignore
-        return None
+# Error tracking compatibility aliases
+_record_error = _record_error_impl
 
 
 def _anon_user_id(auth_header: str | None) -> str:
-    """Return a stable 32‑char hex ID from an optional ``Authorization`` header."""
+    """Return a stable 32-char hex ID from an optional Authorization header."""
     if not auth_header:
         return "local"
     token = auth_header.split()[-1]
     return hashlib.md5(token.encode()).hexdigest()
 
 
-# Configure logging first
-# Set up basic logging in entrypoint only (not in library code or tests)
-if os.getenv("ENV") != "test":
-    logging.basicConfig(
-        level=getattr(logging, os.getenv("LOG_LEVEL", "INFO").upper()),
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        stream=sys.stdout,
-    )
-configure_logging()
-logger = logging.getLogger(__name__)
-
-# Ensure a concrete router is registered at import time to avoid router-unavailable
-try:
-    from .router.model_router import model_router as _module_model_router
-    from .router.registry import get_router, set_router
-
-    try:
-        # Only set if not already configured
-        _ = get_router()
-    except Exception:
-        try:
-            set_router(_module_model_router)
-            logger.debug("Router registry set to model_router at import time")
-        except Exception:
-            logger.debug(
-                "Failed to set router registry at import time; will rely on create_app()"
-            )
-except Exception:
-    # Best-effort only; do not fail import if registry or model_router unavailable
-    pass
-
-
-# Import helper: prefer importlib over exec for safety/readability.
-import importlib
-
-
-def _import_router(module_path: str, *, attr: str = "router"):
-    try:
-        module = importlib.import_module(module_path, package=__package__)
-        return getattr(module, attr)
-    except Exception:
-        return None
-
-
-def _enforce_jwt_strength() -> None:
-    """Enforce JWT_SECRET strength at runtime during startup (not import).
-
-    - In production (ENV in {"prod","production"} or DEV_MODE!=1) a short secret is fatal.
-    - In dev/tests we only log a warning and continue.
-    """
-    sec = os.getenv("JWT_SECRET", "") or ""
-    env = os.getenv("ENV", "").strip().lower()
-    dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {"1", "true", "yes", "on"}
-
-    def _is_dev() -> bool:
-        return env == "dev" or dev_mode
-
-    if len(sec) >= 32:
-        logger.info("JWT secret: OK (len=%d)", len(sec))
-        return
-
-    # Weak secret handling
-    if _is_dev():
-        logger.warning(
-            "JWT secret: WEAK (len=%d) — allowed in dev/tests only", len(sec)
-        )
-        return
-
-    # Production (or non-dev): fail startup
-    raise RuntimeError("JWT_SECRET too weak (need >= 32 characters)")
-
-
-# Global error tracking
-_startup_errors = []
-_runtime_errors = []
-
-
-def _record_error(error: Exception, context: str = "unknown"):
-    """Record an error for monitoring and debugging."""
-    error_info = {
-        "timestamp": datetime.now(UTC).isoformat(),
-        "error_type": type(error).__name__,
-        "error_message": str(error),
-        "context": context,
-        "traceback": "".join(
-            traceback.format_exception(type(error), error, error.__traceback__)
-        ),
-    }
-    _runtime_errors.append(error_info)
-    if len(_runtime_errors) > 100:  # Keep only last 100 errors
-        _runtime_errors.pop(0)
-
-    # Also log to persistent audit trail for long-term diagnostics
-    try:
-        from .audit_new import AuditEvent, append
-
-        audit_event = AuditEvent(
-            user_id="system",
-            route=f"system.{context}",
-            method="ERROR",
-            status=500,
-            action="system_error",
-            meta={
-                "error_type": type(error).__name__,
-                "error_message": str(error),
-                "context": context,
-                "traceback": "".join(
-                    traceback.format_exception(type(error), error, error.__traceback__)
-                ),
-            },
-        )
-        append(audit_event)
-    except Exception as audit_error:
-        # Don't let audit logging failures break the main error handling
-        logger.debug(f"Failed to write error to audit log: {audit_error}")
-
-    logger.error(f"Error in {context}: {error}", exc_info=True)
-
-
-# Enhanced startup with comprehensive error tracking
-async def _enhanced_startup():
-    """Enhanced startup with comprehensive error tracking and logging."""
-    startup_start = time.time()
-    logger.info("Starting enhanced application startup")
-
-    try:
-        # Verify secret usage on boot
-        from .secret_verification import audit_prod_env, log_secret_summary
-
-        log_secret_summary()
-
-        # Enforce JWT strength at startup (moved from import-time)
-        try:
-            _enforce_jwt_strength()
-        except Exception as e:
-            logger.error("JWT secret validation failed: %s", e)
-            _record_error(e, "startup.jwt_secret")
-            raise  # This should be fatal
-
-        # Production environment audit (strict checks for prod)
-        try:
-            audit_prod_env()
-        except Exception as e:
-            logger.error("Production environment audit failed: %s", e)
-            _record_error(e, "startup.prod_audit")
-            raise  # This should be fatal
-
-        # Initialize core components with error tracking (delegated to app.startup)
-        try:
-            from app.startup.components import (
-                init_database,
-                init_home_assistant,
-                init_memory_store,
-                init_openai_health_check,
-                init_scheduler,
-                init_token_store_schema,
-                init_vector_store,
-            )
-
-            components = [
-                ("Database", init_database),
-                ("Database Migrations", init_database_migrations),
-                ("Token Store Schema", init_token_store_schema),
-                ("OpenAI Health Check", init_openai_health_check),
-                ("Vector Store", init_vector_store),
-                # ("LLaMA Integration", init_llama),  # Disabled for faster startup
-                ("Home Assistant", init_home_assistant),
-                ("Memory Store", init_memory_store),
-                ("Scheduler", init_scheduler),
-            ]
-        except Exception as e:
-            logger.warning("Failed to import startup components: %s", e)
-            components = []
-
-        total_components = len(components)
-        for i, (name, init_func) in enumerate(components, 1):
-            try:
-                start_time = time.time()
-                logger.info(f"[{i}/{total_components}] Initializing {name}...")
-
-                # Create a task with timeout to prevent hanging
-                import asyncio
-
-                try:
-                    task = asyncio.create_task(init_func())
-                    await asyncio.wait_for(
-                        task, timeout=30.0
-                    )  # 30 second timeout per component
-                    duration = time.time() - start_time
-                    logger.info(f"✅ {name} initialized successfully ({duration:.1f}s)")
-                except TimeoutError:
-                    logger.warning(
-                        f"⚠️ {name} initialization timed out after 30s - continuing startup"
-                    )
-                    _record_error(
-                        TimeoutError(f"{name} init timeout"),
-                        f"startup.{name.lower().replace(' ', '_')}",
-                    )
-                    continue
-                except Exception as e:
-                    duration = time.time() - start_time
-                    logger.warning(f"⚠️ {name} failed after {duration:.1f}s: {e}")
-                    _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
-                    continue
-
-            except Exception as e:
-                error_msg = f"Critical error initializing {name}: {e}"
-                logger.error(error_msg, exc_info=True)
-                _record_error(e, f"startup.{name.lower().replace(' ', '_')}")
-                # Continue startup even if some components fail
-                continue
-
-        # Schedule nightly jobs (no-op if scheduler unavailable)
-        try:
-            schedule_nightly_jobs()
-        except Exception as e:
-            logger.debug("schedule_nightly_jobs failed", exc_info=True)
-            _record_error(e, "startup.nightly_jobs")
-
-        try:
-            proactive_startup()
-        except Exception as e:
-            logger.debug("proactive_startup failed", exc_info=True)
-            _record_error(e, "startup.proactive")
-
-        # Start token store cleanup task
-        try:
-            from .token_store import start_cleanup_task
-
-            await start_cleanup_task()
-        except Exception as e:
-            logger.debug("token store cleanup task not started", exc_info=True)
-            _record_error(e, "startup.token_store")
-
-        startup_time = time.time() - startup_start
-        logger.info(f"Application startup completed in {startup_time:.2f}s")
-
-    except Exception as e:
-        error_msg = f"Critical startup failure: {e}"
-        logger.error(error_msg, exc_info=True)
-        _record_error(e, "startup.critical")
-        raise
-
-
-async def _init_database():
-    """Initialize database connections and verify connectivity."""
-    try:
-        # Database schemas are now initialized once during app startup
-        # This function now only verifies connectivity
-        logger.info(
-            "Database connectivity verified - schemas already initialized at startup"
-        )
-    except Exception as e:
-        logger.error(f"Database connectivity test failed: {e}")
-        raise
-
-
-async def _init_token_store_schema():
-    try:
-        # Start schema migration in background (non-blocking)
-        import asyncio
-
-        from .auth_store_tokens import token_dao
-
-        asyncio.create_task(token_dao.ensure_schema_migrated())
-        logger.debug("Token store schema migration started in background")
-    except Exception as e:
-        logger.error(f"Token store schema init failed: {e}")
-        raise
-
-
-async def _init_openai_health_check():
-    """Perform OpenAI startup health check using the startup module."""
-    try:
-        from .startup import check_vendor_health_gated
-
-        logger.info("Performing OpenAI startup health check")
-        result = await check_vendor_health_gated("openai")
-
-        if result["status"] in ["skipped", "missing_config"]:
-            logger.debug(
-                "OpenAI health check %s: %s", result["status"], result.get("reason", "")
-            )
-            return
-        elif result["status"] == "healthy":
-            logger.info("OpenAI startup health check successful")
-            return
-        else:
-            # Health check failed
-            error_msg = result.get(
-                "error", f"Health check failed with status: {result['status']}"
-            )
-            logger.error("OpenAI startup health check failed: %s", error_msg)
-            raise RuntimeError(f"OpenAI health check failed: {error_msg}")
-
-    except Exception as e:
-        logger.error("OpenAI startup health check failed: %s", e)
-        raise
-
-
-async def _init_vector_store():
-    """Initialize vector store with read-only health check."""
-    try:
-        from .memory.api import _get_store
-
-        store = _get_store()
-
-        # Read-only connectivity test - be tolerant of sync vs async implementations
-        try:
-            import inspect
-
-            if hasattr(store, "ping"):
-                ping_fn = store.ping
-                # If ping is an async function, await it; otherwise call it and await result if awaitable
-                if inspect.iscoroutinefunction(ping_fn):
-                    await ping_fn()
-                else:
-                    res = ping_fn()
-                    if inspect.isawaitable(res):
-                        await res
-            elif hasattr(store, "search_memories"):
-                search_fn = store.search_memories
-                # Call search with minimal impact; handle sync and async
-                if inspect.iscoroutinefunction(search_fn):
-                    await search_fn("", "", limit=0)
-                else:
-                    res = search_fn("", "", limit=0)
-                    if inspect.isawaitable(res):
-                        await res
-            else:
-                # Fallback: just get the store instance
-                pass
-
-        except Exception:
-            # Bubble up to outer handler which will log and record the error
-            raise
-
-        logger.debug("Vector store initialization successful")
-    except Exception as e:
-        logger.error(f"Vector store initialization failed: {e}")
-        raise
-
-
-async def _init_llama():
-    """Initialize LLaMA integration with health check."""
-    try:
-        # Check if LLaMA is explicitly disabled
-        llama_enabled = (os.getenv("LLAMA_ENABLED") or "").strip().lower()
-        if llama_enabled in {"0", "false", "no", "off"}:
-            logger.debug(
-                "LLaMA integration disabled via LLAMA_ENABLED environment variable"
-            )
-            return
-
-        # Check if Ollama URL is configured (fallback for when LLAMA_ENABLED is not set)
-        ollama_url = os.getenv("OLLAMA_URL") or os.getenv("LLAMA_URL")
-        if not ollama_url and llama_enabled not in {"1", "true", "yes", "on"}:
-            logger.debug(
-                "LLaMA integration not configured (no OLLAMA_URL), skipping initialization"
-            )
-            return
-
-        from .llama_integration import _check_and_set_flag
-
-        await _check_and_set_flag()
-        logger.debug("LLaMA integration initialization successful")
-    except Exception as e:
-        logger.error(f"LLaMA integration initialization failed: {e}")
-        raise
-
-
-async def _init_home_assistant():
-    """Initialize Home Assistant integration."""
-    try:
-        # Check if Home Assistant is explicitly disabled
-        ha_enabled = (os.getenv("HOME_ASSISTANT_ENABLED") or "").strip().lower()
-        if ha_enabled in {"0", "false", "no", "off"}:
-            logger.debug(
-                "Home Assistant integration disabled via HOME_ASSISTANT_ENABLED environment variable"
-            )
-            return
-
-        # Check if Home Assistant URL is configured
-        ha_url = os.getenv("HOME_ASSISTANT_URL")
-        if not ha_url:
-            logger.debug(
-                "Home Assistant not configured (no HOME_ASSISTANT_URL), skipping initialization"
-            )
-            return
-
-        from .home_assistant import get_states
-
-        # Test HA connectivity if configured and enabled
-        await get_states()
-        logger.debug("Home Assistant integration initialization successful")
-    except Exception as e:
-        logger.error(f"Home Assistant initialization failed: {e}")
-        raise
-
-
-async def _init_memory_store():
-    """Initialize memory store."""
-    try:
-        from .memory.api import _get_store
-
-        _ = _get_store()
-        logger.debug("Memory store initialization successful")
-    except Exception as e:
-        logger.error(f"Memory store initialization failed: {e}")
-        raise
-
-
-async def _init_scheduler():
-    """Initialize scheduler."""
-    try:
-        from .deps.scheduler import scheduler
-
-        if scheduler.running:
-            logger.debug("Scheduler already running")
-            return
-
-        # Check if scheduler.start() is awaitable
-        start_method = scheduler.start
-        if callable(start_method):
-            # Try to determine if it's async by checking the return type or signature
-            import inspect
-
-            if inspect.iscoroutinefunction(start_method):
-                # It's an async function, await it
-                await start_method()
-            else:
-                # It's a sync function, call it directly
-                start_method()
-        else:
-            # Fallback: call it directly
-            start_method()
-
-        logger.debug("Scheduler initialization successful")
-
-    except Exception as e:
-        logger.warning(
-            f"Scheduler initialization failed: {e}. Continuing without background jobs."
-        )
-        # Don't raise - make scheduler optional
-        return
-
-
-# Enhanced error handling middleware
-async def enhanced_error_handling(request: Request, call_next):
-    """Enhanced error handling middleware with comprehensive logging."""
-    start_time = time.time()
-    req_id = req_id_var.get()
-
-    try:
-        # Augment logs with route and anonymized user id for observability
-        route_name = None
-        try:
-            route_name = getattr(request.scope.get("endpoint"), "__name__", None)
-        except Exception:
-            route_name = None
-
-        user_anon = _anon_user_id(request.headers.get("authorization"))
-
-        logger.debug(
-            f"Request started: {request.method} {request.url.path} (ID: {req_id})"
-        )
-
-        # Log request details in debug mode
-        if logger.isEnabledFor(logging.DEBUG):
-            headers = dict(request.headers)
-            # Redact sensitive headers
-            for key in ["authorization", "cookie", "x-api-key"]:
-                if key in headers:
-                    headers[key] = "[REDACTED]"
-
-            logger.debug(
-                f"Request details: {request.method} {request.url.path}",
-                extra={
-                    "meta": {
-                        "req_id": req_id,
-                        "route": route_name,
-                        "user_anon": user_anon,
-                        "headers": headers,
-                        "query_params": dict(request.query_params),
-                        "client_ip": request.client.host if request.client else None,
-                    }
-                },
-            )
-
-        response = await call_next(request)
-
-        # Log response details
-        duration = time.time() - start_time
-        logger.info(
-            f"Request completed: {request.method} {request.url.path} -> {response.status_code} ({duration:.3f}s)",
-            extra={
-                "meta": {
-                    "req_id": req_id,
-                    "route": route_name,
-                    "user_anon": user_anon,
-                    "status_code": response.status_code,
-                    "duration_ms": duration * 1000,
-                }
-            },
-        )
-
-        return response
-
-    except Exception as e:
-        duration = time.time() - start_time
-        error_msg = f"Request failed: {request.method} {request.url.path} -> {type(e).__name__}: {e}"
-        logger.error(
-            error_msg,
-            exc_info=True,
-            extra={
-                "meta": {
-                    "req_id": req_id,
-                    "route": route_name,
-                    "user_anon": user_anon,
-                    "duration_ms": duration * 1000,
-                    "error_type": type(e).__name__,
-                    "error_message": str(e),
-                }
-            },
-        )
-        _record_error(
-            e, f"request.{request.method.lower()}.{request.url.path.replace('/', '_')}"
-        )
-
-        # Return a proper error response
-        return JSONResponse(
-            status_code=500,
-            content={
-                "error": "Internal server error",
-                "req_id": req_id,
-                "timestamp": datetime.now(UTC).isoformat(),
-            },
-        )
-
-
-# Startup is now handled directly in the lifespan function
-# using the enhanced startup with comprehensive error tracking
-
-
-tags_metadata = [
-    {
-        "name": "Care",
-        "description": "Care features, contacts, sessions, and Home Assistant actions.",
-    },
-    {"name": "Music", "description": "Music playback, voices, and TTS."},
-    {"name": "Calendar", "description": "Calendar and reminders."},
-    {"name": "TV", "description": "TV UI and related endpoints."},
-    {"name": "Admin", "description": "Admin, status, models, diagnostics, and tools."},
-    {"name": "Auth", "description": "Authentication and authorization."},
-]
-
-
-def _get_version() -> str:
-    """Return a semantic version string for the API.
-
-    Priority:
-    1) ENV APP_VERSION
-    2) ENV GIT_TAG
-    3) `git describe --tags --always`
-    4) Fallback "0.0.0"
-    """
-    try:
-        ver = os.getenv("APP_VERSION") or os.getenv("GIT_TAG")
-        if ver:
-            return ver
-        import subprocess
-
-        proc = subprocess.run(
-            ["git", "describe", "--tags", "--always"],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-        out = (proc.stdout or "").strip()
-        if out:
-            return out
-    except Exception:
-        pass
-    return "0.0.0"
-
-
-_IS_DEV_ENV = os.getenv("ENV", "dev").strip().lower() == "dev"
-
-# Import docs configuration
-from .config_docs import get_docs_visibility_config, get_swagger_ui_parameters
-
-_docs_config = get_docs_visibility_config()
-_docs_url = _docs_config["docs_url"]
-_redoc_url = _docs_config["redoc_url"]
-_openapi_url = _docs_config["openapi_url"]
-_swagger_ui_parameters = get_swagger_ui_parameters()
-
-# Snapshot dev servers override at import time so tests that temporarily set
-# OPENAPI_DEV_SERVERS during module reload still see the intended values even if
-# the environment is restored before /openapi.json is requested.
-_DEV_SERVERS_SNAPSHOT = os.getenv("OPENAPI_DEV_SERVERS")
-
-from app.startup import lifespan  # NEW: use extracted lifespan
-
-
 def create_app() -> FastAPI:
-    """Composition root helper to perform late DI wiring.
+    """Composition root for the FastAPI application."""
+    app = build_application()
 
-    This function assembles the complete FastAPI application from leaf routers
-    via the bootstrap registry. Only this function should wire the application
-    together to avoid circular imports.
-    """
-    logger.info("🔧 Starting application composition in create_app()")
+    # Backwards compatibility: some tests expect these attributes on the app
+    app.ha_startup = ha_startup  # type: ignore[attr-defined]
+    app.llama_startup = llama_startup  # type: ignore[attr-defined]
 
-    # Import guards at top of create_app()
-    import os
-
-    DEBUG = os.getenv("GSN_DEBUG_STARTUP") == "1"
-
-    # Add fault handler for startup diagnostics
-    if DEBUG:
-        import faulthandler
-        import sys
-
-        faulthandler.dump_traceback_later(8, repeat=True, file=sys.stderr)
-
-    # Construct app with single composition root + lifespan
-    app = FastAPI(
-        title="GesahniV2",
-        # Ensure OpenAPI has a non-empty version (FastAPI requires this)
-        # Invariant: prefer _get_version() with fallback to APP_VERSION env
-        version=_get_version() or os.getenv("APP_VERSION", ""),
-        lifespan=lifespan,
-        # Optional but nice: keep tags if defined
-        openapi_tags=tags_metadata,
-    )
-
-    # Immediately after `app = FastAPI(...)`:
-    if DEBUG:
-        from app.diagnostics.startup_probe import probe
-        from app.diagnostics.state import record_event, set_snapshot
-
-        set_snapshot("before", probe(app))
-        record_event("app-created", "FastAPI instantiated")
-
-        # Wrap include_router to trace calls (observation-only)
-        _orig_include = app.include_router
-
-        def _trace_include(router, *args, **kwargs):
-            from app.diagnostics.state import record_router_call
-
-            prefix = kwargs.get("prefix")
-            try:
-                where = f"{router.tags if hasattr(router,'tags') else ''}"
-            except Exception:
-                where = "<router>"
-            res = _orig_include(router, *args, **kwargs)
-            record_router_call(
-                where=str(where), prefix=prefix, routes_total=len(app.routes)
-            )
-            return res
-
-        app.include_router = _trace_include  # type: ignore[attr-defined]
-
-    # Register routers once via registry with dev/prod handling
-    from app.routers.config import register_routers
-
-    DEV = os.getenv("ENV", "dev") == "dev"
-    try:
-        register_routers(app)
-    except Exception as e:
-        if DEV:
-            raise
-        # Invariant: canonical error handling for router registration
-        logger.exception("Router registration failed; continuing (prod): %s", e)
-
-    # Include dev-only router
-    if os.getenv("ENV", "dev").lower() in {"dev", "local"}:
-        try:
-            from app.api.dev import router as dev_router
-
-            app.include_router(dev_router, prefix="/dev", tags=["Dev"])
-        except Exception as e:
-            logger.warning("Failed to include dev router: %s", e)
-
-    # Dev self-check to guarantee health endpoints mounted
-    if DEV:
-        paths = {getattr(r, "path", None) for r in app.routes}
-        assert "/healthz" in paths, "healthz missing after registration"
-
-    # AutoOptionsMiddleware removed; Next proxy keeps dev same-origin, and a single
-    # Starlette CORSMiddleware (mounted only when CORS_ALLOW_ORIGINS is set) handles OPTIONS.
-
-    # Phase 7: Initialize infrastructure singletons first (needed by router)
-    try:
-        from .infra.model_router import init_model_router
-        from .infra.oauth_monitor import init_oauth_monitor
-        from .infra.router_rules import init_router_rules_cache
-
-        init_model_router()
-        init_router_rules_cache()
-        init_oauth_monitor()
-
-        logger.debug("✅ Infrastructure singletons initialized")
-    except Exception as e:
-        logger.warning("⚠️  Failed to initialize infrastructure singletons: %s", e)
-
-    # Phase 4: Wire router using bootstrap registry (now infrastructure is ready)
-    try:
-        from .bootstrap.router_registry import configure_default_router
-
-        configure_default_router()
-        logger.debug("✅ Router configured via bootstrap registry")
-    except Exception as e:
-        logger.warning("⚠️  Failed to configure router: %s", e)
-
-    # Bind a single source of truth for the prompt backend onto app.state
-    @app.on_event("startup")
-    async def _bind_prompt_backend():
-        try:
-            # Defer settings import to avoid side-effects at module import
-            from app.settings import settings
-
-            backend = getattr(
-                settings, "PROMPT_BACKEND", os.getenv("PROMPT_BACKEND", "live")
-            ).lower()
-        except Exception:
-            backend = os.getenv("PROMPT_BACKEND", "live").lower()
-
-        if backend == "openai":
-            from app.routers.openai_router import openai_router
-
-            app.state.prompt_router = openai_router
-            logger.info("prompt backend bound: openai")
-        elif backend == "llama":
-            from app.routers.llama_router import llama_router
-
-            app.state.prompt_router = llama_router
-            logger.info("prompt backend bound: llama")
-        elif backend == "dryrun":
-
-            async def dryrun_router(payload: dict) -> dict:
-                return {"dry_run": True, "echo": payload}
-
-            app.state.prompt_router = dryrun_router
-            logger.info("prompt backend bound: dryrun (safe default)")
-        else:
-            # Fail closed; endpoints will map this to 503
-            raise BackendUnavailableError(f"Unknown PROMPT_BACKEND={backend!r}")
-
-    # Also inside create_app(), attach startup/shutdown event markers (observation only):
-    @app.on_event("startup")
-    async def _diag_start():
-        if DEBUG:
-            from app.diagnostics.state import record_event
-
-            record_event("startup", "application startup")
-
-    # Auth cookie config dump (only when AUTH_DEBUG=1)
-    @app.on_event("startup")
-    async def _auth_cookie_cfg_dump():
-        try:
-            if os.getenv("AUTH_DEBUG") == "1":
-                from app.startup.auth_config_dump import dump_cookie_config
-
-                dump_cookie_config()
-        except Exception:
-            # Never fail startup due to debug logging
-            pass
-
-    @app.on_event("shutdown")
-    async def _diag_stop():
-        if DEBUG:
-            from app.diagnostics.state import record_event
-
-            record_event("shutdown", "application shutdown")
-
-    # Register backend factory for swappable, lazy backends (openai/llama/dryrun)
-    try:
-        from app.routers import register_backend_factory
-
-        def _backend_factory(name: str):
-            # Resolve backend callables lazily to avoid heavy imports at import-time
-            if name == "openai":
-                from app.routers.openai_router import openai_router
-
-                return openai_router
-            if name == "llama":
-                from app.routers.llama_router import llama_router
-
-                return llama_router
-            if name == "dryrun":
-                from app.routers.dryrun_router import dryrun_router
-
-                return dryrun_router
-
-            # Fallback for unknown backends - should not happen in frozen contract
-            async def _unknown_backend(payload: dict) -> dict:
-                raise RuntimeError(f"Unknown backend: {name}")
-
-            return _unknown_backend
-
-        register_backend_factory(_backend_factory)
-        logger.debug("✅ Backend factory registered (openai/llama/dryrun)")
-    except Exception as e:
-        logger.warning("⚠️  Failed to register backend factory: %s", e)
-
-    # Routers are already registered above; do not re-register or include temporary health router
-
-    # Test syntax error to see if this code path is executed
-    # This will cause a startup failure if this code is reached
-    # raise RuntimeError("TEST: This should cause startup failure")
-
-    # Error handlers (single registration point) - MUST happen before middleware setup
-    from app.error_handlers import register_error_handlers
-
-    register_error_handlers(app)
-
-    # CORS middleware moved to middleware/stack.py to avoid duplicates
-
-    # Phase 6.1: Set up canonical middleware stack (isolated from routers)
-    # Note: middleware setup is intentionally executed after registering error handlers
-    from app.middleware.loader import register_canonical_middlewares
-
-    csrf_enabled = bool(int(os.getenv("CSRF_ENABLED", "1")))
-    # Get CORS origins from centralized settings (handles dev proxy mode)
-    from app.settings_cors import get_cors_origins
-
-    cors_origins = get_cors_origins()
-    register_canonical_middlewares(
-        app, csrf_enabled=csrf_enabled, cors_origins=cors_origins
-    )
-    logger.debug("✅ Canonical middleware stack configured")
-
-    # Strict vector store preflight: fail startup early when STRICT_VECTOR_STORE is set
-    try:
-        strict_vs = (os.getenv("STRICT_VECTOR_STORE") or "").strip().lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
-        if strict_vs:
-            from app.memory.unified_store import create_vector_store as _create_vs
-
-            _create_vs()  # raise on invalid DSN when strict
-    except Exception:
-        # Let the exception propagate to fail-fast under strict mode
-        raise
-
-    # Phase 7: Register test router for error normalization testing (dev only)
-    try:
-        logger.debug("Attempting to register test error normalization router...")
-        from .test_error_normalization import router as test_router
-
-        app.include_router(test_router, prefix="/test-errors", tags=["test-errors"])
-        logger.info("✅ Test error normalization router registered at /test-errors")
-    except ImportError as e:
-        logger.warning("⚠️  Failed to import test router: %s", e)
-    except Exception as e:
-        logger.warning("⚠️  Failed to register test router: %s", e)
-
-    # Status and health routers are included via the canonical registry.
-    # Do not include them manually to avoid duplicates.
-
-    # Phase 6: Set up OpenAPI generation (isolated from routers)
-    try:
-        from .openapi.generator import setup_openapi_for_app
-
-        setup_openapi_for_app(app)
-        logger.debug("✅ OpenAPI generation configured")
-    except Exception as e:
-        logger.warning("⚠️  Failed to set up OpenAPI generation: %s", e)
-
-    # Optional static mounts
-    try:
-        _tv_dir = os.getenv("TV_PHOTOS_DIR", "data/shared_photos")
-        if _tv_dir:
-            app.mount(
-                "/shared_photos", StaticFiles(directory=_tv_dir), name="shared_photos"
-            )
-    except Exception:
-        pass
-
-    try:
-        _album_dir = os.getenv("ALBUM_ART_DIR", "data/album_art")
-        if _album_dir:
-            Path(_album_dir).mkdir(parents=True, exist_ok=True)
-            app.mount("/album_art", StaticFiles(directory=_album_dir), name="album_art")
-    except Exception:
-        pass
-
-    # Legacy Google OAuth callback is now handled by app/api/google_compat.py with feature flag
-
-    # Infrastructure initialization moved to beginning of create_app()
-
-    # After **all** middleware and routers are registered, but before return:
-    from fastapi import APIRouter, Query
-
-    from app.diagnostics.startup_probe import probe
-    from app.diagnostics.state import (
-        events,
-        get_snapshot,
-        import_timings,
-        record_event,
-        router_calls,
-        set_snapshot,
-    )
-
-    # Always take snapshot for diagnostic endpoints (lazy imports)
-    set_snapshot("after", probe(app))
-
-    if DEBUG:
-        record_event("wiring-complete", "routers+middleware registered")
-
-    # Always create diagnostic router for CI/regression testing
-    diag = APIRouter()
-
-    @diag.get("/__diag/startup", include_in_schema=False)
-    async def __diag_startup(phase: str = Query(default="after")):
-        return get_snapshot("before" if phase == "before" else "after")
-
-    @diag.get("/__diag/events", include_in_schema=False)
-    async def __diag_events():
-        return {
-            "events": events(),
-            "router_calls": router_calls(),
-            "import_timings": import_timings(),
-        }
-
-    @diag.get("/__diag/verify", include_in_schema=False)
-    async def __diag_verify():
-        snap = get_snapshot("after")
-        routes = snap.get("routes", [])
-        mids = [m.get("class_name") for m in snap.get("middlewares", [])]
-        paths = [r.get("path") for r in routes]
-        checks = []
-
-        def add(name, ok, details=""):
-            checks.append({"name": name, "ok": bool(ok), "details": details})
-
-        try:
-            cors_required = bool(
-                (
-                    os.getenv("CORS_ORIGINS") or os.getenv("CORS_ALLOW_ORIGINS") or ""
-                ).strip()
-            )
-        except Exception:
-            cors_required = False
-        if cors_required:
-            add(
-                "CORS present once",
-                mids.count("CORSMiddleware") == 1,
-                f"count={mids.count('CORSMiddleware')}",
-            )
-        else:
-            add(
-                "CORS omitted in proxy/same-origin",
-                mids.count("CORSMiddleware") == 0,
-                f"count={mids.count('CORSMiddleware')}",
-            )
-        if "CSRFMiddleware" in mids and "CORSMiddleware" in mids:
-            add(
-                "CSRF after CORS",
-                mids.index("CSRFMiddleware") > mids.index("CORSMiddleware"),
-                f"order={mids}",
-            )
-        else:
-            add("CSRF ordering skipped", True, "CSRF or CORS missing")
-
-        add("has /v1/whoami", "/v1/whoami" in paths)
-        add("has health", ("/health" in paths) or ("/v1/health" in paths))
-        dup = sorted({p for p in paths if paths.count(p) > 1})
-        add("no duplicate paths", not dup, f"dups={dup}")
-
-        passed = all(c["ok"] for c in checks)
-        return {"phase": snap.get("phase", "after"), "passed": passed, "checks": checks}
-
-    @diag.get("/__diag/fingerprint", include_in_schema=False)
-    async def __diag_fingerprint():
-        """Generate a stable fingerprint of the application state for regression detection."""
-        snap = get_snapshot("after")
-        routes = snap.get("routes", [])
-        mids = snap.get("middlewares", [])
-
-        # Collect stable identifiers
-        route_info = []
-        for r in sorted(routes, key=lambda x: x.get("path", "")):
-            route_info.append(
-                {
-                    "path": r.get("path", ""),
-                    "methods": sorted(r.get("methods", [])),
-                    "name": r.get("name", ""),
-                }
-            )
-
-        middleware_info = []
-        for m in mids:
-            middleware_info.append(
-                {"class_name": m.get("class_name", ""), "name": m.get("name", "")}
-            )
-
-        # Create stable fingerprint
-        fingerprint_data = {
-            "routes": route_info,
-            "middlewares": middleware_info,
-            "phase": snap.get("phase", "after"),
-        }
-
-        # Convert to JSON string and hash for stable fingerprint
-        import json
-
-        stable_json = json.dumps(
-            fingerprint_data, sort_keys=True, separators=(",", ":")
-        )
-        fingerprint = hashlib.sha256(stable_json.encode("utf-8")).hexdigest()[:16]
-
-        return {
-            "fingerprint": fingerprint,
-            "data": fingerprint_data,
-            "generated_at": snap.get("timestamp", "unknown"),
-        }
-
-    app.include_router(diag)
-    logger.info(f"DEBUG: Diagnostic router included with {len(diag.routes)} routes")
-
-    # Startup-time route collision check: ensure no duplicate (method, path) pairs
-    def _check_route_collisions():
-        from collections import defaultdict
-
-        pair_to_handlers: dict[tuple[str, str], list[str]] = defaultdict(list)
-
-        for route in app.routes:
-            # FastAPI/Starlette routes expose .methods (set) and .path
-            methods = getattr(route, "methods", None)
-            path = getattr(route, "path", None)
-            endpoint = getattr(route, "endpoint", None)
-            qualname = None
-            try:
-                qualname = f"{endpoint.__module__}.{endpoint.__qualname__}"
-            except Exception:
-                qualname = repr(endpoint)
-
-            if not methods or not path:
-                continue
-
-            for m in methods:
-                # Skip automatic HEAD added by Starlette when GET exists
-                if m == "HEAD":
-                    continue
-                pair_to_handlers[(m, path)].append(qualname)
-
-        # Find duplicates where more than one handler is registered for same (method,path)
-        # Allow compat router to override other routers (compat endpoints take precedence)
-        duplicates = {}
-        for pair, handlers in pair_to_handlers.items():
-            if len(handlers) > 1:
-                # Check if any handler is from the compat router
-                compat_handlers = [h for h in handlers if "compat_api" in h]
-                non_compat_handlers = [h for h in handlers if "compat_api" not in h]
-
-                # If we have both compat and non-compat handlers, only report as duplicate
-                # if there are multiple non-compat handlers (compat should override)
-                if len(non_compat_handlers) > 1:
-                    duplicates[pair] = handlers
-                elif len(compat_handlers) > 0 and len(non_compat_handlers) == 1:
-                    # Compat router overriding another router - this is allowed
-                    continue
-                else:
-                    # Other cases of duplicates
-                    duplicates[pair] = handlers
-
-        if duplicates:
-            lines = [f"Duplicate route registrations detected ({len(duplicates)}):"]
-            for (method, path), handlers in sorted(duplicates.items()):
-                lines.append(f" - {method} {path}:\n    " + "\n    ".join(handlers))
-            raise ValueError("\n".join(lines))
-
-    try:
-        _check_route_collisions()
-    except Exception:
-        # Make collision failures explicit during startup so CI/tests fail fast
-        logger.exception("Route collision check failed")
-        raise
-
-    # Register standardized error handlers to enforce error response contract
-    from app.errors import register_error_handlers
-
-    register_error_handlers(app)
-
-    logger.info("🎉 Application composition complete in create_app()")
     return app
 
 
-# Wire store providers into middleware (dependency injection)
-# Import stores *after* app exists to avoid import-time cycles
-from .middleware.middleware_core import set_store_providers
-from .user_store import user_store
+_app_instance: FastAPI | None = None
 
+
+def get_app() -> FastAPI:
+    """Get the FastAPI app instance, creating it lazily if needed."""
+    global _app_instance
+    if _app_instance is None:
+        _app_instance = create_app()
+    return _app_instance
+
+
+class _LazyApp:
+    """Lazy app accessor that creates the app only when accessed."""
+
+    _instance: FastAPI | None = None
+
+    async def __call__(self, scope, receive, send):
+        if self._instance is None:
+            self._instance = get_app()
+        return await self._instance(scope, receive, send)
+
+    def __getattr__(self, name: str) -> Any:
+        if self._instance is None:
+            self._instance = get_app()
+        return getattr(self._instance, name)
+
+    def __repr__(self) -> str:
+        if self._instance is None:
+            return "<LazyApp: not yet created>"
+        return repr(self._instance)
+
+
+app = _LazyApp()
+
+# Wire store providers into middleware (dependency injection)
 set_store_providers(user_store_provider=lambda: user_store)
 
-
-# OpenAPI setup moved to create_app() to avoid import-time cycles
-
-# CORS configuration will be set up later after all imports
-
-# The HTTP->WS guard and debug endpoints have been moved to modular routers:
-# - HTTP->WS guard is implemented in `app/api/ws_endpoints.py` as an APIRouter
-# - Debug endpoints are implemented in `app/api/debug.py` (dev-only)
-# These were removed from the main module to keep `app/main.py` minimal.
-
-# Removed legacy unversioned /whoami to ensure a single canonical /v1/whoami
-
-_HEALTH_LAST: dict[str, bool] = {"online": True}
-
-# Root and health endpoints are provided by `status_router` and `health_router`.
-# To keep the main module focused on bootstrapping and router includes, local
-# implementations were removed in favor of the imported routers.
-
-
-# Dev-only WS helper moved to `app/api/debug.py`
-
-
-class AskRequest(BaseModel):
-    # Accept both legacy text and chat-style array
-    prompt: str | list[dict]
-    model_override: str | None = Field(None, alias="model")
-    stream: bool | None = Field(
-        False, description="Force SSE when true; otherwise negotiated via Accept"
-    )
-
-    # Pydantic v2 config: allow both alias ("model") and field name ("model_override")
-    model_config = ConfigDict(
-        title="AskRequest",
-        validate_by_name=True,
-        validate_by_alias=True,
-        json_schema_extra={"examples": [{"prompt": "hello"}]},
-    )
-
-
-class ServiceRequest(BaseModel):
-    domain: str
-    service: str
-    data: dict | None = None
-
-    model_config = ConfigDict(
-        json_schema_extra={
-            "examples": [
-                {
-                    "domain": "light",
-                    "service": "turn_on",
-                    "data": {"entity_id": "light.kitchen"},
-                }
-            ]
-        }
-    )
-
-
-# Profile and onboarding endpoints have moved to app.api.profile
-
-
-# HA endpoints have been moved to `app/api/ha_local.py` and/or `app/api/ha.py`.
-# Local ha_router definitions and handlers removed from main to keep imports modular.
-
-
-# The following core handlers were moved to modular routers:
-# - explain_route -> app/api/core_misc.py
-# - transcribe endpoints -> app/api/transcribe.py
-# The business handlers were removed from main.py to keep it focused on bootstrap and router includes.
-
-
-# =============================================================================
-# Canonical router mounts (explicit prefixes)
-# =============================================================================
-
-# CORS configuration moved to middleware/stack.py to avoid import-time cycles
-
-# All router includes moved to create_app() to avoid import-time cycles
-
-# All router includes moved to create_app() to avoid import-time cycles
-
-# All router includes moved to create_app() to avoid import-time cycles
-
-# All router includes moved to create_app() to avoid import-time cycles
-
-# All router includes moved to create_app() to avoid import-time cycles
-
-# All router includes moved to create_app() to avoid import-time cycles
-
-
-# Middleware setup moved to create_app() to avoid import-time cycles
-
-
-# Middleware order validation moved to middleware/stack.py
-
-
-# Final startup logging - simplified
 logging.info(
-    f"Server starting on {os.getenv('HOST', '0.0.0.0')}:{os.getenv('PORT', '8000')}"
+    "Server starting on %s:%s",
+    os.getenv("HOST", "0.0.0.0"),
+    os.getenv("PORT", "8000"),
 )
-
 
 if __name__ == "__main__":
     import uvicorn
 
-    # Read host and port from environment variables
     host = os.getenv("HOST", "0.0.0.0")
     port = int(os.getenv("PORT", 8000))
+    uvicorn.run(create_app(), host=host, port=port)
 
-    # Use create_app() for full application setup
-    full_app = create_app()
-    uvicorn.run(full_app, host=host, port=port)
 
-# Create the FastAPI app instance for uvicorn
-app = create_app()
-
-__all__ = ["create_app", "app"]
+__all__ = [
+    "app",
+    "create_app",
+    "get_app",
+    "route_prompt",
+    "ha_startup",
+    "llama_startup",
+    "SESSIONS_DIR",
+    "_anon_user_id",
+    "_enhanced_startup",
+    "_record_error",
+    "_runtime_errors",
+    "_startup_errors",
+    "enforce_jwt_strength",
+    "proactive_startup",
+]

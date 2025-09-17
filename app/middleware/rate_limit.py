@@ -4,10 +4,10 @@ import os
 import sys
 import time
 
-from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 
+from app.errors import json_error
 from app.headers import get_rate_limit_headers, get_retry_after_header
 
 # Import settings and header utilities
@@ -232,6 +232,16 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if scopes and bypass_scopes.intersection(scopes):
             return await call_next(request)
 
+        # Development mode: bypass rate limits for authenticated users
+        dev_mode = os.getenv("DEV_MODE", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+        if dev_mode and uid and uid != "anon":
+            return await call_next(request)
+
         ip = request.client.host if request.client else "0.0.0.0"
         k = _key(ip, p, uid)
         now = int(time.time())
@@ -260,16 +270,20 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             headers = {**rate_limit_headers, **retry_after_headers}
 
             # Return standard error envelope for rate limited requests
-            error_response = {
-                "code": "rate_limited",
-                "message": "Rate limit exceeded",
-                "detail": "Rate limit exceeded",
-                "hint": f"Please wait {window_s} seconds before retrying",
-                "meta": {
+            error_response = json_error(
+                code="rate_limited",
+                message="Rate limit exceeded",
+                http_status=429,
+                meta={
+                    "detail": "Rate limit exceeded",
+                    "hint": f"Please wait {window_s} seconds before retrying",
                     "retry_after_seconds": window_s,
                 },
-            }
-            return JSONResponse(error_response, status_code=429, headers=headers)
+            )
+            # Add headers to the response
+            for key, value in headers.items():
+                error_response.headers[key] = value
+            return error_response
 
         # For successful requests, add rate limit headers to the response
         response = await call_next(request)

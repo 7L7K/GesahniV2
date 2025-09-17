@@ -50,7 +50,7 @@ def test_whoami_header_takes_precedence_over_cookie(client):
     header_token = create_access_token({"user_id": "header_user"})
 
     # Set cookie for one user
-    client.cookies.set("access_token", cookie_token)
+    client.cookies.set("GSNH_AT", cookie_token)
 
     # Use header for different user
     headers = {"Authorization": f"Bearer {header_token}"}

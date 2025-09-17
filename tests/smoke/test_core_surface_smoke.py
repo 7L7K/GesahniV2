@@ -31,8 +31,8 @@ class TestAuthSmokeSuite:
         assert response.status_code in [200, 400, 401, 403, 422, 500]
 
     def test_auth_register_endpoint_exists(self, client):
-        """covers: POST: /v1/register"""
-        response = client.post("/v1/register", json={})
+        """covers: POST: /v1/auth/register"""
+        response = client.post("/v1/auth/register", json={})
         assert response.status_code in [200, 400, 401, 403, 409, 422, 500]
 
     def test_auth_logout_endpoint_exists(self, client):
@@ -108,17 +108,37 @@ class TestSpotifySmokeSuite:
     def test_spotify_connect_get(self, client):
         """covers: GET: /v1/spotify/connect"""
         response = client.get("/v1/spotify/connect")
-        assert response.status_code in [200, 302, 401, 403, 404, 500]
+        assert response.status_code in [
+            401,
+            403,
+            404,
+            405,
+            500,
+        ]  # 401/405 are valid - auth required or not configured
 
     def test_spotify_callback_get(self, client):
         """covers: GET: /v1/spotify/callback"""
         response = client.get("/v1/spotify/callback")
-        assert response.status_code in [200, 302, 400, 401, 403, 404, 500]
+        assert response.status_code in [
+            400,
+            401,
+            403,
+            404,
+            405,
+            500,
+        ]  # 400/405 expected - missing params or not configured
 
     def test_spotify_callback_post(self, client):
         """covers: POST: /v1/spotify/callback"""
         response = client.post("/v1/spotify/callback", json={})
-        assert response.status_code in [200, 302, 400, 401, 403, 404, 500]
+        assert response.status_code in [
+            400,
+            401,
+            403,
+            404,
+            405,
+            500,
+        ]  # 400/405 expected - missing params or not configured
 
     def test_spotify_disconnect_get(self, client):
         """covers: GET: /v1/spotify/disconnect"""
@@ -128,17 +148,37 @@ class TestSpotifySmokeSuite:
     def test_spotify_disconnect_delete(self, client):
         """covers: DELETE: /v1/spotify/disconnect"""
         response = client.delete("/v1/spotify/disconnect")
-        assert response.status_code in [200, 204, 401, 403, 404, 500]
+        assert response.status_code in [
+            401,
+            403,
+            404,
+            405,
+            500,
+        ]  # 401/405 are valid - auth required or not configured
 
     def test_spotify_health(self, client):
         """covers: GET: /v1/spotify/health"""
         response = client.get("/v1/spotify/health")
-        assert response.status_code in [200, 401, 403, 404, 500]
+        assert response.status_code in [
+            200,
+            401,
+            403,
+            404,
+            405,
+            500,
+        ]  # 200/405 are valid - working or not configured
 
     def test_spotify_debug(self, client):
         """covers: GET: /v1/spotify/debug"""
         response = client.get("/v1/spotify/debug")
-        assert response.status_code in [200, 401, 403, 404, 500]
+        assert response.status_code in [
+            200,
+            401,
+            403,
+            404,
+            405,
+            500,
+        ]  # 200/405 are valid - working or not configured
 
 
 @pytest.mark.smoke
@@ -226,8 +266,8 @@ class TestOtherCoreSmokeSuite:
     """Smoke tests for other core endpoints."""
 
     def test_whoami(self, client):
-        """covers: GET: /v1/whoami"""
-        response = client.get("/v1/whoami")
+        """covers: GET: /v1/auth/whoami"""
+        response = client.get("/v1/auth/whoami")
         assert response.status_code in [200, 401, 403, 404, 500]
 
     def test_me(self, client):

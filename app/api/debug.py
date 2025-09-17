@@ -15,9 +15,11 @@ def _is_dev():
 @router.get("/debug/config", include_in_schema=False)
 async def debug_config():
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
     import os
 
     from app.main import allow_credentials, origins
@@ -48,9 +50,11 @@ async def debug_config():
 async def token_health():
     """Get comprehensive token system health information."""
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
 
     from ..auth_store_tokens import get_token_system_health
 
@@ -60,9 +64,11 @@ async def token_health():
 @router.get("/docs/ws", include_in_schema=False)
 async def ws_helper_page():
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
     # Reuse your existing HTML page (shortened here)
     html = "<html><body><h1>WS Helper</h1></body></html>"
     return HTMLResponse(content=html, media_type="text/html")
@@ -75,9 +81,11 @@ async def debug_oauth_routes(request):
     Makes route visibility obvious during troubleshooting.
     """
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
 
     try:
         app = request.app
@@ -115,9 +123,11 @@ async def debug_oauth_routes(request):
 async def debug_oauth_config(request):
     """Show effective Google OAuth environment/config in one place."""
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
 
     cfg = {
         "GOOGLE_CLIENT_ID_present": bool(os.getenv("GOOGLE_CLIENT_ID")),
@@ -139,9 +149,11 @@ async def debug_oauth_config(request):
 async def diag_auth(request: Request):
     """Diagnostic endpoint for authentication state and cookies."""
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
 
     from ..web.cookies import (
         read_access_cookie,
@@ -172,18 +184,22 @@ async def diag_auth(request: Request):
 @router.get("/cookies", include_in_schema=False)
 async def cookies(request: Request):
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
     return {"cookie_names": sorted(request.cookies.keys())}
 
 
 @router.get("/auth-state", include_in_schema=False)
 async def auth_state(request: Request):
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
     authz = "authorization" in (k.lower() for k in request.headers.keys())
     return {
         "authz_header_present": authz,
@@ -194,9 +210,11 @@ async def auth_state(request: Request):
 @router.get("/debug/oauth", include_in_schema=False)
 async def debug_oauth_page(request):
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="debug access forbidden")
+        raise http_error(
+            code="debug_access_forbidden", message="debug access forbidden", status=403
+        )
 
     # Build a simple HTML that fetches JSON endpoints and renders status lights
     html = """

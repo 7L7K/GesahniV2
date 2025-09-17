@@ -61,6 +61,7 @@ async def create_user(
     name: str | None = None,
     avatar_url: str | None = None,
     auth_providers: list[str] | None = None,
+    username: str | None = None,
 ) -> None:
     """Create or upsert a user, honoring the provided id."""
     async with get_async_db() as session:
@@ -80,6 +81,7 @@ async def create_user(
                 password_hash=password_hash,
                 name=name,
                 avatar_url=avatar_url,
+                username=username,
                 created_at=_now(),
             )
             session.add(user)
@@ -88,6 +90,7 @@ async def create_user(
             existing_user.password_hash = password_hash or existing_user.password_hash
             existing_user.name = name or existing_user.name
             existing_user.avatar_url = avatar_url or existing_user.avatar_url
+            existing_user.username = username or existing_user.username
 
         await session.commit()
 

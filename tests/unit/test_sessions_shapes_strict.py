@@ -7,7 +7,7 @@ def test_sessions_shapes_array_only(monkeypatch):
     client = TestClient(app)
     # Force auth bypass for test environment by setting a fake cookie
     with client:
-        client.cookies.set("access_token", "invalid")
+        client.cookies.set("GSNH_AT", "invalid")
         r = client.get("/v1/sessions")
         assert r.status_code in (200, 401)
         if r.status_code == 200:
@@ -19,7 +19,7 @@ def test_sessions_paginated_shape(monkeypatch):
 
     client = TestClient(app)
     with client:
-        client.cookies.set("access_token", "invalid")
+        client.cookies.set("GSNH_AT", "invalid")
         r = client.get("/v1/sessions/paginated")
         assert r.status_code in (200, 401)
         if r.status_code == 200:

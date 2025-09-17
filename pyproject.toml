@@ -29,3 +29,7 @@ markers = [
     "asyncio: marks tests as async tests",
 ]
 asyncio_mode = "auto"
+
+# CI/Environment hardening to keep tests local, fast, and drama-free
+# These prevent tests from reaching out to external services
+# Note: Using environment variables directly since pytest env option may not be supported

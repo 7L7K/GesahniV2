@@ -30,6 +30,7 @@ from __future__ import annotations
 import inspect
 import logging
 import os
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,13 @@ def _log_failure_dev(service: str, error: Exception):
         logger.info("%s connection failed (suppressed warning): %s", service, error)
 
 
+def _is_sqlite(url: str | None) -> bool:
+    if not url:
+        return False
+    u = urlparse(url)
+    return (u.scheme or "").startswith("sqlite")
+
+
 async def init_database():
     """Verify PostgreSQL connectivity.
 
@@ -63,16 +71,54 @@ async def init_database():
     earlier in the startup sequence (`init_db_once`). This function verifies
     that the PostgreSQL database is reachable and responding.
     """
+    # Skip PG health checks when using sqlite (tests/CI)
+    if _is_sqlite(os.getenv("DATABASE_URL")):
+        logger.debug("Skipping PostgreSQL connectivity check (sqlite in use)")
+        return
+
     try:
+        import os
+
         from app.db.core import health_check_async
 
+        logger.info("🔍 Checking PostgreSQL database connectivity...")
+        logger.info("   Database URL: %s", os.getenv("DATABASE_URL", "NOT_SET"))
+
         if await health_check_async():
-            logger.info("✅ PostgreSQL connectivity verified")
+            logger.info("✅ PostgreSQL connectivity verified - database is accessible")
+            logger.info("   ✅ Token storage will work")
+            logger.info("   ✅ User authentication will work")
+            logger.info("   ✅ OAuth integrations will work")
         else:
-            raise RuntimeError("PostgreSQL health check failed")
+            logger.error(
+                "❌ PostgreSQL health check failed - database is not responding"
+            )
+            logger.error("   ❌ Token storage will FAIL")
+            logger.error("   ❌ User authentication will FAIL")
+            logger.error("   ❌ OAuth integrations will FAIL")
+            logger.error(
+                "   💡 SOLUTION: Start PostgreSQL service or check DATABASE_URL"
+            )
+            raise RuntimeError(
+                "PostgreSQL health check failed - database is not responding"
+            )
     except Exception as e:
-        logger.error("❌ PostgreSQL connectivity check failed: %s", e)
-        raise
+        logger.error("🚨 CRITICAL: PostgreSQL connectivity check failed")
+        logger.error("   Error details: %s", str(e))
+        logger.error("   This will cause:")
+        logger.error("   - Token storage failures")
+        logger.error("   - Authentication failures")
+        logger.error("   - OAuth integration failures")
+        logger.error("   - Music integration failures")
+        logger.error("")
+        logger.error("   🔧 IMMEDIATE ACTION REQUIRED:")
+        logger.error(
+            "   1. Start PostgreSQL: pg_ctl -D /usr/local/var/postgresql@14 start"
+        )
+        logger.error("   2. Check DATABASE_URL in .env file")
+        logger.error("   3. Verify PostgreSQL is running: ps aux | grep postgres")
+        logger.error("")
+        raise RuntimeError(f"Database connectivity failure: {e}")
 
 
 async def init_database_migrations():
@@ -263,10 +309,12 @@ async def init_scheduler():
 
 
 async def init_dev_user():
-    """Create a dev user 'dev_user' with password 'devpass123!' in dev environment only.
+    """Create a dev user with password 'devpass123!' in dev environment only.
 
     Gated by ENV=dev to avoid running in production.
     """
+    import uuid
+
     env = os.getenv("ENV", "dev").strip().lower()
     if env != "dev":
         logger.debug("Dev user seeding skipped (ENV != dev)")
@@ -276,17 +324,21 @@ async def init_dev_user():
         from app.auth import pwd_context
         from app.auth_store import create_user
 
+        # Generate a UUID for the dev user
+        dev_user_id = str(uuid.uuid4())
+
         # Hash the password
         password_hash = pwd_context.hash("devpass123!")
 
         # Create the user
         await create_user(
-            id="dev_user",
+            id=dev_user_id,
             email="dev@example.com",  # Dummy email
             password_hash=password_hash,
             name="Dev User",
+            username="dev_user",  # Username for password authentication
         )
-        logger.info("Dev user 'dev_user' created successfully")
+        logger.info("Dev user 'dev_user' created successfully (ID: %s)", dev_user_id)
     except Exception as e:
         logger.warning("Failed to create dev user: %s", e)
 

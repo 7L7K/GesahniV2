@@ -11,9 +11,9 @@ function useBattery(): BatteryInfo {
         let mounted = true;
         (async () => {
             try {
-                const navAny = navigator as any;
-                if (navAny.getBattery) {
-                    const b = await navAny.getBattery();
+                const nav = navigator as { getBattery?: () => Promise<{ level: number; charging: boolean; addEventListener: (event: string, handler: () => void) => void; removeEventListener: (event: string, handler: () => void) => void }> };
+                if (nav.getBattery) {
+                    const b = await nav.getBattery();
                     const set = () => mounted && setBat({ level: b.level, charging: b.charging });
                     set();
                     b.addEventListener("levelchange", set);
@@ -34,15 +34,15 @@ function useHeartbeat() {
     useEffect(() => {
         const onPing = () => setLastAt(Date.now());
         const onHeart = () => setLastAt(Date.now());
-        window.addEventListener('music.state', onPing as any);
-        window.addEventListener('device.heartbeat', onHeart as any);
+        window.addEventListener('music.state', onPing as EventListener);
+        window.addEventListener('device.heartbeat', onHeart as EventListener);
         const on = () => setOnline(true);
         const off = () => setOnline(false);
         window.addEventListener("online", on);
         window.addEventListener("offline", off);
         return () => {
-            window.removeEventListener('music.state', onPing as any);
-            window.removeEventListener('device.heartbeat', onHeart as any);
+            window.removeEventListener('music.state', onPing as EventListener);
+            window.removeEventListener('device.heartbeat', onHeart as EventListener);
             window.removeEventListener("online", on);
             window.removeEventListener("offline", off);
         };

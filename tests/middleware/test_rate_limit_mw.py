@@ -1,5 +1,4 @@
 # tests/test_rate_limit_mw.py
-import importlib
 import os
 import time
 
@@ -8,8 +7,6 @@ from starlette.testclient import TestClient
 
 def _spin():
     """Fresh app instance for testing with rate limit config."""
-    if "app.main" in importlib.sys.modules:
-        del importlib.sys.modules["app.main"]
     # Set low rate limit for fast testing
     os.environ["RATE_LIMIT_PER_MIN"] = "2"
     os.environ["RATE_LIMIT_WINDOW_S"] = "1"  # 1 second window
@@ -23,8 +20,9 @@ def _spin():
 
     _BUCKET.clear()
 
-    from app.main import app
+    from app.main import create_app
 
+    app = create_app()
     return TestClient(app)
 
 

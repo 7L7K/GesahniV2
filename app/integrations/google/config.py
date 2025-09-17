@@ -30,12 +30,10 @@ def get_google_scopes() -> list[str]:
 
 
 # used to sign our state param
-JWT_STATE_SECRET = os.getenv("JWT_STATE_SECRET", "dev_only_change_me")
+JWT_STATE_SECRET = os.getenv("JWT_STATE_SECRET", "")
 
-# optional: override DB URL; enforce PostgreSQL default for production
-GOOGLE_OAUTH_DB_URL = os.getenv(
-    "GOOGLE_OAUTH_DB_URL", "postgresql://app:app_pw@localhost:5432/gesahni"
-)
+# optional: override DB URL; use main database URL if not specified
+GOOGLE_OAUTH_DB_URL = os.getenv("GOOGLE_OAUTH_DB_URL", os.getenv("DATABASE_URL", ""))
 
 
 def validate_config():

@@ -1,8 +1,11 @@
 import asyncio
+import logging
 
 from ...metrics import GOOGLE_REFRESH_FAILED, GOOGLE_REFRESH_SUCCESS
 from .errors import OAuthError
 from .oauth import GoogleOAuth
+
+logger = logging.getLogger(__name__)
 
 # In-flight refresh map: key -> Future
 _inflight: dict[str, asyncio.Future] = {}
@@ -40,8 +43,11 @@ async def refresh_dedup(user_id: str, refresh_token: str) -> tuple[bool, dict]:
         fut.set_result(td)
         try:
             GOOGLE_REFRESH_SUCCESS.labels(user_id=user_id).inc()
-        except Exception:
-            pass
+        except Exception as e:
+            logger.debug(
+                "Failed to record Google refresh success metric",
+                extra={"meta": {"error": str(e), "user_id": user_id}},
+            )
         return True, td
     except Exception as e:
         fut.set_exception(e)
@@ -50,8 +56,17 @@ async def refresh_dedup(user_id: str, refresh_token: str) -> tuple[bool, dict]:
             if isinstance(e, OAuthError):
                 reason = e.reason
             GOOGLE_REFRESH_FAILED.labels(user_id=user_id, reason=str(reason)).inc()
-        except Exception:
-            pass
+        except Exception as metric_error:
+            logger.debug(
+                "Failed to record Google refresh failure metric",
+                extra={
+                    "meta": {
+                        "error": str(metric_error),
+                        "user_id": user_id,
+                        "original_error": str(e),
+                    }
+                },
+            )
         raise
     finally:
         async with _lock:

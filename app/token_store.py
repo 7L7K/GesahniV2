@@ -289,7 +289,7 @@ async def claim_refresh_jti_with_retry(
 ) -> tuple[bool, str | None]:
     """Atomically mark a refresh ``jti`` for ``sid`` as used with retry logic for race conditions.
 
-    Returns (success, error_reason) where success is True only for the first caller.
+    Returns (success, error_reason) where only the first caller gets success=True.
     Handles race conditions by implementing a distributed lock mechanism.
     """
     key = f"refresh_used:{sid}:{jti}"

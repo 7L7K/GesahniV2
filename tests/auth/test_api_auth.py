@@ -1,13 +1,6 @@
-"""
-Tests for app/api/auth.py endpoints
+"""Tests for app/api/auth.py endpoints."""
 
-Target coverage: 35-45% selective
-- whoami, refresh, logout happy paths
-- 2 error branches per endpoint
-- FastAPI TestClient with dependency overrides for get_current_user_id
-- End-to-end cookie behavior
-"""
-
+import json
 import time
 from unittest.mock import patch
 
@@ -90,7 +83,7 @@ class TestWhoami:
         token = _mint_token(
             "test-secret-key-for-testing-only-not-for-production", "alice"
         )
-        client.cookies.set("access_token", token)
+        client.cookies.set("GSNH_AT", token)
 
         # Make request
         response = client.get("/v1/whoami")
@@ -159,7 +152,7 @@ class TestWhoami:
         expired_token = _mint_token(
             "test-secret-key-for-testing-only-not-for-production", "expired", ttl_s=-120
         )
-        client.cookies.set("access_token", expired_token)
+        client.cookies.set("GSNH_AT", expired_token)
 
         # Make request
         response = client.get("/v1/whoami")
@@ -168,6 +161,28 @@ class TestWhoami:
         assert response.status_code == 401
         data = response.json()
         assert data["detail"] == "Unauthorized"
+
+    def test_whoami_cookie_with_rotated_keys(self, monkeypatch):
+        """Ensure whoami can decode tokens signed with rotated HS256 keys."""
+        monkeypatch.delenv("JWT_SECRET", raising=False)
+        priv = json.dumps({"primary": "rot-secret-12345678901234567890"})
+        monkeypatch.setenv("JWT_PRIVATE_KEYS", priv)
+        monkeypatch.setenv("JWT_PUBLIC_KEYS", priv)
+        monkeypatch.setenv("JWT_ALGS", "HS256")
+
+        app = _create_test_app()
+        client = TestClient(app)
+
+        from app.tokens import make_access
+
+        token = make_access({"user_id": "carol"})
+        client.cookies.set("GSNH_AT", token)
+
+        response = client.get("/v1/whoami")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["is_authenticated"] is True
+        assert body["user"]["id"] == "carol"
 
 
 class TestRefresh:
@@ -187,7 +202,7 @@ class TestRefresh:
         refresh_token = _mint_token(
             "test-secret-key-for-testing-only-not-for-production", "alice", "refresh"
         )
-        client.cookies.set("refresh_token", refresh_token)
+        client.cookies.set("GSNH_RT", refresh_token)
 
         # Mock the rotate_refresh_cookies function to return success
         with patch("app.api.auth.rotate_refresh_cookies") as mock_rotate:
@@ -232,7 +247,7 @@ class TestRefresh:
         client = TestClient(app)
 
         # Set invalid refresh token
-        client.cookies.set("refresh_token", "invalid_token")
+        client.cookies.set("GSNH_RT", "invalid_token")
 
         # Mock rotate_refresh_cookies to return None (failure)
         with patch("app.api.auth.rotate_refresh_cookies") as mock_rotate:
@@ -258,8 +273,8 @@ class TestLogout:
         client = TestClient(app)
 
         # Set some auth cookies
-        client.cookies.set("access_token", "some_access_token")
-        client.cookies.set("refresh_token", "some_refresh_token")
+        client.cookies.set("GSNH_AT", "some_access_token")
+        client.cookies.set("GSNH_RT", "some_refresh_token")
         client.cookies.set("session_id", "some_session_id")
 
         # Make logout request
@@ -517,7 +532,7 @@ class TestWhoamiAdvanced:
             "test-secret-key-for-testing-only-not-for-production", "header-user"
         )
 
-        client.cookies.set("access_token", cookie_token)
+        client.cookies.set("GSNH_AT", cookie_token)
 
         # Make request with header token
         response = client.get(
@@ -539,7 +554,7 @@ class TestWhoamiAdvanced:
         client = TestClient(app)
 
         # Set a token that would require JWT_SECRET
-        client.cookies.set("access_token", "some-invalid-token")
+        client.cookies.set("GSNH_AT", "some-invalid-token")
 
         # Make request
         response = client.get("/v1/whoami")
@@ -558,7 +573,7 @@ class TestWhoamiAdvanced:
         client = TestClient(app)
 
         # Set malformed token
-        client.cookies.set("access_token", "malformed-token")
+        client.cookies.set("GSNH_AT", "malformed-token")
 
         # Make request
         response = client.get("/v1/whoami")

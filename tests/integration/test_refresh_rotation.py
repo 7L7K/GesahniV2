@@ -36,7 +36,7 @@ def test_refresh_rotates_and_spends_prior_jti(monkeypatch):
     sc2 = r2.headers.get_list("set-cookie")
     assert sc2 and sc2 != sc1
 
-    client.cookies.set("refresh_token", latest_refresh_val)
+    client.cookies.set("GSNH_RT", latest_refresh_val)
     r3 = client.post("/v1/refresh")
     assert r3.status_code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN)
 

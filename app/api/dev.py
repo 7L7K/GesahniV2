@@ -21,9 +21,11 @@ class MintAccessRequest(BaseModel):
 async def mint_access(request: MintAccessRequest, response: Response):
     """Mint a short-lived access token for dev testing."""
     if not _is_dev():
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(message="dev access forbidden")
+        raise http_error(
+            code="dev_access_forbidden", message="dev access forbidden", status=403
+        )
 
     from ..sessions_store import sessions_store
     from ..tokens import sign_access_token

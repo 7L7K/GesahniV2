@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRouterDecisions, apiFetch } from "@/lib/api";
 
 type Decision = {
@@ -163,7 +163,7 @@ function SelfReview() {
     const [review, setReview] = useState<Review>(null)
     const [loading, setLoading] = useState(true)
     const [err, setErr] = useState<string | null>(null)
-    const token = useMemo(() => process.env.NEXT_PUBLIC_ADMIN_TOKEN || '', [])
+    const token = process.env.NEXT_PUBLIC_ADMIN_TOKEN || ''
 
     useEffect(() => {
         async function load() {

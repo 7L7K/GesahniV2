@@ -4,7 +4,6 @@ Script to set up test database tables before running tests.
 This ensures all required tables exist for test execution.
 """
 
-import os
 import sys
 from pathlib import Path
 
@@ -12,6 +11,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from sqlalchemy import text
+
 from app.db.core import sync_engine
 
 
@@ -24,7 +24,9 @@ def setup_test_db():
     try:
         with sync_engine.connect() as conn:
             # care_sessions table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS care_sessions (
                     id TEXT PRIMARY KEY,
                     resident_id TEXT,
@@ -33,20 +35,28 @@ def setup_test_db():
                     created_at TIMESTAMP,
                     updated_at TIMESTAMP
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured care_sessions table")
 
             # auth_users table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS auth_users (
                     username TEXT PRIMARY KEY,
                     password_hash TEXT NOT NULL
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured auth_users table")
 
             # contacts table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS contacts (
                     id TEXT PRIMARY KEY,
                     resident_id TEXT,
@@ -55,11 +65,15 @@ def setup_test_db():
                     priority INTEGER,
                     quiet_hours TEXT
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured contacts table")
 
             # tv_config table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS tv_config (
                     resident_id TEXT PRIMARY KEY,
                     ambient_rotation INTEGER,
@@ -68,11 +82,15 @@ def setup_test_db():
                     default_vibe TEXT,
                     updated_at TIMESTAMP
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured tv_config table")
 
             # music_tokens table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS music_tokens (
                     id SERIAL PRIMARY KEY,
                     provider TEXT NOT NULL,
@@ -83,11 +101,15 @@ def setup_test_db():
                     scope TEXT,
                     UNIQUE(provider, provider_user_id)
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured music_tokens table")
 
             # third_party_tokens table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS third_party_tokens (
                     id SERIAL PRIMARY KEY,
                     identity_id TEXT NOT NULL,
@@ -100,11 +122,15 @@ def setup_test_db():
                     scope TEXT,
                     UNIQUE(identity_id, provider)
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured third_party_tokens table")
 
             # auth_identities table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS auth_identities (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
@@ -117,11 +143,15 @@ def setup_test_db():
                     updated_at TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES auth_users(username)
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured auth_identities table")
 
             # pat_tokens table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS pat_tokens (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
@@ -133,15 +163,21 @@ def setup_test_db():
                     revoked_at TIMESTAMP,
                     FOREIGN KEY (user_id) REFERENCES auth_users(username)
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured pat_tokens table")
 
             # notes table
-            conn.execute(text("""
+            conn.execute(
+                text(
+                    """
                 CREATE TABLE IF NOT EXISTS notes (
                     text TEXT
                 )
-            """))
+            """
+                )
+            )
             print("✓ Created/ensured notes table")
 
             conn.commit()

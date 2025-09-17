@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-import time
+from datetime import UTC
 from pathlib import Path
 from typing import Any
 
@@ -24,8 +24,10 @@ def _db_path() -> Path:
     return Path("/dev/null")
 
 
-def _now() -> float:
-    return time.time()
+def _now():
+    from datetime import datetime
+
+    return datetime.now(UTC)
 
 
 async def ensure_tables() -> None:
@@ -357,8 +359,8 @@ async def create_session(rec: dict[str, Any]) -> None:
         conn.execute(
             text(
                 """
-                INSERT INTO care.care_sessions (id, resident_id, title, transcript_uri, created_at, updated_at)
-                VALUES (:id, :resident_id, :title, :transcript_uri, :created_at, :updated_at)
+                INSERT INTO care.care_sessions (id, resident_id, title, transcript_uri, status, created_at, updated_at)
+                VALUES (:id, :resident_id, :title, :transcript_uri, :status, :created_at, :updated_at)
             """
             ),
             {
@@ -366,6 +368,7 @@ async def create_session(rec: dict[str, Any]) -> None:
                 "resident_id": rec["resident_id"],
                 "title": rec.get("title", ""),
                 "transcript_uri": rec.get("transcript_uri"),
+                "status": rec.get("status", "active"),
                 "created_at": now,
                 "updated_at": now,
             },
@@ -391,7 +394,7 @@ async def update_session(session_id: str, **fields: Any) -> None:
 async def list_sessions(resident_id: str | None = None) -> list[dict[str, Any]]:
     """List sessions from PostgreSQL care.care_sessions table."""
     query = """
-        SELECT id, resident_id, title, transcript_uri, created_at, updated_at
+        SELECT id, resident_id, title, transcript_uri, status, created_at, updated_at
         FROM care.care_sessions
     """
     params = {}

@@ -82,8 +82,6 @@ except ImportError:
     rate_limit_with = None
     require_nonce = None
     scope_rate_limit = None
-    decode_jwt = None
-    jwt_decode = None
 
 __all__ = [
     "get_jwt_config",

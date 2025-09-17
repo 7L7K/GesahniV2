@@ -10,6 +10,7 @@ from typing import Any
 from fastapi import APIRouter, Request, Response, WebSocket
 
 from app.api._deps import dep_verify_ws
+from app.metrics import WS_MUSIC_CONNECTIONS_TOTAL, WS_MUSIC_MESSAGES_TOTAL
 from app.music import get_provider
 from app.music.delta import DeltaBuilder
 from app.music.models import PlayerState
@@ -111,6 +112,15 @@ async def _send_ack(ws: WebSocket, req_id: str | None, user_id: str) -> None:
 
     try:
         await asyncio.wait_for(ws.send_json(ack_payload), timeout=0.5)
+
+        # Track WebSocket message metrics
+        try:
+            WS_MUSIC_MESSAGES_TOTAL.labels(
+                direction="outbound", message_type="ack"
+            ).inc()
+        except Exception:
+            pass
+
     except TimeoutError:
         logger.warning("ws.music.ack_timeout", extra={"meta": {"user_id": user_id}})
     except Exception as e:
@@ -517,6 +527,13 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
     if manager is not None:
         try:
             conn_state = await manager.add_connection(ws, uid, endpoint="music")
+
+            # Track WebSocket connection metrics
+            try:
+                WS_MUSIC_CONNECTIONS_TOTAL.labels(action="connect").inc()
+            except Exception:
+                pass
+
             logger.info(
                 "ws.music.connection_established", extra={"meta": {"user_id": uid}}
             )
@@ -604,6 +621,15 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
                 )
                 continue
 
+            # Track WebSocket message metrics for valid incoming messages
+            try:
+                message_type = payload.get("type", "unknown")
+                WS_MUSIC_MESSAGES_TOTAL.labels(
+                    direction="inbound", message_type=message_type
+                ).inc()
+            except Exception:
+                pass
+
             # Update activity for valid messages
             if conn_state:
                 conn_state.update_activity()
@@ -649,6 +675,13 @@ async def ws_music(ws: WebSocket, _v: None = dep_verify_ws()):
 
         try:
             dur = int(round(_t.time() - connected_at))
+
+            # Track WebSocket disconnection metrics
+            try:
+                WS_MUSIC_CONNECTIONS_TOTAL.labels(action="disconnect").inc()
+            except Exception:
+                pass
+
             logger.info(
                 "ws.music.connection_closed",
                 extra={"meta": {"user_id": uid, "duration_s": dur}},

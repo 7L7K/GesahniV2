@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
 import { useRouter, usePathname } from 'next/navigation';
+import Header from '../Header';
 
 // Mock Next.js router and pathname
 jest.mock('next/navigation', () => ({
@@ -56,7 +57,6 @@ describe('Header Component - Cookie Authentication', () => {
     });
 
     test('renders header with cookie auth only', () => {
-        const Header = require('../Header').default;
         render(<Header />);
 
         expect(screen.getByText('Gesahni')).toBeInTheDocument();
@@ -67,7 +67,6 @@ describe('Header Component - Cookie Authentication', () => {
         // Ensure Clerk is disabled
         delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
 
-        const Header = require('../Header').default;
         render(<Header />);
 
         expect(screen.getByText('Gesahni')).toBeInTheDocument();
@@ -75,18 +74,15 @@ describe('Header Component - Cookie Authentication', () => {
     });
 
     test('should handle environment variable changes', () => {
-        const Header1 = require('../Header').default;
-        const { unmount } = render(<Header1 />);
+        const { unmount } = render(<Header />);
         expect(screen.getByText('Gesahni')).toBeInTheDocument();
         unmount();
 
-        const Header2 = require('../Header').default;
-        render(<Header2 />);
+        render(<Header />);
         expect(screen.getByText('Gesahni')).toBeInTheDocument();
     });
 
     test('should render navigation elements', () => {
-        const Header = require('../Header').default;
         render(<Header />);
 
         expect(screen.getByText('Gesahni')).toBeInTheDocument();
@@ -94,7 +90,6 @@ describe('Header Component - Cookie Authentication', () => {
     });
 
     test('should handle component initialization', () => {
-        const Header = require('../Header').default;
         render(<Header />);
 
         // Should render without throwing errors

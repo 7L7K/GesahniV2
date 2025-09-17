@@ -5,7 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app.auth as auth
-from app.main import app
+from app.main import get_app
 
 
 @pytest.mark.integration
@@ -18,7 +18,7 @@ def test_csrf_enforcement_on_login(monkeypatch):
     import app.main
 
     importlib.reload(app.main)
-    client = TestClient(app.main.app)
+    client = TestClient(app.main.get_app())
 
     # Ensure user exists (ignore username_taken) - provide CSRF tokens
     client.post(
@@ -52,7 +52,7 @@ def test_csrf_enforcement_on_login(monkeypatch):
 
 @pytest.mark.integration
 def test_backoff_sleep_in_login(monkeypatch):
-    client = TestClient(app)
+    client = TestClient(get_app())
     username = "test_user_123"
     # Ensure user exists (ignore if already exists)
     register_resp = client.post(

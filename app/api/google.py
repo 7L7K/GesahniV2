@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse
 
 from ..auth_store_tokens import get_token, mark_invalid, upsert_token
 from ..deps.user import get_current_user_id
+from ..errors import json_error
 from ..metrics import (
     GOOGLE_DISCONNECT_SUCCESS,
 )
@@ -67,11 +68,32 @@ async def google_status(request: Request):
     try:
         current_user = get_current_user_id(request=request)
     except Exception:
-        return JSONResponse({"error_code": "auth_required"}, status_code=401)
+        return json_error(
+            code="unauthorized",
+            message="Authentication required",
+            http_status=401,
+            meta={"error_code": "auth_required"},
+        )
 
     from ..auth_store_tokens import get_token_by_user_identities
 
-    token = await get_token_by_user_identities(current_user, "google")
+    try:
+        token = await get_token_by_user_identities(current_user, "google")
+    except Exception as exc:  # pragma: no cover - defensive fallback
+        logger.warning(
+            "google.status.store_unavailable",
+            extra={"meta": {"user_id": current_user, "error": str(exc)}},
+        )
+        return {
+            "connected": False,
+            "required_scopes_ok": False,
+            "scopes": [],
+            "expires_at": None,
+            "last_refresh_at": None,
+            "refreshed": False,
+            "degraded_reason": "unavailable",
+            "services": {},
+        }
 
     required_scopes = [
         "openid",
@@ -103,7 +125,7 @@ async def google_status(request: Request):
                 "required_scopes_ok": False,
                 "scopes": [],
                 "expires_at": token.expires_at,
-                "last_refresh_at": token.last_refresh_at,
+                "last_refresh_at": getattr(token, "last_refresh_at", None),
                 "refreshed": False,
                 "degraded_reason": "consent_revoked",
                 "services": {},
@@ -117,10 +139,6 @@ async def google_status(request: Request):
 
     # Scope drift detection: log missing scopes once per day per user
     if not required_ok:
-        import logging
-
-        logger = logging.getLogger(__name__)
-
         # Calculate missing scopes
         missing_scopes = [s for s in required_scopes if s not in token_scopes]
 
@@ -176,7 +194,7 @@ async def google_status(request: Request):
                         "required_scopes_ok": required_ok,
                         "scopes": token_scopes,
                         "expires_at": token.expires_at,
-                        "last_refresh_at": token.last_refresh_at,
+                        "last_refresh_at": getattr(token, "last_refresh_at", None),
                         "refreshed": refreshed,
                         "degraded_reason": "expired_no_refresh",
                     },
@@ -216,7 +234,7 @@ async def google_status(request: Request):
                     "required_scopes_ok": required_ok,
                     "scopes": token_scopes,
                     "expires_at": token.expires_at,
-                    "last_refresh_at": token.last_refresh_at,
+                    "last_refresh_at": getattr(token, "last_refresh_at", None),
                     "refreshed": refreshed,
                     "degraded_reason": f"refresh_failed: {str(e)[:200]}",
                 },
@@ -249,7 +267,7 @@ async def google_status(request: Request):
                 "required_scopes_ok": False,
                 "scopes": token_scopes,
                 "expires_at": token.expires_at,
-                "last_refresh_at": token.last_refresh_at,
+                "last_refresh_at": getattr(token, "last_refresh_at", None),
                 "refreshed": refreshed,
                 "degraded_reason": "missing_scopes",
                 "services": services,
@@ -264,7 +282,7 @@ async def google_status(request: Request):
             "required_scopes_ok": True,
             "scopes": token_scopes,
             "expires_at": token.expires_at,
-            "last_refresh_at": token.last_refresh_at,
+            "last_refresh_at": getattr(token, "last_refresh_at", None),
             "refreshed": refreshed,
             "degraded_reason": None,
             "services": services,

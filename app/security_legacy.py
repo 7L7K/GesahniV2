@@ -125,9 +125,11 @@ def scope_required(*required_scopes: str):
         payload = getattr(request.state, "jwt_payload", None)
         scopes = _payload_scopes(payload)
         if not set(required_scopes) <= scopes:
-            from .http_errors import forbidden
+            from .http_errors import http_error
 
-            raise forbidden(code="insufficient_scope", message="insufficient scope")
+            raise http_error(
+                code="insufficient_scope", message="insufficient scope", status=403
+            )
 
     return _dep
 
@@ -979,7 +981,7 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
     # Test-mode bypass: allow anonymous when secret is missing under tests OR when JWT_OPTIONAL_IN_TESTS=1
     test_bypass = (
         os.getenv("ENV", "").strip().lower() == "test"
-        or os.getenv("PYTEST_RUNNING")
+        or os.getenv("PYTEST_RUNNING", "").strip().lower() in {"1", "true", "yes", "on"}
         or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").strip().lower()
         in {"1", "true", "yes", "on"}
     )
@@ -1925,7 +1927,7 @@ async def verify_webhook(
                 return body
     # Back-compat path: allow legacy signature that only covers body
     # When REQUIRE_WEBHOOK_TS=1 this block is only reached if ts was present but signature mismatched
-    # or when ts header absent and require_ts is False.
+    # or when ts header absent and require_ts evaluates False.
     for s in secrets:
         calc = sign_webhook(body, s)
         if hmac.compare_digest(calc.lower(), sig):

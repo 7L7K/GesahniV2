@@ -1,0 +1,100 @@
+# GOAL
+Refactor a 2.4k-line monolith at app/api/auth.py into small focused modules with ZERO behavior changes.
+Keep all routes, JSON shapes, headers, cookie semantics, logging keys, and status codes identical.
+Preserve legacy shims for tests expecting old imports.
+
+# CONSTRAINTS (do not violate)
+- Public routes and paths unchanged.
+- JSON response schema unchanged (whoami "version", "source", etc.).
+- Set-Cookie names/attributes unchanged; legacy cookie headers still emitted when flag is enabled.
+- Status codes and redirects (308) unchanged.
+- No import-time side effects (no DB/net/Redis at import).
+- Only move code; no new dependencies; no renames of env vars.
+
+# FILE LAYOUT (create these)
+app/api/auth_router.py
+app/auth/__init__.py
+app/auth/core.py
+app/auth/jwt_utils.py
+app/auth/csrf_flow.py
+app/auth/refresh_flow.py
+app/auth/login_register.py
+app/auth/whoami.py
+app/auth/pats.py
+app/auth/cookies_compat.py
+
+# MOVE: function/group → destination module (verbatim, fix imports)
+- whoami_impl, whoami endpoint adapter → app/auth/whoami.py
+- login, register_v1, logout, logout_all, dev_token, token_examples, mock_set_access_cookie, clerk_finish → app/auth/login_register.py
+- rotate_refresh_cookies and refresh helper logic → app/auth/refresh_flow.py
+- _jwt_secret, _key_pool_from_env, _primary_kid_secret, _decode_any, _decode_any_strict → app/auth/jwt_utils.py
+- CSRF extraction/validation helpers inside refresh/login paths → app/auth/csrf_flow.py
+- _is_rate_limit_enabled and any rate limit keys/guards → app/auth/core.py (or app/auth/rate_limit.py if needed)
+- _ensure_loop, _in_test_mode, _ensure_auth → app/auth/core.py
+- PATs: create_pat, revoke_pat, verify_pat, verify_pat_async, list_pats → app/auth/pats.py
+- _append_legacy_auth_cookie_headers → app/auth/cookies_compat.py (temporary)
+
+# NEW: app/api/auth_router.py (wire routes only; no logic)
+- APIRouter(tags=["Auth"])
+- Import callable endpoints from the new modules and register:
+  GET /v1/whoami                          → whoami
+  GET /v1/auth/whoami                     → whoami (same impl)
+  POST /v1/auth/login                     → login
+  POST /v1/auth/register                  → register_v1
+  POST /v1/auth/logout                    → logout
+  POST /v1/auth/logout_all                → logout_all
+  POST /v1/auth/token                     → dev_token
+  GET  /v1/auth/examples                  → token_examples
+  GET/POST /v1/auth/clerk/finish          → clerk_finish
+  GET  /v1/mock/set_access_cookie         → mock_set_access_cookie
+  POST /v1/auth/refresh                   → refresh
+  GET  /v1/pats (legacy redirect)         → list_pats
+  POST /v1/pats                           → create_pat
+  DELETE /v1/pats/{pat_id}                → revoke_pat
+
+# SHIM: keep app/api/auth.py as a thin legacy layer
+- from app.api.auth_router import router
+- from app.auth.refresh_flow import rotate_refresh_cookies
+- from app.auth.login_register import login as login_v1, register_v1
+- __all__ = ["router", "rotate_refresh_cookies", "login_v1", "register_v1"]
+- Remove duplicate imports and any dead code; do NOT change behavior.
+
+# IMPORT FIXUPS
+- All moved code must replace relative imports:
+  from ..auth_refresh ... (keep as-is if valid) or update to correct path.
+- Shared helpers consumed by multiple modules:
+  - jwt utils used by login/refresh/whoami should import from app.auth.jwt_utils
+  - CSRF helpers import from app.auth.csrf_flow
+  - core (_in_test_mode, _ensure_loop) from app.auth.core
+  - cookies_compat only referenced from login/refresh where legacy flag is used.
+
+# LOGGING PRESERVATION
+- Keep existing logger names and log key structures ("whoami.cookie_check", meta.req_id, etc.).
+
+# OPENAPI TAGS
+- Router tag stays "Auth".
+
+# COMMIT PLAN (create commits automatically if possible)
+- Commit A: Add new modules; copy code; keep old file intact.
+- Commit B: Add app/api/auth_router.py and wire app factory to include it.
+- Commit C: Convert app/api/auth.py to shim (re-exports).
+- Commit D: Delete duplicates and dead code lines inside the shim; no logic changes.
+
+# QUICK SELF-CHECKS (run)
+- rg -n "from app\.api\.auth import"  → should still work via shim.
+- rg -n "🔐 AUTH REQUEST DEBUG"       → appears exactly once in login_register.
+- rg -n "whoami\."                    → same log events exist after move.
+
+# NON-REGRESSION SMOKE (execute shell)
+- pytest -q -n 0 -k "auth and not e2e"
+- pytest -q tests/contract -k auth
+- curl -s -D- http://localhost:8000/v1/whoami | rg -n "Cache-Control: no-store"
+- curl -s -X POST http://localhost:8000/v1/auth/login -d '{"username":"dev"}' -H "Content-Type: application/json"
+- curl -s http://localhost:8000/v1/whoami
+- curl -s -X POST http://localhost:8000/v1/auth/refresh -H "X-Auth-Intent: refresh"  # if COOKIE_SAMESITE=none & CSRF rules permit
+- curl -s -X POST http://localhost:8000/v1/auth/logout -H "X-CSRF-Token: $(cookie csrf_token)"  # adjust for your CSRF setting
+
+# EXIT CRITERIA
+- All above curls return same shapes as before (whoami fields; login returns tokens; refresh returns {"rotated": bool, ...}).
+- Cookies present in Set-Cookie exactly match pre-refactor behavior when AUTH_LEGACY_COOKIE_NAMES is on.
+- Tests in tests/auth and tests/contract/auth pass.

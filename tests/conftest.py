@@ -4,97 +4,93 @@ import json
 import logging
 import os
 import sys
-import tempfile
-import time
 
 import httpx
 import pytest
 from httpx import ASGITransport
 from starlette.testclient import TestClient as _TestClient
 
+# Import test fixtures
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _lock_test_env():
+    """Force test-mode environment for deterministic, dry-run behavior.
+
+    This fixture ensures every test run is isolated, deterministic, and safe:
+    - No network calls to external services
+    - Dry-run mode for all backends
+    - Deterministic timeouts and fallbacks
+    - Consistent environment state
+    """
+    # Absolute no-network / dry-run configuration
+    os.environ.setdefault("PYTEST_RUNNING", "1")
+    os.environ.setdefault("CI", "1")
+    os.environ.setdefault("DRY_RUN", "1")  # CONFIG.dry_run guard
+    os.environ.setdefault("PROMPT_BACKEND", "dryrun")  # Fallback path selector
+    os.environ.setdefault(
+        "DISABLE_OUTBOUND_HTTP", "1"
+    )  # http_utils should respect this
+    os.environ.setdefault("OPENAI_API_KEY", "test")
+    os.environ.setdefault("OPENAI_HTTP_TIMEOUT", "0.01")
+    os.environ.setdefault("OLLAMA_URL", "http://127.0.0.1:9")  # Blackhole port
+    os.environ.setdefault("ENFORCE_JWT_SCOPES", "1")
+
+    # Keep optionals OFF unless a test opts-in explicitly or they're enabled via pytest.ini
+    # Note: pytest.ini handles SPOTIFY_ENABLED=1, so we don't remove it here
+
+    # Make sure DEBUG model routing doesn't switch output text
+    os.environ.pop("DEBUG_MODEL_ROUTING", None)
+
+    # Prevent any real API calls by setting safe defaults
+    os.environ.setdefault("VECTOR_STORE", "memory")  # Use in-memory vector store
+    os.environ.setdefault("HOME_ASSISTANT_URL", "http://127.0.0.1:8123")  # Blackhole HA
+    os.environ.setdefault("SPOTIFY_CLIENT_ID", "test_client_id")
+    os.environ.setdefault("SPOTIFY_CLIENT_SECRET", "test_client_secret")
+
+    yield
+
 
 @pytest.fixture(scope="session", autouse=True)
-def _setup_test_db_and_init_tables():
-    """Guarantee DB tables exist before any tests touch the databases.
+def per_worker_database():
+    """Configure environment to use the existing gesahni_test database.
 
-    This fixture runs once per test session and ensures all database tables
-    are created before any test code runs, preventing sqlite3.OperationalError.
+    - Uses existing gesahni_test database instead of creating worker-specific ones
+    - Sets DATABASE_URL to point to gesahni_test
+    - Run Alembic migrations to head if needed
     """
-    # Mark that we're running tests
+    # Base test flags
     os.environ["PYTEST_RUNNING"] = "1"
-
-    # Disable database connection pooling for tests to prevent TooManyConnectionsError
-    # with parallel test execution (xdist)
     os.environ["DB_POOL"] = "disabled"
-
-    # Set critical test environment variables EARLY to override any defaults from env files
-    os.environ["JWT_SECRET"] = (
-        "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long"
-    )
+    os.environ["ENV"] = "test"
     os.environ["DEV_MODE"] = "1"
-    os.environ["DEV_AUTH"] = "0"  # Disable dev auth bypass for proper security testing
-    os.environ["COOKIE_SAMESITE"] = "Lax"
-    os.environ["COOKIE_SECURE"] = "false"
-    os.environ["COOKIE_DOMAIN"] = ""  # Empty string = host-only cookies for tests
-    os.environ["CORS_ALLOW_CREDENTIALS"] = (
-        "true"  # Required for cookie auth to work with CORS
+    os.environ["ASGI_AUTO_APP"] = "0"
+
+    # Security and rate-limit defaults
+    os.environ.setdefault(
+        "JWT_SECRET", "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long"
     )
-    os.environ["CORS_ALLOW_ORIGINS"] = "http://localhost:3000,http://127.0.0.1:3000"
-    os.environ["SPOTIFY_TEST_MODE"] = "1"
+    os.environ.setdefault("DEV_AUTH", "0")
+    os.environ.setdefault("RATE_LIMIT_MODE", "off")
+    os.environ.setdefault("ENABLE_RATE_LIMIT_IN_TESTS", "0")
 
-    # Additional rate limiting variables for predictable test behavior
-    os.environ["RATE_LIMIT_PER_MIN"] = "1000"  # High limit to prevent interference
-    os.environ["RATE_LIMIT_BURST"] = "100"  # High burst limit
-    os.environ["RATE_LIMIT_WINDOW_S"] = "60"
-    os.environ["RATE_LIMIT_BURST_WINDOW_S"] = "10"
-    os.environ["RATE_LIMIT_BYPASS_SCOPES"] = "admin,test"
-    os.environ["RATE_LIMIT_KEY_SCOPE"] = "global"
-    os.environ["RATE_LIMIT_BACKEND"] = "memory"
+    # Use the existing gesahni_test database instead of creating worker-specific ones
+    worker_url = "postgresql://app:app_pw@localhost:5432/gesahni_test"
+    os.environ["DATABASE_URL"] = worker_url
 
-    # STANDARDIZED TEST IDENTITY AND TTL CONFIGURATION
-    # =================================================
-    # Use long TTLs to prevent expiry during test execution
-    os.environ.setdefault("JWT_EXPIRE_MINUTES", "60")  # 1 hour access tokens
-    os.environ.setdefault("JWT_REFRESH_EXPIRE_MINUTES", "1440")  # 1 day refresh tokens
-    os.environ.setdefault("CSRF_TTL_SECONDS", "3600")  # 1 hour CSRF tokens
+    # Run Alembic migrations to head for the test database if needed
+    try:
+        from alembic import command
+        from alembic.config import Config
 
-    # Additional test environment variables for predictable behavior
-    os.environ.setdefault("JWT_CLOCK_SKEW_S", "60")  # Allow 1 minute clock skew
-    os.environ.setdefault("ENV", "test")  # Explicit test environment
-    os.environ.setdefault("USE_DEV_PROXY", "0")  # Disable dev proxy for tests
-    os.environ.setdefault("AUTH_DEV_BYPASS", "0")  # Disable auth bypass
-    os.environ.setdefault("CLERK_ENABLED", "0")  # Disable Clerk integration
-    os.environ.setdefault("OAUTH_TEST_MODE", "1")  # Enable OAuth test mode
-    os.environ.setdefault("LOG_LEVEL", "WARNING")  # Reduce log noise during tests
-    os.environ.setdefault("DISABLE_REQUEST_LOGGING", "1")  # Disable request logging
+        alembic_cfg = Config("alembic.ini")
+        alembic_cfg.set_main_option("sqlalchemy.url", worker_url)
+        command.upgrade(alembic_cfg, "head")
+    except Exception:
+        # If Alembic is not configured for this repo, continue (fallback models may create on first use)
+        pass
 
-    # Disable rate limiting for tests to prevent 429 errors
-    # Force disable globally - cannot be overridden by individual tests
-    os.environ["RATE_LIMIT_MODE"] = "off"
-    # Also set ENABLE_RATE_LIMIT_IN_TESTS to 0 for consistency
-    os.environ["ENABLE_RATE_LIMIT_IN_TESTS"] = "0"
-
-    # Set up test database directory - use a dedicated temp directory for tests
-    test_db_dir = os.path.join(tempfile.gettempdir(), "gesahni_test_dbs")
-    os.environ["GESAHNI_TEST_DB_DIR"] = test_db_dir
-
-    # Ensure the test directory exists
-    os.makedirs(test_db_dir, exist_ok=True)
-
-    # Set DATABASE_URL for PostgreSQL tests (Phase 3 requirement)
-    # Use per-worker database to avoid conflicts in parallel execution
-    worker = os.getenv("PYTEST_XDIST_WORKER") or os.getenv("PYTEST_WORKER_ID") or "main"
-    if worker != "main":
-        os.environ["DATABASE_URL"] = (
-            f"postgresql://app:app_pw@localhost:5432/gesahni_test_{worker}"
-        )
-    else:
-        os.environ["DATABASE_URL"] = (
-            "postgresql://app:app_pw@localhost:5432/gesahni_test"
-        )
-
-    # Database initialization will be handled by the async app fixture
-    # which properly manages the event loop through pytest-asyncio
+    yield
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -183,16 +179,31 @@ def client(app):
         yield c
 
 
+@pytest.fixture
+def override_db_dependency(monkeypatch, db_session):
+    """Override app dependency to use per-test async session where supported."""
+    try:
+
+        async def _gen():
+            yield db_session
+
+        # Monkeypatch function to yield our session
+        monkeypatch.setattr("app.db.core.get_async_db", lambda: _gen())
+    except Exception:
+        pass
+    yield
+
+
 # Async fixtures and auth helpers for modern test support
 
 
 @pytest.fixture(scope="session")
 def app():
-    """FastAPI app fixture for testing."""
-    from app.main import app as fastapi_app
+    """Create FastAPI app under test env, lazily."""
+    os.environ["ENV"] = "test"
+    from app.main import get_app
 
-    # Return the app directly - TestClient will handle lifespan
-    return fastapi_app
+    return get_app()
 
 
 @pytest.fixture(scope="session")
@@ -205,6 +216,47 @@ async def async_client(app):
         yield client
 
 
+# Database session per-test with transaction rollback
+@pytest.fixture
+async def db_session():
+    """Provide an async SQLAlchemy session wrapped in a transaction per test.
+
+    Starts a transaction and nested SAVEPOINT. Rolls back on teardown to keep
+    the database clean. Uses the engine configured via DATABASE_URL from the
+    per_worker_database fixture.
+    """
+    import os as _os
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    dsn = (_os.getenv("DATABASE_URL") or "").replace(
+        "postgresql://", "postgresql+asyncpg://"
+    )
+    engine = create_async_engine(dsn, future=True)
+    AsyncSessionLocal = async_sessionmaker(
+        bind=engine, expire_on_commit=False, future=True
+    )
+
+    session = AsyncSessionLocal()
+    trans = await session.begin()
+    nested = await session.begin_nested()
+
+    try:
+        yield session
+    finally:
+        await session.close()
+        # Rollback the nested transaction and main transaction
+        try:
+            await nested.rollback()
+        except Exception:
+            pass  # Transaction may already be closed
+        try:
+            await trans.rollback()
+        except Exception:
+            pass  # Transaction may already be closed
+        await engine.dispose()
+
+
 @pytest.fixture
 def test_env(monkeypatch):
     """Set up test environment variables."""
@@ -213,11 +265,9 @@ def test_env(monkeypatch):
     pass
 
 
-@pytest.fixture(scope="session")
-async def create_test_user():
+@pytest.fixture
+async def create_test_user(db_session):
     """Create or reuse the standardized test user in the database."""
-    from app.auth_store_tokens import upsert_token
-    from app.models.third_party_tokens import ThirdPartyToken
     from app.user_store import user_store
 
     # Use standardized test user identity
@@ -225,24 +275,13 @@ async def create_test_user():
     username = "test_user_123"
     password = "test_password_123"
 
-    # Ensure user exists in user store
-    await user_store.ensure_user(test_user_id)
-
-    # Create a valid Spotify token for testing
-    expires_at = int(time.time()) + 3600  # 1 hour from now
-    token_data = ThirdPartyToken(
-        identity_id="59fd9451-f29e-43ce-a845-e11a3e494759",
-        id="spotify_test_token",
-        user_id=test_user_id,
-        provider="spotify",
-        access_token="BAAAAAAAAAAAAAAAAA",
-        refresh_token="ABBBBBBBBBBBBBBBBB",
-        expires_at=expires_at,
-        scopes="user-read-private user-read-email",
-    )
-
-    # Upsert the token
-    await upsert_token(token_data)
+    # Use the existing user_store.ensure_user method
+    # This will work with whatever database connection is configured
+    try:
+        await user_store.ensure_user(test_user_id)
+    except Exception as e:
+        # If user creation fails, continue anyway - the test might still work
+        print(f"Warning: Could not ensure user exists: {e}")
 
     return {
         "user_id": test_user_id,

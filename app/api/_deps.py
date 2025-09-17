@@ -88,9 +88,11 @@ def require_admin_scope():
         if "admin" in user_scopes or "admin:write" in user_scopes:
             return getattr(request.state, "user_id", None)
 
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(code="admin_scope_required", message="admin scope required")
+        raise http_error(
+            code="admin_scope_required", message="admin scope required", status=403
+        )
 
     return Depends(check_admin)
 

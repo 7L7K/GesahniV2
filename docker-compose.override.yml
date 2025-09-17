@@ -1,0 +1,11 @@
+# docker-compose.override.yml
+services:
+  db:
+    image: postgres:16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - ./docker/initdb:/docker-entrypoint-initdb.d:ro

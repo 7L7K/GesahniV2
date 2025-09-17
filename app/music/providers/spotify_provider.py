@@ -1,11 +1,44 @@
 from __future__ import annotations
 
 import logging
+import time
 
-from ...integrations.spotify.client import SpotifyAuthError, SpotifyClient
+from app.integrations.spotify.client import SpotifyAuthError, SpotifyClient
+
 from .base import Device, PlaybackState, Track
 
 logger = logging.getLogger(__name__)
+
+
+def log_spotify_provider(
+    operation: str, user_id: str, details: dict = None, level: str = "info"
+):
+    """Enhanced Spotify provider logging."""
+    details = details or {}
+    log_data = {
+        "operation": operation,
+        "user_id": user_id,
+        "component": "spotify_provider",
+        "timestamp": time.time(),
+        **details,
+    }
+
+    if level == "debug":
+        logger.debug(
+            f"🎵 SPOTIFY PROVIDER {operation.upper()}", extra={"meta": log_data}
+        )
+    elif level == "warning":
+        logger.warning(
+            f"🎵 SPOTIFY PROVIDER {operation.upper()}", extra={"meta": log_data}
+        )
+    elif level == "error":
+        logger.error(
+            f"🎵 SPOTIFY PROVIDER {operation.upper()}", extra={"meta": log_data}
+        )
+    else:
+        logger.info(
+            f"🎵 SPOTIFY PROVIDER {operation.upper()}", extra={"meta": log_data}
+        )
 
 
 class SpotifyProvider:
@@ -14,8 +47,40 @@ class SpotifyProvider:
     name = "spotify"
 
     def __init__(self, user_id: str = "default") -> None:
+        log_spotify_provider(
+            "provider_init",
+            user_id,
+            {
+                "message": "Initializing SpotifyProvider",
+                "user_id": user_id,
+                "default_user": user_id == "default",
+            },
+        )
+
         self.user_id = user_id
-        self.client = SpotifyClient(user_id)
+        try:
+            self.client = SpotifyClient(user_id)
+            log_spotify_provider(
+                "provider_init_success",
+                user_id,
+                {
+                    "message": "SpotifyProvider initialized successfully",
+                    "client_created": True,
+                },
+            )
+        except Exception as e:
+            log_spotify_provider(
+                "provider_init_error",
+                user_id,
+                {
+                    "message": "Failed to initialize SpotifyProvider",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "level": "error",
+                },
+                level="error",
+            )
+            raise
 
     async def _ensure_client(self) -> SpotifyClient:
         """Ensure we have a client with valid tokens."""
@@ -40,8 +105,17 @@ class SpotifyProvider:
             if device_id:
                 try:
                     await client.transfer_playback(device_id, play=True)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(
+                        "Failed to transfer Spotify playback to device",
+                        extra={
+                            "meta": {
+                                "user_id": self.user_id,
+                                "device_id": device_id,
+                                "error": str(e),
+                            }
+                        },
+                    )
 
             uri = entity_id if ":" in (entity_id or "") else None
 
@@ -119,7 +193,7 @@ class SpotifyProvider:
                         type=d.get("type") or "unknown",
                         volume=d.get("volume_percent"),
                         active=bool(
-                            d.get("is_active") or d.get("is_restricted") is False
+                            d.get("is_active") or (d.get("is_restricted") in (False,))
                         ),
                     )
                 )
@@ -139,11 +213,34 @@ class SpotifyProvider:
             raise RuntimeError("spotify_auth_failed")
 
     async def get_state(self) -> PlaybackState:
+        log_spotify_provider(
+            "get_state_start",
+            self.user_id,
+            {"message": "Starting get_state request", "method": "get_state"},
+        )
+
         try:
             client = await self._ensure_client()
+            log_spotify_provider(
+                "client_ensured",
+                self.user_id,
+                {"message": "Client ensured for get_state"},
+            )
+
             st = await client.get_currently_playing()
+            log_spotify_provider(
+                "currently_playing_result",
+                self.user_id,
+                {
+                    "message": "Received currently playing data",
+                    "has_data": st is not None,
+                    "data_keys": list(st.keys()) if st else None,
+                },
+            )
+
             track = None
             device = None
+
             if st:
                 item = (st or {}).get("item") or {}
                 if item:
@@ -158,6 +255,17 @@ class SpotifyProvider:
                         explicit=bool(item.get("explicit")),
                         provider=self.name,
                     )
+                    log_spotify_provider(
+                        "track_parsed",
+                        self.user_id,
+                        {
+                            "message": "Track data parsed successfully",
+                            "track_id": track.id,
+                            "track_title": track.title,
+                            "track_artist": track.artist,
+                        },
+                    )
+
                 dev = (st or {}).get("device") or {}
                 if dev:
                     device = Device(
@@ -167,7 +275,18 @@ class SpotifyProvider:
                         volume=dev.get("volume_percent"),
                         active=bool(dev.get("is_active")),
                     )
-            return PlaybackState(
+                    log_spotify_provider(
+                        "device_parsed",
+                        self.user_id,
+                        {
+                            "message": "Device data parsed successfully",
+                            "device_id": device.id,
+                            "device_name": device.name,
+                            "device_active": device.active,
+                        },
+                    )
+
+            playback_state = PlaybackState(
                 is_playing=bool(st.get("is_playing") if st else False),
                 progress_ms=int(
                     st.get("progress_ms")
@@ -179,7 +298,52 @@ class SpotifyProvider:
                 shuffle=False,
                 repeat="off",
             )
-        except Exception:
+
+            log_spotify_provider(
+                "get_state_success",
+                self.user_id,
+                {
+                    "message": "Playback state retrieved successfully",
+                    "is_playing": playback_state.is_playing,
+                    "progress_ms": playback_state.progress_ms,
+                    "has_track": playback_state.track is not None,
+                    "has_device": playback_state.device is not None,
+                },
+            )
+
+            return playback_state
+
+        except SpotifyAuthError as e:
+            log_spotify_provider(
+                "get_state_auth_error",
+                self.user_id,
+                {
+                    "message": "Authentication error in get_state",
+                    "error": str(e),
+                    "level": "warning",
+                },
+                level="warning",
+            )
+            return PlaybackState(
+                is_playing=False,
+                progress_ms=0,
+                track=None,
+                device=None,
+                shuffle=False,
+                repeat="off",
+            )
+        except Exception as e:
+            log_spotify_provider(
+                "get_state_error",
+                self.user_id,
+                {
+                    "message": "Unexpected error in get_state",
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "level": "error",
+                },
+                level="error",
+            )
             return PlaybackState(
                 is_playing=False,
                 progress_ms=0,

@@ -5,9 +5,11 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from app.music.providers.spotify_provider import SpotifyProvider
+
+from ..deps.scopes import require_scope
 from ..deps.user import get_current_user_id
 from ..music.orchestrator import MusicOrchestrator
-from ..music.providers.spotify_provider import SpotifyProvider
 from ..music.store import get_idempotent, set_idempotent
 
 router = APIRouter(prefix="/api/music")
@@ -15,6 +17,32 @@ router = APIRouter(prefix="/api/music")
 # System state router - separate from music state
 system_router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def log_music_api(
+    operation: str, user_id: str = None, details: dict = None, level: str = "info"
+):
+    """Enhanced music API logging."""
+    import time
+
+    details = details or {}
+    log_data = {
+        "operation": operation,
+        "component": "music_api",
+        "timestamp": time.time(),
+        **details,
+    }
+    if user_id:
+        log_data["user_id"] = user_id
+
+    if level == "debug":
+        logger.debug(f"🎵 MUSIC API {operation.upper()}", extra={"meta": log_data})
+    elif level == "warning":
+        logger.warning(f"🎵 MUSIC API {operation.upper()}", extra={"meta": log_data})
+    elif level == "error":
+        logger.error(f"🎵 MUSIC API {operation.upper()}", extra={"meta": log_data})
+    else:
+        logger.info(f"🎵 MUSIC API {operation.upper()}", extra={"meta": log_data})
 
 
 class PlayBody(BaseModel):
@@ -29,25 +57,98 @@ class PlayBody(BaseModel):
 async def play(
     body: PlayBody, request: Request, user_id: str = Depends(get_current_user_id)
 ):
-    # idempotency
-    key = request.headers.get("X-Idempotency-Key")
-    if key:
-        prev = await get_idempotent(key, user_id)
-        if prev:
-            return prev
-    provider = SpotifyProvider()
-    orch = MusicOrchestrator(providers=[provider])
-    res = await orch.play(
-        body.utterance,
-        entity=body.entity,
-        room=body.room,
-        vibe=body.vibe,
-        provider_hint=body.provider_hint,
+    log_music_api(
+        "play_request",
+        user_id,
+        {
+            "message": "Music play request received",
+            "utterance": body.utterance,
+            "entity": body.entity,
+            "room": body.room,
+            "vibe": body.vibe,
+            "provider_hint": body.provider_hint,
+            "user_id": user_id,
+        },
     )
-    out = {"status": "ok", "result": res}
-    if key:
-        await set_idempotent(key, user_id, out)
-    return out
+
+    try:
+        # idempotency
+        key = request.headers.get("X-Idempotency-Key")
+        log_music_api(
+            "idempotency_check",
+            user_id,
+            {"message": "Checking idempotency key", "idempotency_key": key},
+        )
+
+        if key:
+            prev = await get_idempotent(key, user_id)
+            if prev:
+                log_music_api(
+                    "idempotency_hit",
+                    user_id,
+                    {
+                        "message": "Idempotency key found, returning cached result",
+                        "idempotency_key": key,
+                        "cached_result": prev,
+                    },
+                )
+                return prev
+
+        log_music_api(
+            "provider_creation", user_id, {"message": "Creating SpotifyProvider"}
+        )
+
+        provider = SpotifyProvider()
+        orch = MusicOrchestrator(providers=[provider])
+
+        log_music_api(
+            "orchestrator_play", user_id, {"message": "Calling orchestrator.play"}
+        )
+
+        res = await orch.play(
+            body.utterance,
+            entity=body.entity,
+            room=body.room,
+            vibe=body.vibe,
+            provider_hint=body.provider_hint,
+        )
+
+        out = {"status": "ok", "result": res}
+
+        log_music_api(
+            "play_success",
+            user_id,
+            {
+                "message": "Play request completed successfully",
+                "result": res,
+                "response": out,
+            },
+        )
+
+        if key:
+            await set_idempotent(key, user_id, out)
+            log_music_api(
+                "idempotency_stored",
+                user_id,
+                {"message": "Result stored for idempotency", "idempotency_key": key},
+            )
+
+        return out
+
+    except Exception as e:
+        log_music_api(
+            "play_error",
+            user_id,
+            {
+                "message": "Error during play request",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "utterance": body.utterance,
+                "level": "error",
+            },
+            level="error",
+        )
+        raise
 
 
 import asyncio
@@ -832,7 +933,7 @@ async def restore_volume(user_id: str = Depends(get_current_user_id)):
     return {"status": "ok"}
 
 
-@router.get("/state")
+@router.get("/state", dependencies=[Depends(require_scope("chat:read"))])
 async def get_state(
     request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ):
@@ -842,12 +943,46 @@ async def get_state(
 
 async def _get_state_impl(request: Request, response: Response, user_id: str):
     """Actual implementation of get_state that can be called from multiple routes"""
+    log_music_api(
+        "get_state_impl_start",
+        user_id,
+        {"message": "Starting get_state_impl", "method": "_get_state_impl"},
+    )
+
     try:
+        log_music_api(
+            "build_state_payload_start",
+            user_id,
+            {"message": "Calling _build_state_payload"},
+        )
+
         body = await _build_state_payload(user_id)
+
+        log_music_api(
+            "build_state_payload_success",
+            user_id,
+            {
+                "message": "_build_state_payload completed",
+                "body_type": type(body).__name__,
+                "has_data": body is not None,
+            },
+        )
+
     except Exception as e:
-        logger.error(f"Error in _build_state_payload: {e}")
+        log_music_api(
+            "build_state_payload_error",
+            user_id,
+            {
+                "message": "Error in _build_state_payload",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "level": "error",
+            },
+            level="error",
+        )
+
         # Return a fallback response if _build_state_payload fails
-        return {
+        fallback_response = {
             "vibe": {"name": "Default", "energy": 0.5, "tempo": 120, "explicit": False},
             "volume": 50,
             "device_id": None,
@@ -859,6 +994,17 @@ async def _get_state_impl(request: Request, response: Response, user_id: str):
             "radio_url": None,
             "radio_playing": None,
         }
+
+        log_music_api(
+            "returning_fallback_response",
+            user_id,
+            {
+                "message": "Returning fallback response due to error",
+                "fallback_response": fallback_response,
+            },
+        )
+
+        return fallback_response
 
     try:
         # Handle both dict and StateResponse object cases
@@ -898,7 +1044,7 @@ async def _get_state_impl(request: Request, response: Response, user_id: str):
 
 
 # System state endpoint - provides app/system level state, not music state
-@system_router.get("/state")
+@system_router.get("/state", dependencies=[Depends(require_scope("chat:read"))])
 async def get_system_state():
     """Get system/app state at /v1/state"""
     import os
@@ -1090,10 +1236,16 @@ class DeviceBody(BaseModel):
     model_config = ConfigDict(json_schema_extra={"example": {"device_id": "abcdef123"}})
 
 
+def _no_store_headers(resp: Response) -> None:
+    resp.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    resp.headers["Pragma"] = "no-cache"
+
+
 @router.get("/music/devices")
 async def list_devices(
     request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ):
+    _no_store_headers(response)
     logger.info(
         "🎵 MUSIC DEVICES: Request started",
         extra={
@@ -1101,7 +1253,6 @@ async def list_devices(
                 "user_id": user_id,
                 "method": request.method,
                 "url": str(request.url),
-                "headers": dict(request.headers),
                 "provider_spotify_enabled": PROVIDER_SPOTIFY,
             }
         },
@@ -1144,6 +1295,7 @@ async def list_devices(
             "🎵 MUSIC DEVICES: Calling get_devices()",
             extra={"meta": {"user_id": user_id}},
         )
+
         devices = await client.get_devices()
         logger.info(
             "🎵 MUSIC DEVICES: get_devices() completed",
@@ -1157,18 +1309,32 @@ async def list_devices(
         )
     except SpotifyAuthError as e:
         logger.warning(
-            "🎵 MUSIC DEVICES: Spotify auth error",
-            extra={"meta": {"user_id": user_id, "error": str(e)}},
-        )
-        devices = []
-    except Exception as e:
-        logger.error(
-            "🎵 MUSIC DEVICES: Unexpected error getting devices",
+            "🎵 MUSIC DEVICES: Spotify auth error - returning 401 response",
             extra={
                 "meta": {
                     "user_id": user_id,
                     "error": str(e),
                     "error_type": type(e).__name__,
+                }
+            },
+        )
+        # Canonical unauthenticated response
+        raise HTTPException(
+            status_code=401,
+            detail={
+                "code": "spotify_not_authenticated",
+                "message": "Connect Spotify to list devices.",
+            },
+        )
+    except Exception as e:
+        logger.error(
+            "🎵 MUSIC DEVICES: Unexpected error - checking error type",
+            extra={
+                "meta": {
+                    "user_id": user_id,
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "is_spotify_auth_error": "SpotifyAuthError" in str(type(e)),
                 }
             },
         )
@@ -1231,9 +1397,18 @@ async def set_device(body: DeviceBody, user_id: str = Depends(get_current_user_i
         try:
             client = SpotifyClient(user_id)
             await client.transfer_playback(body.device_id, play=True)
-        except Exception:
+        except Exception as e:
             # Non-fatal in tests or when auth not configured
-            pass
+            logger.debug(
+                "Failed to transfer Spotify playback to device",
+                extra={
+                    "meta": {
+                        "user_id": user_id,
+                        "device_id": body.device_id,
+                        "error": str(e),
+                    }
+                },
+            )
     await _broadcast("music.state", (await _build_state_payload(user_id)).model_dump())
     return {"status": "ok"}
 

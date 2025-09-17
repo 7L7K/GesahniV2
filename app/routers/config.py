@@ -7,6 +7,8 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI
 
+from app.security.module_loader import secure_load_router
+
 log = logging.getLogger(__name__)
 
 
@@ -22,9 +24,8 @@ def _is_truthy(v: str | None) -> bool:
 
 
 def _load_router(path: str):
-    mod, attr = path.split(":", 1)
-    m = __import__(mod, fromlist=[attr])
-    return getattr(m, attr)
+    """Load a router securely with allowlist validation."""
+    return secure_load_router(path)
 
 
 def _must(specs: Sequence[RouterSpec]) -> list[RouterSpec]:
@@ -41,13 +42,19 @@ def _env_name() -> str:
 
 def build_plan() -> list[RouterSpec]:
     env = _env_name()
-    in_ci = _is_truthy(os.getenv("CI")) or "PYTEST_CURRENT_TEST" in os.environ
+    in_ci = (
+        _is_truthy(os.getenv("CI"))
+        or _is_truthy(os.getenv("PYTEST_RUNNING"))
+        or "PYTEST_CURRENT_TEST" in os.environ
+    )
 
     core = _must(
         [
             RouterSpec("app.api.ask:router", "/v1"),
-            # Canonical auth router (use app.api.auth as source of truth)
-            RouterSpec("app.api.auth:router", "/v1"),
+            # Canonical auth router mounted at /v1 so its subpaths like /auth/* map to /v1/auth/*
+            RouterSpec("app.auth.endpoints:router", "/v1/auth"),
+            RouterSpec("app.api.auth_router_pats:router", "/v1"),
+            RouterSpec("app.api.auth_router_pats:legacy_router", "/v1"),
             RouterSpec("app.router.auth_legacy_aliases:router", "/v1"),
             RouterSpec("app.router.google_api:router", "/v1/google"),
             # Alias compatibility router provides legacy endpoints like /v1/list
@@ -62,8 +69,6 @@ def build_plan() -> list[RouterSpec]:
             RouterSpec("app.api.google:integrations_router", "/v1"),
             RouterSpec("app.api.integrations_status:router", "/v1"),
             RouterSpec("app.api.music:system_router", "/v1"),
-            # Spotify OAuth/connect handlers expected by tests
-            RouterSpec("app.api.spotify:router", "/v1"),
             RouterSpec("app.api.tts:router", "/v1"),
             RouterSpec("app.api.transcribe:router", "/v1"),
             RouterSpec("app.api.ws_endpoints:router", "/v1"),
@@ -78,6 +83,7 @@ def build_plan() -> list[RouterSpec]:
                 "app.router.compat_api:router", ""
             ),  # Deprecated compatibility routes
             RouterSpec("app.api.health:router", ""),
+            RouterSpec("app.api.health_google:router", "/v1/health"),
             RouterSpec("app.api.root:router", ""),
             RouterSpec("app.api.me:router", "/v1"),  # User profile endpoint
             RouterSpec("app.api.profile:router", "/v1"),  # Profile management endpoints
@@ -97,21 +103,33 @@ def build_plan() -> list[RouterSpec]:
         ]
     )
 
-    enable_spotify = _is_truthy(os.getenv("SPOTIFY_ENABLED")) and not in_ci
-    enable_apple = _is_truthy(os.getenv("APPLE_OAUTH_ENABLED")) and not in_ci
-    enable_device = _is_truthy(os.getenv("DEVICE_AUTH_ENABLED")) and not in_ci
+    # CI detection for hiding optional routers by default
+    ci = (
+        _is_truthy(os.getenv("CI"))
+        or _is_truthy(os.getenv("PYTEST_RUNNING"))
+        or "PYTEST_CURRENT_TEST" in os.environ
+    )
+
+    # Optional routers: enabled by explicit flags, but hidden by default in CI/test mode
+    enable_spotify = _is_truthy(os.getenv("SPOTIFY_ENABLED"))
+    enable_apple = _is_truthy(os.getenv("APPLE_OAUTH_ENABLED"))
+    enable_device = _is_truthy(os.getenv("DEVICE_AUTH_ENABLED"))
     enable_preflt = _is_truthy(os.getenv("PREFLIGHT_ENABLED", "1"))
     enable_legacy_google = _is_truthy(os.getenv("GSN_ENABLE_LEGACY_GOOGLE"))
-    enable_legacy_music_http = _is_truthy(os.getenv("LEGACY_MUSIC_HTTP")) and not in_ci
+    enable_legacy_music_http = _is_truthy(os.getenv("LEGACY_MUSIC_HTTP")) and not ci
 
     optional: list[RouterSpec] = []
     optional += _optional(
         enable_spotify,
         [
-            RouterSpec("app.api.spotify:integrations_router", "/v1"),
+            RouterSpec("app.api.spotify:router", "/v1"),  # Core spotify router
             RouterSpec(
-                "app.api.spotify:integrations_router", "/v1/integrations/spotify"
-            ),
+                "app.api.spotify:integrations_router", "/v1"
+            ),  # Integrations router
+            RouterSpec("app.api.spotify_sdk:router", "/v1"),  # Spotify SDK router
+            RouterSpec(
+                "app.api.spotify_player:router", ""
+            ),  # Spotify player router (already has /v1/spotify prefix)
         ],
     )
     optional += _optional(
@@ -124,6 +142,8 @@ def build_plan() -> list[RouterSpec]:
     optional += _optional(
         enable_legacy_google, [RouterSpec("app.api.google_compat:router", "")]
     )
+    # Always include Google integration router (not legacy-dependent)
+    optional += [RouterSpec("app.integrations.google.routes:router", "/v1/google")]
     optional += _optional(
         enable_legacy_music_http,
         [
@@ -169,12 +189,18 @@ def register_routers(app: FastAPI) -> None:
         "qdrant": False,
     }
 
+    spotify_routers_loaded = 0
     for spec in build_plan():
         try:
             r = _load_router(spec.import_path)
             app.include_router(
                 r, prefix=spec.prefix, include_in_schema=spec.include_in_schema
             )
+
+            # Count and log Spotify routers
+            if "spotify" in spec.import_path.lower():
+                spotify_routers_loaded += 1
+                log.info("🎵 Spotify router loaded: %s", spec.import_path)
 
             # Mark known feature routers as mounted
             if "app.api.devices" in spec.import_path:
@@ -192,6 +218,16 @@ def register_routers(app: FastAPI) -> None:
                 raise
             # In production, log and continue gracefully
             log.warning("router include failed: %s (%s)", spec.import_path, e)
+
+    # Log Spotify integration status
+    if spotify_routers_loaded > 0:
+        log.info(
+            "✅ Spotify integration ENABLED: %d routers loaded", spotify_routers_loaded
+        )
+    else:
+        log.warning(
+            "❌ Spotify integration DISABLED: 0 routers loaded (check SPOTIFY_ENABLED env var)"
+        )
 
     # Register alias compatibility routes onto the app (best-effort).
     try:

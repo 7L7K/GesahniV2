@@ -34,6 +34,8 @@ def test_contract(method, path, allowed):
         assert (
             r.status_code in allowed
         ), f"{method} {path} -> {r.status_code} not in {allowed}"
-        # Ensure JSON body and either a detail or a success code
-        assert isinstance(r.json(), dict)
-        assert "detail" in r.json() or r.status_code in (200, 202)
+        # Ensure JSON body and either legacy detail or canonical envelope
+        body = r.json()
+        assert isinstance(body, dict)
+        canonical_ok = {"code", "message", "meta"} <= set(body.keys())
+        assert ("detail" in body) or canonical_ok or (r.status_code in (200, 202))

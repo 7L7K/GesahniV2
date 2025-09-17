@@ -1,6 +1,7 @@
 import { renderHook, act } from '@testing-library/react';
 import { useRecorder } from '../useRecorder';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
+import { apiFetch } from '@/lib/api';
 
 // Mock dependencies
 jest.mock('@/services/authOrchestrator');
@@ -78,7 +79,6 @@ describe('useRecorder WebSocket Discipline', () => {
         });
 
         // Mock successful API response
-        const { apiFetch } = require('@/lib/api');
         apiFetch.mockResolvedValue({
             ok: true,
             json: () => Promise.resolve({ session_id: 'test-session' }),
@@ -360,7 +360,6 @@ describe('useRecorder WebSocket Discipline', () => {
         });
 
         it('should handle API errors during start', async () => {
-            const { apiFetch } = require('@/lib/api');
             apiFetch.mockRejectedValue(new Error('API Error'));
 
             const { result } = renderHook(() => useRecorder());

@@ -65,11 +65,11 @@ AUTH_LAZY_REFRESH_V2 = Counter(
     ["source", "result"],
 )
 
-# Refresh rotation metrics
+# Refresh rotation metrics with improved labels
 AUTH_REFRESH_ROTATION = Counter(
     "auth_refresh_rotation_total",
     "Total number of refresh token rotations",
-    ["result", "reason"],
+    ["result", "reason", "path"],
 )
 
 # Replay protection metrics
@@ -157,6 +157,20 @@ AUTH_TOKEN_EXPIRATION = Histogram(
     buckets=[60, 300, 900, 3600, 7200, 21600, 43200, 86400],
 )
 
+# Error code tracking metrics
+AUTH_ERROR_CODES = Counter(
+    "auth_error_codes_total",
+    "Total number of authentication errors by error code",
+    ["error_code", "endpoint", "severity"],
+)
+
+# Authentication operation metrics
+AUTH_OPERATIONS = Counter(
+    "auth_operations_total",
+    "Total number of authentication operations",
+    ["operation", "result", "endpoint"],
+)
+
 
 def record_lazy_refresh(source: str, result: str) -> None:
     """Record a lazy refresh operation."""
@@ -166,10 +180,12 @@ def record_lazy_refresh(source: str, result: str) -> None:
         pass  # Silently fail if metrics are disabled
 
 
-def record_refresh_rotation(result: str, reason: str = "") -> None:
-    """Record a refresh token rotation."""
+def record_refresh_rotation(
+    result: str, reason: str = "", path: str = "/v1/auth/refresh"
+) -> None:
+    """Record a refresh token rotation with improved labels."""
     try:
-        AUTH_REFRESH_ROTATION.labels(result=result, reason=reason).inc()
+        AUTH_REFRESH_ROTATION.labels(result=result, reason=reason, path=path).inc()
     except Exception:
         pass
 
@@ -274,6 +290,30 @@ def record_token_expiration(token_type: str, seconds_until_expiry: float) -> Non
         pass
 
 
+def record_error_code(
+    error_code: str, endpoint: str = "unknown", severity: str = "error"
+) -> None:
+    """Record authentication error by code."""
+    try:
+        AUTH_ERROR_CODES.labels(
+            error_code=error_code, endpoint=endpoint, severity=severity
+        ).inc()
+    except Exception:
+        pass
+
+
+def record_auth_operation(
+    operation: str, result: str, endpoint: str = "unknown"
+) -> None:
+    """Record authentication operation."""
+    try:
+        AUTH_OPERATIONS.labels(
+            operation=operation, result=result, endpoint=endpoint
+        ).inc()
+    except Exception:
+        pass
+
+
 # Convenience functions for common operations
 def lazy_refresh_minted(source: str = "deps") -> None:
     """Record successful lazy refresh."""
@@ -298,14 +338,16 @@ def record_lazy_refresh_v2(source: str, result: str) -> None:
         pass
 
 
-def refresh_rotation_success() -> None:
+def refresh_rotation_success(path: str = "/v1/auth/refresh") -> None:
     """Record successful refresh rotation."""
-    record_refresh_rotation("success")
+    record_refresh_rotation("success", "", path)
 
 
-def refresh_rotation_failed(reason: str = "unknown") -> None:
+def refresh_rotation_failed(
+    reason: str = "unknown", path: str = "/v1/auth/refresh"
+) -> None:
     """Record failed refresh rotation."""
-    record_refresh_rotation("failed", reason)
+    record_refresh_rotation("failed", reason, path)
 
 
 def replay_detected() -> None:
@@ -360,6 +402,8 @@ __all__ = [
     "update_active_sessions",
     "record_failed_attempt_ip",
     "record_token_expiration",
+    "record_error_code",
+    "record_auth_operation",
     # Convenience functions
     "lazy_refresh_minted",
     "lazy_refresh_skipped",

@@ -9,6 +9,7 @@ from app import (
     home_assistant as ha,
 )  # capture original callable for monkeypatch detection
 from app.deps.flags import require_home_assistant
+from app.deps.scopes import require_scope
 from app.deps.user import get_current_user_id
 from app.home_assistant import HomeAssistantAPIError, get_states, resolve_entity
 
@@ -64,7 +65,7 @@ except Exception:  # pragma: no cover
     ORIG_CALL_SERVICE = None  # type: ignore
 
 
-@router.get("/ha/entities")
+@router.get("/ha/entities", dependencies=[Depends(require_scope("care:resident"))])
 async def ha_entities(user_id: str = Depends(get_current_user_id)):
     try:
         return await get_states()

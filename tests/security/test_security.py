@@ -46,7 +46,7 @@ def test_verify_token_cookie_and_header_paths(monkeypatch):
     r1 = client.get("/healthz", headers={"Authorization": f"Bearer {tok}"})
     assert r1.status_code == 200
     # Cookie path
-    client.cookies.set("access_token", tok)
+    client.cookies.set("GSNH_AT", tok)
     r2 = client.get("/healthz")
     assert r2.status_code == 200
 

@@ -20,6 +20,12 @@ from app.api.music import PROVIDER_SPOTIFY
 from app.deps.scopes import require_scope
 from app.deps.user import get_current_user_id
 from app.integrations.spotify.client import SpotifyAuthError, SpotifyClient
+from app.metrics import (
+    MUSIC_COMMAND_COUNT,
+    MUSIC_COMMAND_LATENCY,
+    MUSIC_SET_DEVICE_COUNT,
+    MUSIC_STATE_REQUEST_COUNT,
+)
 from app.models.common import OkResponse as CommonOkResponse
 from app.models.music_state import MusicVibe
 from app.models.music_state import load_state as load_state_memory
@@ -619,6 +625,26 @@ async def music_command(
     user_id: str = Depends(get_current_user_id),
     _=Depends(require_scope("music:control")),
 ):
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Enhanced logging with user_id, route, and auth_state
+    logger.info(
+        "🎵 MUSIC COMMAND: Request started",
+        extra={
+            "user_id": user_id,
+            "route": "/v1/music/command",
+            "auth_state": (
+                "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
+            ),
+            "meta": {"command": body.command},
+        },
+    )
+
+    start_time = time.time()
+    provider = "spotify" if is_provider_spotify() else "radio"
+
     state = load_state(user_id)
     quiet = _in_quiet_hours()
     cap = _volume_cap_for(state.vibe, quiet)
@@ -683,6 +709,36 @@ async def music_command(
         state.quiet_hours = quiet
         state.explicit_allowed = _explicit_allowed(state.vibe)
         save_state(user_id, state)
+
+    # Track command metrics
+    execution_time = time.time() - start_time
+    try:
+        MUSIC_COMMAND_COUNT.labels(
+            command=body.command, status="200", provider=provider
+        ).inc()
+        MUSIC_COMMAND_LATENCY.labels(command=body.command, provider=provider).observe(
+            execution_time
+        )
+    except Exception:
+        pass
+
+    logger.info(
+        "🎵 MUSIC COMMAND: Request successful",
+        extra={
+            "user_id": user_id,
+            "route": "/v1/music/command",
+            "auth_state": (
+                "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
+            ),
+            "meta": {
+                "command": body.command,
+                "provider": provider,
+                "execution_time": execution_time,
+                "changed": changed,
+            },
+        },
+    )
+
     return {"status": "ok"}
 
 
@@ -731,6 +787,22 @@ async def set_vibe(
 async def music_state(
     request: Request, response: Response, user_id: str = Depends(get_current_user_id)
 ):
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Enhanced logging with user_id, route, and auth_state
+    logger.info(
+        "🎵 MUSIC STATE: Request started",
+        extra={
+            "user_id": user_id,
+            "route": "/v1/music/state",
+            "auth_state": (
+                "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
+            ),
+        },
+    )
+
     payload = await _build_state_payload(user_id)
 
     def _state_fingerprint(state) -> dict:
@@ -763,9 +835,46 @@ async def music_state(
     finger = _state_fingerprint(payload.model_dump())
     etag = _strong_etag("state", user_id, finger)
     maybe = _maybe_304(request, response, etag)
+
+    # Track cache hit/miss
+    cached = maybe is not None
+    try:
+        MUSIC_STATE_REQUEST_COUNT.labels(
+            status="200" if not cached else "304", cached=str(cached).lower()
+        ).inc()
+    except Exception:
+        pass
+
     if maybe is not None:
+        logger.info(
+            "🎵 MUSIC STATE: Cache hit (304)",
+            extra={
+                "user_id": user_id,
+                "route": "/v1/music/state",
+                "auth_state": (
+                    "spotify_linked=true"
+                    if user_id != "anon"
+                    else "spotify_linked=false"
+                ),
+                "meta": {"cached": True},
+            },
+        )
         return maybe
+
     _attach_cache_headers(response, etag)
+
+    logger.info(
+        "🎵 MUSIC STATE: Request successful",
+        extra={
+            "user_id": user_id,
+            "route": "/v1/music/state",
+            "auth_state": (
+                "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
+            ),
+            "meta": {"cached": False},
+        },
+    )
+
     return payload
 
 
@@ -870,8 +979,37 @@ async def transfer_playback_device(
     user_id: str = Depends(get_current_user_id),
     _=Depends(require_scope("music:control")),
 ):
+    import logging
+
+    logger = logging.getLogger(__name__)
+
+    # Enhanced logging with user_id, route, and auth_state
+    logger.info(
+        "🎵 MUSIC DEVICE TRANSFER: Request started",
+        extra={
+            "user_id": user_id,
+            "route": "/v1/music/device",
+            "auth_state": (
+                "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
+            ),
+            "meta": {"device_id": body.device_id},
+        },
+    )
+
     device_id = (body.device_id or "").strip() or None
     if not device_id:
+        logger.warning(
+            "🎵 MUSIC DEVICE TRANSFER: Missing device_id",
+            extra={
+                "user_id": user_id,
+                "route": "/v1/music/device",
+                "auth_state": (
+                    "spotify_linked=true"
+                    if user_id != "anon"
+                    else "spotify_linked=false"
+                ),
+            },
+        )
         return {"status": "ok"}
     orch = _mk_orchestrator(user_id)
     if orch:
@@ -879,15 +1017,82 @@ async def transfer_playback_device(
             await orch.transfer_playback(device_id, force_play=True)
         except Exception:
             pass
+
+        # Track metrics
+        try:
+            MUSIC_SET_DEVICE_COUNT.labels(status="200").inc()
+        except Exception:
+            pass
+
+        logger.info(
+            "🎵 MUSIC DEVICE TRANSFER: Request successful (orchestrator)",
+            extra={
+                "user_id": user_id,
+                "route": "/v1/music/device",
+                "auth_state": (
+                    "spotify_linked=true"
+                    if user_id != "anon"
+                    else "spotify_linked=false"
+                ),
+                "meta": {"device_id": device_id, "provider": "orchestrator"},
+            },
+        )
+
         return {"status": "ok"}
     if not PROVIDER_SPOTIFY:
+        logger.info(
+            "🎵 MUSIC DEVICE TRANSFER: Skipping (no Spotify provider)",
+            extra={
+                "user_id": user_id,
+                "route": "/v1/music/device",
+                "auth_state": "spotify_linked=false",
+                "meta": {"device_id": device_id},
+            },
+        )
         return {"status": "ok"}
+
     try:
         client = SpotifyClient(user_id)
         await client.transfer_playback(device_id)
+
+        # Track metrics
+        try:
+            MUSIC_SET_DEVICE_COUNT.labels(status="200").inc()
+        except Exception:
+            pass
+
+        logger.info(
+            "🎵 MUSIC DEVICE TRANSFER: Request successful (Spotify)",
+            extra={
+                "user_id": user_id,
+                "route": "/v1/music/device",
+                "auth_state": (
+                    "spotify_linked=true"
+                    if user_id != "anon"
+                    else "spotify_linked=false"
+                ),
+                "meta": {"device_id": device_id, "provider": "spotify"},
+            },
+        )
+
         return {"status": "ok"}
     except SpotifyAuthError:
-        logger.warning("spotify.auth_error", extra={"user_id": user_id})
+        logger.warning(
+            "🎵 MUSIC DEVICE TRANSFER: Auth error",
+            extra={
+                "user_id": user_id,
+                "route": "/v1/music/device",
+                "auth_state": "spotify_linked=false",
+                "meta": {"device_id": device_id},
+            },
+        )
+
+        # Track metrics for auth errors
+        try:
+            MUSIC_SET_DEVICE_COUNT.labels(status="401").inc()
+        except Exception:
+            pass
+
         return {"status": "ok"}
 
 

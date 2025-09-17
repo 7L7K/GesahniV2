@@ -368,6 +368,9 @@ def get_cookie(request: Request, name: str) -> str | None:
     return request.cookies.get(name)
 
 
+# Import set_auth_cookies from web.cookies for compatibility
+from .web.cookies import set_auth_cookies
+
 # Export all cookie facade functions
 __all__ = [
     "set_auth_cookie",

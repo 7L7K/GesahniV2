@@ -3,8 +3,15 @@
 import React from "react";
 import { listDevices, setDevice } from "@/lib/api";
 
+interface Device {
+    id: string;
+    name: string;
+    type: string;
+    is_active: boolean;
+}
+
 export default function DevicePicker() {
-    const [devices, setDevices] = React.useState<any[]>([]);
+    const [devices, setDevices] = React.useState<Device[]>([]);
     const [loading, setLoading] = React.useState(false);
     const refresh = async () => {
         setLoading(true);

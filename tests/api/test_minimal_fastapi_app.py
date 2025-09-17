@@ -218,7 +218,16 @@ def create_auth_cookies(user_id: str = "dev") -> dict[str, str]:
     """Create test authentication cookies."""
     import os
 
+    # Use the same JWT_SECRET that the application is using
     jwt_secret = os.getenv("JWT_SECRET", "test-jwt-secret-for-testing")
+    # If JWT_SECRET is set via env var (not from .env), use that for consistency
+    env_jwt_secret = os.environ.get("JWT_SECRET")
+    if (
+        env_jwt_secret
+        and env_jwt_secret
+        != "your-secure-jwt-secret-at-least-32-characters-long-please-change-this-in-production"
+    ):
+        jwt_secret = env_jwt_secret
 
     now = int(datetime.now(UTC).timestamp())
 
@@ -249,7 +258,16 @@ def create_auth_headers(user_id: str = "dev") -> dict[str, str]:
     """Create test authentication headers."""
     import os
 
+    # Use the same JWT_SECRET that the application is using
     jwt_secret = os.getenv("JWT_SECRET", "test-jwt-secret-for-testing")
+    # If JWT_SECRET is set via env var (not from .env), use that for consistency
+    env_jwt_secret = os.environ.get("JWT_SECRET")
+    if (
+        env_jwt_secret
+        and env_jwt_secret
+        != "your-secure-jwt-secret-at-least-32-characters-long-please-change-this-in-production"
+    ):
+        jwt_secret = env_jwt_secret
 
     now = int(datetime.now(UTC).timestamp())
 

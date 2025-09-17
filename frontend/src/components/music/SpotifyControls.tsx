@@ -57,7 +57,7 @@ export default function SpotifyControls() {
                 const deviceList = j.devices || [];
                 console.log('🎵 SPOTIFY CONTROLS: Setting devices', {
                     count: deviceList.length,
-                    devices: deviceList.map((d: any) => ({ id: d.id, name: d.name, type: d.type, is_active: d.is_active })),
+                    devices: deviceList.map((d: Device) => ({ id: d.id, name: d.name, type: d.type, is_active: d.is_active })),
                     timestamp: new Date().toISOString()
                 });
                 setDevices(deviceList);

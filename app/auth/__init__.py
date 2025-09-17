@@ -46,8 +46,12 @@ try:
     )
 except ImportError:
     # If the auth module doesn't exist yet, define stubs
-    def _should_apply_backoff(*args, **kwargs):
-        return False  # Default: no backoff
+    def _should_apply_backoff(user_key):
+        """Check if exponential backoff should be applied for the given user."""
+        if user_key not in _attempts:
+            return False
+        count, _ = _attempts[user_key]
+        return count >= _EXPONENTIAL_BACKOFF_THRESHOLD
 
     _backoff_start_ms = 0
     _backoff_max_ms = 0
@@ -71,10 +75,14 @@ except ImportError:
     EXPIRE_MINUTES = 30
     REFRESH_EXPIRE_MINUTES = 1440
 
-    # Stub rate limiting constants
+    # Stub rate limiting constants - read from environment
+    import os
+
     _ATTEMPT_MAX = 5
     _ATTEMPT_WINDOW = 300
-    _EXPONENTIAL_BACKOFF_THRESHOLD = 3
+    _EXPONENTIAL_BACKOFF_THRESHOLD = int(os.getenv("LOGIN_BACKOFF_THRESHOLD", "3"))
+    _EXPONENTIAL_BACKOFF_START = int(os.getenv("LOGIN_BACKOFF_START_MS", "200"))
+    _EXPONENTIAL_BACKOFF_MAX = int(os.getenv("LOGIN_BACKOFF_MAX_MS", "1000"))
     _HARD_LOCKOUT_THRESHOLD = 10
     _LOCKOUT_SECONDS = 900
     _attempts = {}  # Add stub for _attempts
@@ -127,6 +135,8 @@ __all__ = [
     "_ATTEMPT_MAX",
     "_ATTEMPT_WINDOW",
     "_EXPONENTIAL_BACKOFF_THRESHOLD",
+    "_EXPONENTIAL_BACKOFF_START",
+    "_EXPONENTIAL_BACKOFF_MAX",
     "_HARD_LOCKOUT_THRESHOLD",
     "_LOCKOUT_SECONDS",
     "_attempts",  # Add _attempts to __all__

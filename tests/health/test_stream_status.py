@@ -39,4 +39,4 @@ def test_streaming_sets_status_code(monkeypatch):
     assert resp.status_code == 503
     data = resp.json()
     assert isinstance(data, dict)
-    assert data.get("code") in {"BACKEND_UNAVAILABLE", "ROUTER_UNAVAILABLE"}
+    assert data.get("code") in {"backend_unavailable", "router_unavailable"}

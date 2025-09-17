@@ -131,7 +131,7 @@ def test_refresh_sets_cookies_once(monkeypatch):
     tokens = login_resp.json()
 
     # Set refresh token cookie for the refresh request
-    client.cookies.set("refresh_token", tokens["refresh_token"])
+    client.cookies.set("GSNH_RT", tokens["refresh_token"])
 
     # Refresh and capture response
     refresh_resp = client.post("/v1/auth/refresh")
@@ -207,7 +207,8 @@ def test_logout_clears_cookies_properly(monkeypatch):
 
     # Logout with the latest refresh token
     logout_resp = client.post(
-        "/logout", headers={"Authorization": f"Bearer {new_tokens['refresh_token']}"}
+        "/v1/auth/logout",
+        headers={"Authorization": f"Bearer {new_tokens['refresh_token']}"},
     )
     assert logout_resp.status_code == 204
 

@@ -1,16 +1,30 @@
 "use client";
 
 import React from "react";
-import { getQueue } from "@/lib/api";
+import { getQueue, type QueueItem as ApiQueueItem } from "@/lib/api";
+
+type QueueItem = {
+    id: string;
+    name: string;
+    artists: string;
+    art_url?: string;
+};
 
 export default function QueueCard() {
-    const [items, setItems] = React.useState<any[]>([]);
+    const [items, setItems] = React.useState<QueueItem[]>([]);
     const [skipCount, setSkipCount] = React.useState(0);
     const lastLoadedAtRef = React.useRef<number>(0);
 
     const refresh = async () => {
         const q = await getQueue();
-        setItems(q.up_next || []);
+        // Transform ApiQueueItem[] to component QueueItem[]
+        const transformedItems: QueueItem[] = (q.up_next || []).map((item: ApiQueueItem) => ({
+            id: item.id,
+            name: item.track.title,
+            artists: item.track.artist,
+            art_url: item.track.album ? `/album-art/${item.track.album}.jpg` : undefined
+        }));
+        setItems(transformedItems);
         if (typeof q.skip_count === 'number') setSkipCount(q.skip_count);
         lastLoadedAtRef.current = Date.now();
     };

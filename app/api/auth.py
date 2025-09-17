@@ -8,6 +8,7 @@ import os
 import random
 import secrets
 import time
+import warnings
 from datetime import UTC, datetime
 from typing import Any
 
@@ -17,6 +18,22 @@ from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
 from ..auth_protection import public_route
+
+# DEPRECATED: Import from app.auth.endpoints.* instead
+warnings.warn(
+    "DEPRECATED: app.api.auth is deprecated. Import from app.auth.endpoints.* instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+# Legacy re-exports - these will be wrapped with deprecation warnings below
+from app.auth.endpoints.debug import debug_auth_state, debug_cookies, whoami
+from app.auth.endpoints.login import login, login_v1
+from app.auth.endpoints.logout import logout, logout_all
+from app.auth.endpoints.refresh import refresh, rotate_refresh_cookies
+from app.auth.endpoints.register import register_v1
+from app.auth.endpoints.token import dev_token, token_examples
+
 from ..deps.scopes import require_scope
 from ..deps.user import get_current_user_id, require_user, resolve_session_id
 from ..security import jwt_decode
@@ -175,8 +192,12 @@ def _append_legacy_auth_cookie_headers(
                     domain=dom,
                 ),
             )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "auth_flow: legacy_cookie_header_error=true, error=%s",
+            str(e),
+            exc_info=True,
+        )
 
 
 def _is_rate_limit_enabled() -> bool:
@@ -197,8 +218,10 @@ def _is_rate_limit_enabled() -> bool:
             not in {"1", "true", "yes", "on"}
         ):
             return False
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "rate_limit_config: config_error=true, error=%s", str(e), exc_info=True
+        )
     return True
 
 
@@ -335,15 +358,23 @@ def debug_auth_state(request: Request) -> dict[str, Any]:
             try:
                 _decode_any(access)
                 access_valid = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "debug_auth_state: access_token_decode_error=true, error=%s",
+                    str(e),
+                    exc_info=True,
+                )
 
         if refresh:
             try:
                 _decode_any(refresh)
                 refresh_valid = True
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "debug_auth_state: refresh_token_decode_error=true, error=%s",
+                    str(e),
+                    exc_info=True,
+                )
 
         return {
             "cookies_seen": list(request.cookies.keys()),
@@ -412,7 +443,7 @@ async def _require_user_or_dev(request: Request) -> str:
     try:
         return await require_user(request)
     except Exception:
-        # Best-effort dev fallback when Clerk isn’t configured and we’re in dev
+        # Best-effort dev fallback when Clerk isn't configured and we're in dev
         env = os.getenv("ENV", "dev").strip().lower()
         has_clerk = any(
             bool(os.getenv(k, "").strip())
@@ -807,10 +838,12 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 WHOAMI_OK.inc()
             else:
                 WHOAMI_FAIL.labels(reason="jwt_invalid").inc()
-        except Exception:
-            pass
-    except Exception:
-        pass
+        except Exception as e:
+            logger.warning(
+                "whoami: metrics_error=true, error=%s", str(e), exc_info=True
+            )
+    except Exception as e:
+        logger.warning("whoami: logging_error=true, error=%s", str(e), exc_info=True)
 
     # Record whoami call for monitoring
     try:
@@ -822,8 +855,10 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             is_authenticated=is_authenticated,
             jwt_status=jwt_status,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "whoami: record_call_error=true, error=%s", str(e), exc_info=True
+        )
 
     # For public whoami endpoint, return success even when unauthenticated
     # This allows clients to check authentication status without requiring auth
@@ -892,8 +927,12 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 body.get("user_id"),
                 _rid.get(),
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.error(
+                "whoami: source_conflict_log_error=true, error=%s",
+                str(e),
+                exc_info=True,
+            )
 
     # Observability log
     try:
@@ -906,8 +945,10 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             _rid.get(),
             latency_ms,
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            "whoami: observability_log_error=true, error=%s", str(e), exc_info=True
+        )
 
     from fastapi.responses import JSONResponse as _JSON
 
@@ -950,8 +991,8 @@ async def whoami(
     try:
         if os.getenv("AUTH_DEBUG") == "1":
             log_incoming_cookies(request, route="/v1/whoami")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("whoami: debug_log_error=true, error=%s", str(e), exc_info=True)
 
     # First, delegate identity resolution to canonical whoami_impl
     try:
@@ -990,10 +1031,16 @@ async def whoami(
 
                         current_user_id = get_current_user_id(request=request)
                         await perform_lazy_refresh(request, out, current_user_id)  # type: ignore[arg-type]
-                    except Exception:
-                        pass
-        except Exception:
-            pass
+                    except Exception as e:
+                        logger.warning(
+                            "whoami: lazy_refresh_error=true, error=%s",
+                            str(e),
+                            exc_info=True,
+                        )
+        except Exception as e:
+            logger.warning(
+                "whoami: lazy_refresh_setup_error=true, error=%s", str(e), exc_info=True
+            )
         return out  # type: ignore[return-value]
 
     # If already authenticated (dict), return immediately
@@ -1010,15 +1057,19 @@ async def whoami(
                     }
                 },
             )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "whoami: success_log_error=true, error=%s", str(e), exc_info=True
+            )
         # Set caching headers on the provided response and return dict
         try:
             response.headers["Vary"] = "Origin"
             response.headers["Cache-Control"] = "no-store, max-age=0"
             response.headers["Pragma"] = "no-cache"
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "whoami: headers_error=true, error=%s", str(e), exc_info=True
+            )
         return out  # FastAPI will serialize and include headers/cookies from response
 
     # Otherwise, attempt silent rotation if refresh cookie present and no access cookie
@@ -1036,10 +1087,18 @@ async def whoami(
                 current_user_id = get_current_user_id(request=request)
                 # IMPORTANT: set cookies on the actual response object so Set-Cookie is returned
                 await perform_lazy_refresh(request, response, current_user_id)
-            except Exception:
-                pass  # Best effort for compatibility
-    except Exception:
-        pass
+            except Exception as e:
+                logger.warning(
+                    "whoami: lazy_refresh_response_error=true, error=%s",
+                    str(e),
+                    exc_info=True,
+                )
+    except Exception as e:
+        logger.warning(
+            "whoami: lazy_refresh_response_setup_error=true, error=%s",
+            str(e),
+            exc_info=True,
+        )
 
     try:
         duration = int((time.time() - start_time) * 1000)
@@ -1054,16 +1113,20 @@ async def whoami(
                 }
             },
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "whoami: response_log_error=true, error=%s", str(e), exc_info=True
+        )
 
     # Set caching headers on the provided response and return dict
     try:
         response.headers["Vary"] = "Origin"
         response.headers["Cache-Control"] = "no-store, max-age=0"
         response.headers["Pragma"] = "no-cache"
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "whoami: response_headers_error=true, error=%s", str(e), exc_info=True
+        )
     return out
 
 
@@ -1168,11 +1231,17 @@ def _jwt_secret() -> str:
                 logging.getLogger(__name__).warning(
                     "Using weak JWT_SECRET because DEV_MODE=1 is set. Do NOT use in production."
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.error(
+                    "jwt_secret: dev_mode_warning_error=true, error=%s",
+                    str(e),
+                    exc_info=True,
+                )
             return sec
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            "jwt_secret: configuration_error=true, error=%s", str(e), exc_info=True
+        )
     # Security check: prevent use of default/placeholder secrets
     # Allow "secret" for test compatibility
     insecure_secrets = {"change-me", "default", "placeholder", "key"}
@@ -1190,8 +1259,10 @@ def _key_pool_from_env() -> dict[str, str]:
             obj = json.loads(raw)
             if isinstance(obj, dict) and obj:
                 return {str(k): str(v) for k, v in obj.items()}
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "jwt_secret: json_parse_error=true, error=%s", str(e), exc_info=True
+            )
         try:
             items = [p.strip() for p in str(raw).split(",") if p.strip()]
             out: dict[str, str] = {}
@@ -1201,8 +1272,12 @@ def _key_pool_from_env() -> dict[str, str]:
                     out[kid.strip()] = sec.strip()
             if out:
                 return out
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "jwt_secret: key_value_parse_error=true, error=%s",
+                str(e),
+                exc_info=True,
+            )
     sec = os.getenv("JWT_SECRET")
     if not sec or sec.strip() == "":
         raise HTTPException(status_code=500, detail="missing_jwt_secret")
@@ -1240,8 +1315,12 @@ def _decode_any_strict(token: str, *, leeway: int = 0) -> dict:
     elif kid and kid not in pool:
         try:
             logger.info("auth.jwt kid_not_found attempting_pool_refresh")
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "jwt_decode: kid_not_found_log_error=true, error=%s",
+                str(e),
+                exc_info=True,
+            )
     last_err: Exception | None = None
     for _, sec in keys:
         try:
@@ -1270,14 +1349,18 @@ def _get_refresh_ttl_seconds() -> int:
         v = os.getenv("JWT_REFRESH_TTL_SECONDS")
         if v is not None and str(v).strip() != "":
             return max(1, int(v))
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "jwt_ttl: seconds_config_error=true, error=%s", str(e), exc_info=True
+        )
     try:
         vmin = os.getenv("JWT_REFRESH_EXPIRE_MINUTES")
         if vmin is not None and str(vmin).strip() != "":
             return max(60, int(vmin) * 60)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "jwt_ttl: minutes_config_error=true, error=%s", str(e), exc_info=True
+        )
     return 7 * 24 * 60 * 60
 
 
@@ -1304,12 +1387,15 @@ async def clerk_finish(request: Request) -> dict[str, Any]:
         except Exception:
             body = b""
         logger.info(">> Body: %s", body)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("debug_body: log_error=true, error=%s", str(e), exc_info=True)
     # Echo minimal info so callers see something structured
     try:
         return {"status": "ok", "path": str(request.url), "length": len(body)}  # type: ignore[name-defined]
-    except Exception:
+    except Exception as e:
+        logger.warning(
+            "clerk_finish: response_error=true, error=%s", str(e), exc_info=True
+        )
         return {"status": "ok"}
 
 
@@ -1457,10 +1543,14 @@ async def register_v1(request: Request, response: Response):
             sid = resolve_session_id(request=request, user_id=username)
             if jti:
                 await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "register: refresh_allow_error=true, error=%s", str(e), exc_info=True
+            )
     except Exception as e:
-        logger.warning(f"register.cookie_set_failed: {e}")
+        logger.warning(
+            "register: cookie_set_failed=true, error=%s", str(e), exc_info=True
+        )
 
     # Update user metrics
     try:
@@ -1468,8 +1558,10 @@ async def register_v1(request: Request, response: Response):
         if user:
             await user_store.ensure_user(user.id)
             await user_store.update_login_stats(user.id)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "register: user_metrics_error=true, error=%s", str(e), exc_info=True
+        )
 
     return {"access_token": access_token, "refresh_token": refresh_token}
 
@@ -1541,8 +1633,11 @@ async def login(
                 raise HTTPException(status_code=429, detail="too_many_requests")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            "login_flow: rate_limit_error=true, error=%s", str(e), exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="rate_limit_error")
 
     # Use centralized cookie configuration for sharp and consistent cookies
     from ..cookie_config import get_cookie_config, get_token_ttls
@@ -1642,14 +1737,18 @@ async def login(
                     request=request,
                     cookie_name="did",
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(
+                "login: device_cookie_error=true, error=%s", str(e), exc_info=True
+            )
         # Use centralized session ID resolution to ensure consistency
         sid = resolve_session_id(request=request, user_id=username)
         await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
     except Exception as e:
         # Best-effort; login still succeeds with access token alone
-        logger.error(f"Exception in login cookie setting: {e}")
+        logger.error(
+            "login: cookie_setting_error=true, error=%s", str(e), exc_info=True
+        )
     # Get the user's UUID for user_store operations
     user = await get_user_async(username)
     if user:
@@ -1659,8 +1758,8 @@ async def login(
     try:
         if os.getenv("AUTH_DEBUG") == "1":
             log_set_cookie(response, route="/v1/auth/login", user_id=username)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning("login: debug_log_error=true, error=%s", str(e), exc_info=True)
     # Always return tokens in dev login to support header-auth mode and debugging.
     # In cookie mode the client may ignore these fields.
     return {
@@ -1748,9 +1847,11 @@ async def logout(request: Request, response: Response):
 
         # TTL: align with remaining refresh TTL when available; best-effort 7d
         await revoke_refresh_family(sid, ttl_seconds=_get_refresh_ttl_seconds())
-    except Exception:
+    except Exception as e:
         # Best-effort token revocation - continue with cookie clearing
-        pass
+        logger.warning(
+            "logout: revoke_refresh_family_error=true, error=%s", str(e), exc_info=True
+        )
 
     # Delete session from session store
     try:
@@ -1785,20 +1886,27 @@ async def logout(request: Request, response: Response):
             from ..web.cookies import clear_auth_cookies as _web_clear
 
             _web_clear(response, request)
-        except Exception:
-            pass
-    except Exception:
+        except Exception as e:
+            logger.warning(
+                "logout: web_clear_error=true, error=%s", str(e), exc_info=True
+            )
+    except Exception as e:
         # Ultimate fallback: clear cookies using centralized cookie functions
         # This ensures cookies are cleared even if cookie_config fails
+        logger.warning(
+            "logout: web_clear_setup_error=true, error=%s", str(e), exc_info=True
+        )
         try:
             from ..cookies import clear_auth_cookies
 
             clear_auth_cookies(response, request)
             logger.info("logout.clear_cookies fallback cookies=3")
-        except Exception:
+        except Exception as e:
             # If even the fallback fails, we can't do much more
             # The response will still be 204, indicating logout was processed
-            pass
+            logger.warning(
+                "logout: fallback_clear_error=true, error=%s", str(e), exc_info=True
+            )
 
     # 204 No Content per contract
     response.status_code = 204
@@ -1821,8 +1929,12 @@ async def logout_all(request: Request, response: Response):
         sid = resolve_session_id_strict(request=request)
         if sid:
             await revoke_refresh_family(sid, ttl_seconds=_get_refresh_ttl_seconds())
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            "logout_flow: revoke_refresh_family_error=true, error=%s",
+            str(e),
+            exc_info=True,
+        )
     # Delete session id
     try:
         from ..auth import _delete_session_id
@@ -1831,8 +1943,10 @@ async def logout_all(request: Request, response: Response):
         sid = read_session_cookie(request)
         if sid:
             _delete_session_id(sid)
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(
+            "logout: delete_session_error=true, error=%s", str(e), exc_info=True
+        )
     # Clear cookies
     try:
         from ..cookies import clear_auth_cookies, clear_device_cookie
@@ -1840,8 +1954,10 @@ async def logout_all(request: Request, response: Response):
         clear_auth_cookies(response, request)
         # Also clear device_id cookie to ensure complete logout
         clear_device_cookie(response, request, cookie_name="device_id")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            "logout_flow: clear_cookies_error=true, error=%s", str(e), exc_info=True
+        )
     response.status_code = 204
     return response
 
@@ -1937,8 +2053,11 @@ async def refresh(
                     )
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            "refresh_flow: csrf_validation_error=true, error=%s", str(e), exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="csrf_validation_error")
 
     # CSRF validation passed
     logger.info("refresh_flow: csrf_passed=true")
@@ -1960,8 +2079,11 @@ async def refresh(
                 raise HTTPException(status_code=429, detail="too_many_requests")
     except HTTPException:
         raise
-    except Exception:
-        pass
+    except Exception as e:
+        logger.error(
+            "refresh_flow: rate_limit_error=true, error=%s", str(e), exc_info=True
+        )
+        raise HTTPException(status_code=500, detail="rate_limit_error")
     # Use the new robust refresh implementation
     from ..metrics_auth import (
         record_refresh_latency,
@@ -2005,8 +2127,12 @@ async def refresh(
                 payload = _decode_any(refresh_token)
                 if isinstance(payload, dict):
                     extracted_user_id = payload.get("user_id") or payload.get("sub")
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "refresh_decode: token_decode_error=true, error=%s",
+                    str(e),
+                    exc_info=True,
+                )
 
         # Get current user ID for validation (fallback if token decode fails)
         current_user_id = (
@@ -2044,8 +2170,10 @@ async def refresh(
                         route="/v1/auth/refresh",
                         user_id=tokens.get("user_id"),
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "refresh: debug_log_error=true, error=%s", str(e), exc_info=True
+                )
             # Return RefreshOut with rotated=True and access_token if available
             # Use guard to prevent empty tokens
             at = tokens.get("access_token", "") if isinstance(tokens, dict) else ""
@@ -2149,16 +2277,24 @@ async def refresh(
                         session_id=None,
                         request=request,
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "refresh: cookie_set_no_rotation_error=true, error=%s",
+                    str(e),
+                    exc_info=True,
+                )
             # Debug: print Set-Cookie headers sent when no rotation
             try:
                 if os.getenv("AUTH_DEBUG") == "1":
                     log_set_cookie(
                         response, route="/v1/auth/refresh", user_id=current_user_id
                     )
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(
+                    "refresh: debug_log_no_rotation_error=true, error=%s",
+                    str(e),
+                    exc_info=True,
+                )
 
             return RefreshOut(
                 rotated=False,
@@ -2343,11 +2479,142 @@ from ..auth_protection import public_route
 login_v1 = login
 
 
-__all__ = [
-    "router",
-    "verify_pat",
-    "rotate_refresh_cookies",
-    "_ensure_auth",
+# DEPRECATED: Add warnings when legacy exports are accessed
+class _DeprecatedAccess:
+    """Wrapper to warn when deprecated exports are accessed."""
+
+    def __init__(self, obj, name: str, message: str):
+        self._obj = obj
+        self._name = name
+        self._message = message
+        self._warned = False
+
+    def __call__(self, *args, **kwargs):
+        if not self._warned:
+            logger.warning(self._message)
+            self._warned = True
+        return self._obj(*args, **kwargs)
+
+    def __getattr__(self, name):
+        if not self._warned:
+            logger.warning(self._message)
+            self._warned = True
+        return getattr(self._obj, name)
+
+    # Wrap key functions with deprecation warnings
+    # Note: These are defined at the end after all functions are declared
+
+    __all__ = [
+        "router",
+        "verify_pat",
+        "rotate_refresh_cookies",
+        "_ensure_auth",
+        "login",
+        "login_v1",
+        "register_v1",
+        "refresh",
+        "logout",
+        "logout_all",
+        "dev_token",
+        "token_examples",
+        "debug_cookies",
+        "debug_auth_state",
+        "whoami",
+        "clerk_finish",
+        "mock_set_access_cookie",
+        "finish_clerk_login",
+    ]
+
+
+# Apply deprecation wrappers for legacy re-exports
+login = _DeprecatedAccess(
+    login,
+    "login",
+    "DEPRECATED: app.api.auth.login is deprecated. Import from app.auth.endpoints.login instead.",
+)
+
+login_v1 = _DeprecatedAccess(
+    login_v1,
     "login_v1",
+    "DEPRECATED: app.api.auth.login_v1 is deprecated. Import from app.auth.endpoints.login instead.",
+)
+
+register_v1 = _DeprecatedAccess(
+    register_v1,
     "register_v1",
-]
+    "DEPRECATED: app.api.auth.register_v1 is deprecated. Import from app.auth.endpoints.register instead.",
+)
+
+refresh = _DeprecatedAccess(
+    refresh,
+    "refresh",
+    "DEPRECATED: app.api.auth.refresh is deprecated. Import from app.auth.endpoints.refresh instead.",
+)
+
+logout = _DeprecatedAccess(
+    logout,
+    "logout",
+    "DEPRECATED: app.api.auth.logout is deprecated. Import from app.auth.endpoints.logout instead.",
+)
+
+logout_all = _DeprecatedAccess(
+    logout_all,
+    "logout_all",
+    "DEPRECATED: app.api.auth.logout_all is deprecated. Import from app.auth.endpoints.logout instead.",
+)
+
+dev_token = _DeprecatedAccess(
+    dev_token,
+    "dev_token",
+    "DEPRECATED: app.api.auth.dev_token is deprecated. Import from app.auth.endpoints.token instead.",
+)
+
+token_examples = _DeprecatedAccess(
+    token_examples,
+    "token_examples",
+    "DEPRECATED: app.api.auth.token_examples is deprecated. Import from app.auth.endpoints.token instead.",
+)
+
+debug_cookies = _DeprecatedAccess(
+    debug_cookies,
+    "debug_cookies",
+    "DEPRECATED: app.api.auth.debug_cookies is deprecated. Import from app.auth.endpoints.debug instead.",
+)
+
+debug_auth_state = _DeprecatedAccess(
+    debug_auth_state,
+    "debug_auth_state",
+    "DEPRECATED: app.api.auth.debug_auth_state is deprecated. Import from app.auth.endpoints.debug instead.",
+)
+
+whoami = _DeprecatedAccess(
+    whoami,
+    "whoami",
+    "DEPRECATED: app.api.auth.whoami is deprecated. Import from app.auth.endpoints.debug instead.",
+)
+
+clerk_finish = _DeprecatedAccess(
+    clerk_finish,
+    "clerk_finish",
+    "DEPRECATED: app.api.auth.clerk_finish is deprecated. Import from app.auth.endpoints.debug instead.",
+)
+
+mock_set_access_cookie = _DeprecatedAccess(
+    mock_set_access_cookie,
+    "mock_set_access_cookie",
+    "DEPRECATED: app.api.auth.mock_set_access_cookie is deprecated. Import from app.auth.endpoints.debug instead.",
+)
+
+finish_clerk_login = _DeprecatedAccess(
+    finish_clerk_login,
+    "finish_clerk_login",
+    "DEPRECATED: app.api.auth.finish_clerk_login is deprecated. Import from app.auth.endpoints.debug instead.",
+)
+
+# Warn when router is accessed (main export)
+_router = router
+router = _DeprecatedAccess(
+    _router,
+    "router",
+    "DEPRECATED: app.api.auth.router is deprecated. Import from app.auth.endpoints instead.",
+)

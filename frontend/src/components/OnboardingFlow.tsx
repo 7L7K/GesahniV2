@@ -58,7 +58,7 @@ export default function OnboardingFlow({ onboardingStatus, onComplete }: Onboard
                         await updateProfile(nextProfile);
                     } catch (err) {
                         // eslint-disable-next-line no-console
-                        console.error('Failed to save step data:', err as any);
+                        console.error('Failed to save step data:', err);
                     }
                 })();
             }

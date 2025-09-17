@@ -16,6 +16,29 @@ from ...models.third_party_tokens import ThirdPartyToken
 
 logger = logging.getLogger(__name__)
 
+
+def log_spotify_oauth(operation: str, details: dict = None, level: str = "info"):
+    """Enhanced Spotify OAuth logging."""
+    details = details or {}
+    log_data = {
+        "operation": operation,
+        "component": "spotify_oauth",
+        "timestamp": time.time(),
+        **details,
+    }
+
+    if level == "debug":
+        logger.debug(f"🔐 SPOTIFY OAUTH {operation.upper()}", extra={"meta": log_data})
+    elif level == "warning":
+        logger.warning(
+            f"🔐 SPOTIFY OAUTH {operation.upper()}", extra={"meta": log_data}
+        )
+    elif level == "error":
+        logger.error(f"🔐 SPOTIFY OAUTH {operation.upper()}", extra={"meta": log_data})
+    else:
+        logger.info(f"🔐 SPOTIFY OAUTH {operation.upper()}", extra={"meta": log_data})
+
+
 # telemetry span decorator fallback
 try:
     from ...telemetry import with_span
@@ -127,6 +150,15 @@ class SpotifyOAuth:
         self, code: str, pkce: SpotifyPKCE
     ) -> dict[str, Any]:
         """Exchange authorization code for access and refresh tokens."""
+        log_spotify_oauth(
+            "exchange_code_start",
+            {
+                "message": "Starting code exchange for tokens",
+                "code_length": len(code) if code else 0,
+                "pkce_state": pkce.state[:8] + "..." if pkce.state else None,
+            },
+        )
+
         token_url = "https://accounts.spotify.com/api/token"
 
         # Prepare token exchange data
@@ -151,32 +183,44 @@ class SpotifyOAuth:
         )
         is_fake_code = code == "fake"
 
-        logger.info(
-            "🎵 SPOTIFY EXCHANGE: Test mode check",
-            extra={
-                "meta": {
-                    "test_mode_env": test_mode_env,
-                    "is_test_mode": is_test_mode,
-                    "code": code,
-                    "is_fake_code": is_fake_code,
-                    "condition_met": is_test_mode and is_fake_code,
-                }
+        log_spotify_oauth(
+            "test_mode_check",
+            {
+                "message": "Checking test mode configuration",
+                "test_mode_env": test_mode_env,
+                "is_test_mode": is_test_mode,
+                "code": code[:8] + "..." if code else None,
+                "is_fake_code": is_fake_code,
+                "condition_met": is_test_mode and is_fake_code,
             },
         )
 
         if is_test_mode and is_fake_code:
-            logger.info(
-                "🎵 SPOTIFY EXCHANGE: Using test mode - returning fake tokens",
-                extra={"meta": {"code": code}},
+            log_spotify_oauth(
+                "using_test_mode",
+                {
+                    "message": "Using test mode - returning fake tokens",
+                    "code": code[:8] + "..." if code else None,
+                },
             )
             now = int(time.time())
-            return {
+            fake_tokens = {
                 "access_token": f"B{secrets.token_hex(16)}",  # Start with 'B' to pass validation
                 "refresh_token": f"A{secrets.token_hex(16)}",  # Start with 'A' and ensure length > 10
                 "scope": self.scopes,
                 "expires_in": 3600,
                 "expires_at": now + 3600,
             }
+            log_spotify_oauth(
+                "test_tokens_generated",
+                {
+                    "message": "Test tokens generated successfully",
+                    "access_token_length": len(fake_tokens["access_token"]),
+                    "refresh_token_length": len(fake_tokens["refresh_token"]),
+                    "expires_at": fake_tokens["expires_at"],
+                },
+            )
+            return fake_tokens
 
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(30.0, connect=10.0)

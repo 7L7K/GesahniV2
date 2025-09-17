@@ -29,7 +29,9 @@ def test_register_and_duplicate():
         conn.commit()
     conn.close()
 
-    resp = client.post("/register", json={"username": "alice", "password": "secret"})
+    resp = client.post(
+        "/v1/auth/register", json={"username": "alice", "password": "secret"}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert "access_token" in data
@@ -47,7 +49,9 @@ def test_register_and_duplicate():
     assert stored != "secret"
     assert auth.pwd_context.verify("secret", stored)
 
-    resp2 = client.post("/register", json={"username": "alice", "password": "x"})
+    resp2 = client.post(
+        "/v1/auth/register", json={"username": "alice", "password": "x"}
+    )
     assert resp2.status_code == 400
     assert resp2.json()["detail"] == "username_taken"
 
@@ -71,7 +75,9 @@ def test_register_is_public_endpoint():
     conn.close()
 
     # Register should work without any authentication
-    resp = client.post("/register", json={"username": "bob", "password": "secret"})
+    resp = client.post(
+        "/v1/auth/register", json={"username": "bob", "password": "secret"}
+    )
     assert resp.status_code == 200
     data = resp.json()
     assert "access_token" in data

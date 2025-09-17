@@ -31,6 +31,12 @@ class _MetricStub:
         except Exception:
             pass
 
+    def set(self, value: float):
+        try:
+            self.value = value
+        except Exception:
+            pass
+
 
 # Wrap real prometheus Counter/Histogram to tolerate duplicate registration
 # by falling back to _MetricStub when registry already contains the timeseries.
@@ -199,10 +205,49 @@ SPOTIFY_PLAY_COUNT = Counter(
     ["status"],
 )
 
+SPOTIFY_CALLBACK_TOTAL = Counter(
+    "spotify_callback_total",
+    "Spotify callback results",
+    ["result"],
+)
+
+SPOTIFY_STATUS_CONNECTED = Counter(
+    "spotify_status_connected_total",
+    "Spotify status responses reporting connected",
+    ["user"],
+)
+
+if Gauge is not None:
+    SPOTIFY_TOKENS_EXPIRES_IN_SECONDS = Gauge(
+        "spotify_tokens_expires_in_seconds",
+        "Spotify token freshness for connected users",
+        ["user"],
+    )
+else:  # pragma: no cover - Gauge unavailable
+    SPOTIFY_TOKENS_EXPIRES_IN_SECONDS = _MetricStub("spotify_tokens_expires_in_seconds")
+
 SPOTIFY_DEVICE_LIST_COUNT = Counter(
     "spotify_device_list_count_total",
     "Spotify device list requests",
     ["status"],
+)
+
+# New observability metrics for music functionality
+SPOTIFY_DEVICES_REQUEST_COUNT = Counter(
+    "spotify_devices_request_count",
+    "Spotify devices API requests",
+    ["status", "auth_state"],
+)
+
+SPOTIFY_DEVICES_CACHE_BYPASS_COUNT = Counter(
+    "spotify_devices_cache_bypass_count",
+    "Spotify devices cache bypass events",
+)
+
+SPOTIFY_STATUS_REQUESTS_COUNT = Counter(
+    "spotify_status_requests_count",
+    "Spotify status API requests",
+    ["status", "auth_state"],
 )
 
 # Phase 6.1: Clean Prometheus Metrics (no sampling)
@@ -841,6 +886,18 @@ WS_CONNECTIONS_TOTAL = Counter(
     ["scope", "endpoint", "action"],  # action: connect|disconnect|error
 )
 
+WS_MUSIC_CONNECTIONS_TOTAL = Counter(
+    "ws_music_connections_total",
+    "Music WebSocket connections",
+    ["action"],  # action: connect|disconnect|error
+)
+
+WS_MUSIC_MESSAGES_TOTAL = Counter(
+    "ws_music_messages_total",
+    "Music WebSocket messages",
+    ["direction", "message_type"],  # direction: inbound|outbound
+)
+
 WS_MESSAGES_TOTAL = Counter(
     "gesahni_ws_messages_total",
     "WebSocket messages by scope",
@@ -983,6 +1040,37 @@ MUSIC_RECO_MISS = Counter(
     "music_reco_miss_total",
     "Recommendation cache misses",
     ["vibe"],
+)
+
+# Additional music command metrics
+MUSIC_COMMAND_COUNT = Counter(
+    "music_command_total",
+    "Music control commands executed",
+    ["command", "status", "provider"],
+)
+
+MUSIC_COMMAND_LATENCY = Histogram(
+    "music_command_latency_seconds",
+    "Music command execution latency",
+    ["command", "provider"],
+)
+
+MUSIC_STATE_REQUEST_COUNT = Counter(
+    "music_state_request_total",
+    "Music state endpoint requests",
+    ["status", "cached"],
+)
+
+MUSIC_SET_DEVICE_COUNT = Counter(
+    "music_set_device_total",
+    "Set music device requests",
+    ["status"],
+)
+
+TV_MUSIC_PLAY_COUNT = Counter(
+    "tv_music_play_total",
+    "TV music play requests",
+    ["status"],
 )
 
 # ----------------------------

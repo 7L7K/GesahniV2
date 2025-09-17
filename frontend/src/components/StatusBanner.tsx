@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useHealthPolling } from '@/hooks/useHealth';
 import IssueTray from '@/components/IssueTray';
 
@@ -30,7 +30,7 @@ export default function StatusBanner() {
   useEffect(() => {
     // Reset dismissal when status changes
     if (dismissedKey && dismissedKey !== statusKey) setDismissedKey(null);
-  }, [statusKey]);
+  }, [statusKey, dismissedKey]);
 
   const onDismiss = () => {
     try { sessionStorage.setItem('statusBanner:dismissed', statusKey); } catch { /* noop */ }
@@ -55,13 +55,13 @@ export default function StatusBanner() {
           <span>Backend offline — retrying…</span>
           <div className="flex items-center gap-2">
             <button
-            type="button"
-            aria-label="Open issue tray"
-            className="inline-flex items-center justify-center rounded bg-red-600 text-white text-[11px] px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-red-700"
-            onClick={() => setTrayOpen(true)}
-          >
-            {failingCount} {failingCount === 1 ? 'Issue' : 'Issues'}
-          </button>
+              type="button"
+              aria-label="Open issue tray"
+              className="inline-flex items-center justify-center rounded bg-red-600 text-white text-[11px] px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-red-700"
+              onClick={() => setTrayOpen(true)}
+            >
+              {failingCount} {failingCount === 1 ? 'Issue' : 'Issues'}
+            </button>
             <button
               type="button"
               aria-label="Dismiss status banner"
@@ -71,10 +71,10 @@ export default function StatusBanner() {
               Dismiss
             </button>
           </div>
-          </div>
-          <IssueTray open={trayOpen} onClose={() => setTrayOpen(false)} />
         </div>
-      );
+        <IssueTray open={trayOpen} onClose={() => setTrayOpen(false)} />
+      </div>
+    );
   }
 
   // Degraded banner
@@ -90,13 +90,13 @@ export default function StatusBanner() {
           <span title={tooltip}>⚠︎ Some services degraded: {failing.join(', ')}</span>
           <div className="flex items-center gap-2">
             <button
-            type="button"
-            aria-label="Open issue tray"
-            className="inline-flex items-center justify-center rounded bg-amber-600 text-white text-[11px] px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-amber-700"
-            onClick={() => setTrayOpen(true)}
-          >
-            {failingCount} {failingCount === 1 ? 'Issue' : 'Issues'}
-          </button>
+              type="button"
+              aria-label="Open issue tray"
+              className="inline-flex items-center justify-center rounded bg-amber-600 text-white text-[11px] px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-amber-700"
+              onClick={() => setTrayOpen(true)}
+            >
+              {failingCount} {failingCount === 1 ? 'Issue' : 'Issues'}
+            </button>
             <button
               type="button"
               aria-label="Dismiss status banner"

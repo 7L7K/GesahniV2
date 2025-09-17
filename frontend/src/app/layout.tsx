@@ -14,6 +14,7 @@ import AuthProvider from "@/components/AuthProvider";
 import ClientOnly from "@/components/ClientOnly";
 import { ConfigValidator } from "@/components/ConfigValidator";
 import AuthHud from "@/components/AuthHUD";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -67,7 +68,9 @@ export default function RootLayout({
                 <ConfigValidator />
                 <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 bg-primary text-primary-foreground rounded px-3 py-2">Skip to content</a>
                 <div id="main" className="bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-zinc-50 via-background to-background dark:from-zinc-900/20">
-                  {children}
+                  <ErrorBoundary>
+                    {children}
+                  </ErrorBoundary>
                 </div>
                 {process.env.NODE_ENV !== 'production' ? <AuthHud /> : null}
               </div>

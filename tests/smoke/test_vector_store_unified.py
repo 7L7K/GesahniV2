@@ -37,11 +37,13 @@ def _setup_app(monkeypatch, vector_dsn: str):
     importlib.reload(app.memory.unified_store)
     importlib.reload(app.memory.api)
 
-    from app import main
+    from app.main import create_app
 
-    monkeypatch.setattr(main, "ha_startup", lambda: None)
-    monkeypatch.setattr(main, "llama_startup", lambda: None)
-    return main.app
+    app = create_app()
+    # Mock startup functions to avoid real network calls
+    monkeypatch.setattr(app, "ha_startup", lambda: None)
+    monkeypatch.setattr(app, "llama_startup", lambda: None)
+    return app
 
 
 def test_vector_store_memory_backend(monkeypatch):

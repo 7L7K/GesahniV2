@@ -16,7 +16,7 @@ interface DevicePrefsStepProps {
 export default function DevicePrefsStep({ profile, onNext }: DevicePrefsStepProps) {
     const [speechRate, setSpeechRate] = useState<number>(profile.speech_rate ?? 1.0);
     const [inputMode, setInputMode] = useState<'voice' | 'touch' | 'both'>(
-        (profile.input_mode as any) ?? 'both',
+        (profile.input_mode as 'voice' | 'touch' | 'both' | undefined) ?? 'both',
     );
     const [fontScale, setFontScale] = useState<number>(profile.font_scale ?? 1.0);
     const [wakeWord, setWakeWord] = useState<boolean>(Boolean(profile.wake_word_enabled));
@@ -117,7 +117,7 @@ export default function DevicePrefsStep({ profile, onNext }: DevicePrefsStepProp
                     <h3 className="text-lg font-medium text-gray-900 mb-3">Wake word</h3>
                     <label className="inline-flex items-center gap-3">
                         <input type="checkbox" checked={wakeWord} onChange={e => setWakeWord(e.target.checked)} />
-                        <span className="text-sm text-gray-700">Enable "Hey Sweetie"</span>
+                        <span className="text-sm text-gray-700">Enable &ldquo;Hey Sweetie&rdquo;</span>
                     </label>
                 </div>
 

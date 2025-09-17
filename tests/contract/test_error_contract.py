@@ -128,7 +128,7 @@ def test_error_contract_shape_429_rate_limit(client):
 def test_error_contract_shape_500_internal_error(client):
     """Test 500 internal error response shape matches contract."""
     # Mock an internal error by patching a core function
-    with patch("app.main.app.middleware") as mock_middleware:
+    with patch("app.main.get_app().middleware") as mock_middleware:
         mock_middleware.side_effect = Exception("Test internal error")
         r = client.get("/v1/health", headers=auth_header())
 

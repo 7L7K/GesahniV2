@@ -1,13 +1,13 @@
 'use client';
 
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import ChatBubble from '../components/ChatBubble';
 import LoadingBubble from '../components/LoadingBubble';
 import InputBar from '../components/InputBar';
 import { Button } from '@/components/ui/button';
 // Clerk auth UI removed for cookie-only frontend
-import { sendPrompt, getToken, getMusicState, type MusicState, apiFetch, isAuthed, handleAuthError } from '@/lib/api';
+import { sendPrompt, getToken, getMusicState, type MusicState, apiFetch, handleAuthError } from '@/lib/api';
 import { wsHub } from '@/services/wsHub';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 import NowPlayingCard from '@/components/music/NowPlayingCard';
@@ -27,6 +27,7 @@ import { ModelSelector } from '@/components/ModelSelector';
 import EmptyState from '@/components/EmptyState';
 import { useHealthPolling } from '@/hooks/useHealth';
 import { useSpotifyStatus, useMusicDevices } from '@/hooks/useSpotify';
+import { FEATURES } from '@/config/features';
 
 interface ChatMessage {
   id: string;
@@ -114,10 +115,11 @@ export default function Page() {
   const wsMusicOpen = useWsOpen('music', 2000);
   const spotifyOk = (String(health?.checks?.spotify || 'ok') === 'ok') || (String(health?.checks?.spotify || '') === 'skipped');
   const { connected: spotifyConnected } = useSpotifyStatus(45000);
-  const { hasDevice } = useMusicDevices(45000);
+  const { devices, connected: musicConnected } = useMusicDevices();
+  const hasDevice = devices && devices.length > 0;
   const musicUiReady = wsMusicOpen && spotifyOk && spotifyConnected;
   const shouldPollHttpMusic = (!wsMusicOpen) && spotifyOk && spotifyConnected;
-  const musicDegradedReason = !spotifyConnected ? 'Connect Spotify to enable playback' : (!spotifyOk ? 'Spotify degraded' : (!wsMusicOpen ? 'Connection lost — trying to reconnect' : (!hasDevice ? 'No device available' : 'Unavailable')));
+  const musicDegradedReason = !FEATURES.MUSIC_DEVICES_POLL_ENABLED ? 'Music device polling is disabled' : (!spotifyConnected ? 'Connect Spotify to enable playback' : (!spotifyOk ? 'Spotify degraded' : (!wsMusicOpen ? 'Connection lost — trying to reconnect' : (!hasDevice ? 'No device available' : 'Unavailable'))));
 
   // Helpers: scope storage keys per user id for privacy
   const historyKey = `chat_history_${authState.user?.id || 'anon'}`;

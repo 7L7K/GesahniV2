@@ -22,9 +22,11 @@ def require_scopes(scopes: list[str]):
             getattr(user, "state", None) or getattr(user, "jwt_payload", None) or user,
             scopes,
         ):
-            from app.http_errors import forbidden
+            from app.http_errors import http_error
 
-            raise forbidden(code="insufficient_scopes", message="insufficient scopes")
+            raise http_error(
+                code="insufficient_scopes", message="insufficient scopes", status=403
+            )
         return user
 
     return _gate

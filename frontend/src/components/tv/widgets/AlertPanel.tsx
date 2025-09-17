@@ -18,7 +18,7 @@ export function AlertPanel() {
         setSeconds(10);
         timerRef.current = setInterval(() => setSeconds((s) => (s > 0 ? s - 1 : 0)), 1000);
         return () => { if (timerRef.current) clearInterval(timerRef.current); emitUiRestore(); };
-    }, []);
+    }, [scene]);
 
     const cancel = () => {
         scene.toAmbient("user_interaction");

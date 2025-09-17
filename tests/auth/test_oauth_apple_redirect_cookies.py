@@ -11,6 +11,7 @@ def _make_client(monkeypatch):
     # Private key is not used when we stub the signer below
     monkeypatch.setenv("APPLE_PRIVATE_KEY", "unused")
     monkeypatch.setenv("APPLE_REDIRECT_URI", "http://testserver/auth/apple/callback")
+    monkeypatch.setenv("AUTH_LEGACY_COOKIE_NAMES", "1")
 
     from app.api.oauth_apple import router as apple_router
 
@@ -48,6 +49,14 @@ def test_apple_callback_sets_cookies_on_returned_302(monkeypatch):
     oa.httpx.AsyncClient = lambda timeout=10: _FakeClient()  # type: ignore
     # Stub signer to avoid ES256 private key handling during tests
     oa._sign_client_secret = lambda team_id, client_id, key_id, private_key: "fake"  # type: ignore
+
+    async def _fake_session_create(user_id):
+        return {"sid": "sid123", "did": "did123"}
+
+    oa.sessions_store.create_session = _fake_session_create  # type: ignore
+
+    # Pretend the state double-submit cookie was set by /auth/apple/start
+    client.cookies.set("oauth_state", "/")
 
     # Now call the callback with minimal fields
     r = client.post(

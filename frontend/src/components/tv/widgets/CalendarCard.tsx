@@ -53,13 +53,13 @@ export function CalendarCard() {
   const [mounted, setMounted] = useState<boolean>(false);
 
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
     (async () => {
       try {
         const res = (await apiFetch("/v1/tv/calendar/next", { method: "GET" }).then((r) => r.json())) as CalendarNextRes;
-        if (mounted) setItems(Array.isArray(res.items) ? res.items : []);
+        if (isMounted) setItems(Array.isArray(res.items) ? res.items : []);
       } catch {
-        if (mounted) setItems([]);
+        if (isMounted) setItems([]);
       }
     })();
     const t = setInterval(() => setNow(new Date()), 30_000);
@@ -67,7 +67,7 @@ export function CalendarCard() {
     setNow(new Date());
     setMounted(true);
     return () => {
-      mounted = false;
+      isMounted = false;
       clearInterval(t);
     };
   }, []);

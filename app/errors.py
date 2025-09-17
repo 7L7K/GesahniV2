@@ -5,6 +5,24 @@ from typing import Any
 
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+
+class APIError(BaseModel):
+    """Standardized API error response model."""
+
+    code: str
+    message: str
+
+    model_config = {
+        "json_schema_extra": {
+            "example": {
+                "code": "spotify_not_authenticated",
+                "message": "Connect Spotify to list devices.",
+            }
+        }
+    }
 
 
 class BackendUnavailableError(RuntimeError):
@@ -15,16 +33,27 @@ class BackendUnavailableError(RuntimeError):
 
 
 def json_error(
-    code: str, message: str, status: int, meta: dict[str, Any] | None = None
+    code: str,
+    message: str,
+    status: int | None = None,
+    meta: dict[str, Any] | None = None,
+    *,
+    http_status: int | None = None,
 ) -> JSONResponse:
     """Create a standardized JSON error response.
 
     This enforces the contract: {"code", "message", "meta"} structure
     that our tests verify. Lowercase codes for consistency.
     """
+    # Accept both "status" and "http_status" for compatibility. Prefer http_status.
+    sc = (
+        http_status
+        if http_status is not None
+        else (status if status is not None else 500)
+    )
     return JSONResponse(
         {"code": code.lower(), "message": message, "meta": meta or {}},
-        status_code=status,
+        status_code=sc,
     )
 
 
@@ -39,7 +68,7 @@ async def global_error_handler(request: Request, exc: Exception) -> JSONResponse
     base_meta = {"request_id": req_id, "timestamp": now}
 
     # Map common exceptions to standardized responses
-    if isinstance(exc, HTTPException):
+    if isinstance(exc, (HTTPException, StarletteHTTPException)):
         # FastAPI HTTPException - map status codes to specific error codes
         status_to_code = {
             401: "unauthorized",
@@ -99,3 +128,5 @@ def register_error_handlers(app):
 
     # Add specific HTTP exception handler (FastAPI's built-in)
     app.add_exception_handler(HTTPException, global_error_handler)
+    # Ensure Starlette HTTP errors (e.g., 404 for missing routes) are also normalized
+    app.add_exception_handler(StarletteHTTPException, global_error_handler)

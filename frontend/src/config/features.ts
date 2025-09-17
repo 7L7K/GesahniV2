@@ -2,6 +2,7 @@ export type FeatureFlags = {
   FEATURE_SCHEDULER_ON: boolean;
   FEATURE_REDUCE_MOTION: boolean;
   FEATURE_TICKER: boolean;
+  MUSIC_DEVICES_POLL_ENABLED: boolean;
 };
 
 function flag(name: string, fallback = false): boolean {
@@ -16,4 +17,5 @@ export const FEATURES: FeatureFlags = {
   FEATURE_SCHEDULER_ON: flag("FEATURE_SCHEDULER_ON", true),
   FEATURE_REDUCE_MOTION: flag("FEATURE_REDUCE_MOTION", false),
   FEATURE_TICKER: flag("FEATURE_TICKER", true),
+  MUSIC_DEVICES_POLL_ENABLED: flag("MUSIC_DEVICES_POLL_ENABLED", true),
 };

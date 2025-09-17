@@ -9,7 +9,42 @@ from collections.abc import Iterable
 from functools import lru_cache
 from typing import TYPE_CHECKING, Any, Literal
 
-from rapidfuzz import fuzz
+try:
+    from rapidfuzz import fuzz as _fuzz
+except Exception:  # pragma: no cover - optional dependency for local scripts
+    _fuzz = None
+
+    def _partial_ratio(a: str, b: str) -> int:
+        """Fallback fuzzy matcher using difflib when rapidfuzz/numpy is unavailable."""
+
+        from difflib import SequenceMatcher
+
+        if not a or not b:
+            return 0
+
+        a_l = a.lower()
+        b_l = b.lower()
+        # Ensure ``shorter`` is the reference window
+        shorter, longer = (a_l, b_l) if len(a_l) <= len(b_l) else (b_l, a_l)
+        if not shorter:
+            return 0
+
+        matcher = SequenceMatcher()
+        matcher.set_seq1(shorter)
+        max_ratio = 0.0
+        # Slide window across the longer string to approximate partial ratio
+        for start in range(len(longer) - len(shorter) + 1):
+            matcher.set_seq2(longer[start : start + len(shorter)])
+            max_ratio = max(max_ratio, matcher.ratio())
+            if max_ratio == 1.0:
+                break
+        return int(max_ratio * 100)
+
+else:  # pragma: no cover - exercised in normal deployments
+
+    def _partial_ratio(a: str, b: str) -> int:
+        return int(_fuzz.partial_ratio(a, b))
+
 
 # NOTE: Avoid importing sentence-transformers at module import time to prevent
 # fork warnings with uvicorn --reload and to keep startup fast. We import
@@ -110,7 +145,7 @@ def _semantic_classify(text: str) -> tuple[str, float, bool]:
         exact = False
         for label, examples in EXAMPLE_INTENTS.items():
             for ex in examples:
-                score = fuzz.partial_ratio(text, ex)
+                score = _partial_ratio(text, ex)
                 if score > best_score:
                     best_label, best_score = label, float(score)
                     exact = text == ex
@@ -147,7 +182,7 @@ def detect_intent(
     prompt_l = prompt.lower().strip()
 
     # -- Greeting heuristic --------------------------------------------------
-    if any(fuzz.partial_ratio(prompt_l, g) >= 80 for g in GREETINGS):
+    if any(_partial_ratio(prompt_l, g) >= 80 for g in GREETINGS):
         score = 1.0
         intent, priority = "smalltalk", "low"
         rec = log_record_var.get()

@@ -45,9 +45,11 @@ async def verify_ws(ws: WebSocket):
         except Exception:
             pass
         await ws.close(code=4403, reason="origin_not_allowed")
-        from app.http_errors import forbidden
+        from app.http_errors import http_error
 
-        raise forbidden(code="origin_not_allowed", message="origin not allowed")
+        raise http_error(
+            code="origin_not_allowed", message="origin not allowed", status=403
+        )
 
     # If no JWT secret is configured, allow connections (useful for tests/dev)
     jwt_secret = os.getenv("JWT_SECRET")

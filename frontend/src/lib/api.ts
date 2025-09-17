@@ -15,7 +15,7 @@ const BACKOFF_CONFIG = {
     initialDelay: 400, // Start at 400ms
     maxDelay: 5000,    // Cap at 5 seconds
     maxAttempts: 4,    // Maximum 4 attempts
-    multiplier: 2,     // Exponential growth
+    multiplier: 2 as number, // Exponential growth
 } as const;
 
 /**
@@ -29,24 +29,24 @@ async function withBackoff<T>(
     context: string = 'unknown'
 ): Promise<T> {
     let attempt = 0;
-    let delay = BACKOFF_CONFIG.initialDelay;
+    let delay: number = BACKOFF_CONFIG.initialDelay;
 
     while (attempt < BACKOFF_CONFIG.maxAttempts) {
         attempt += 1;
 
         try {
             return await operation();
-        } catch (error: any) {
+        } catch (error: unknown) {
             // Extract status code from error - could be from Response object or error object
             let status: number | null = null;
 
             // If it's a Response object, get the status
             if (error && typeof error === 'object' && 'status' in error) {
-                status = error.status;
+                status = (error as { status: number }).status;
             }
             // If it's an error with status property
-            else if (error?.status) {
-                status = error.status;
+            else if (error && typeof error === 'object' && 'status' in error) {
+                status = (error as { status: number }).status;
             }
 
             // Don't retry on auth/validation errors
@@ -86,7 +86,7 @@ export async function api(path: string, init: RequestInit = {}) {
     // Deprecated: use apiFetch for all new code; keep this shim for legacy callers
     const { apiFetch } = await import('./api/fetch');
     const headers = { 'content-type': 'application/json', ...(init.headers || {}) } as HeadersInit;
-    const res = await apiFetch(path, { ...(init as any), headers });
+    const res = await apiFetch(path, { ...init, headers });
     if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status} ${res.statusText}: ${body}`);
@@ -157,16 +157,23 @@ export async function sendPrompt(
         throw new Error(`Request failed: ${res.status} - ${message}`);
     }
     if (isJson) {
-        const body = await res.json().catch(() => null) as any;
+        const body = await res.json().catch(() => null) as unknown;
         // Be defensive: some backends may return null or a different shape
-        const candidate = body && (body.response ?? body.result ?? body.text ?? body.answer);
+        const candidate = body && typeof body === 'object' && body !== null &&
+            ((body as Record<string, unknown>).response ??
+                (body as Record<string, unknown>).result ??
+                (body as Record<string, unknown>).text ??
+                (body as Record<string, unknown>).answer);
         if (typeof candidate === 'string') return candidate;
-        const rawDetail = body && (body.detail || body.error || body.message);
+        const rawDetail = body && typeof body === 'object' && body !== null &&
+            ((body as Record<string, unknown>).detail ||
+                (body as Record<string, unknown>).error ||
+                (body as Record<string, unknown>).message);
         const msg = rawDetail ? String(rawDetail) : (res.statusText || `HTTP ${res.status}`);
         throw new Error(`Invalid JSON response body: ${msg}`);
     }
     // Prefer streaming reader if available (works in browsers and jsdom)
-    const bodyStream: any = (res as any).body;
+    const bodyStream = (res as { body?: ReadableStream<Uint8Array> }).body;
     let result = "";
     if (!bodyStream || (typeof bodyStream.getReader !== 'function' && !(Symbol.asyncIterator in bodyStream))) {
         // Fall back to text() for jsdom/Response mocks that buffer whole body
@@ -333,15 +340,17 @@ export async function getBudget(): Promise<{ tokens_used?: number; minutes_used?
     // Safari sometimes surfaces non-JSON content with a generic SyntaxError.
     // Parse defensively and fall back to boolean shape.
     const ct = (res.headers.get('content-type') || '').toLowerCase();
-    let body: any = null;
+    let body: unknown = null;
     if (ct.includes('application/json')) {
         body = await res.json().catch(() => null);
     } else {
         const text = await res.text().catch(() => '');
         try { body = JSON.parse(text); } catch { body = text; }
     }
-    if (body && typeof body === 'object' && 'near_cap' in body) return body as any;
-    return { near_cap: Boolean(body) } as any;
+    if (body && typeof body === 'object' && body !== null && 'near_cap' in body) {
+        return body as { tokens_used?: number; minutes_used?: number; reply_len_target?: string; escalate_allowed?: boolean; near_cap: boolean };
+    }
+    return { near_cap: Boolean(body) };
 }
 
 // Music helpers
@@ -393,6 +402,16 @@ export type MusicState = {
     explicit_allowed?: boolean
 }
 
+// Extend window interface for WebSocket hub
+declare global {
+    interface Window {
+        wsHub?: {
+            getConnectionStatus: (channel: string) => { isOpen: boolean };
+            send: (channel: string, message: string) => void;
+        };
+    }
+}
+
 export async function musicCommand(cmd: {
     command: 'play' | 'pause' | 'next' | 'previous' | 'seek' | 'setVolume' | 'transferPlayback' | 'queueAdd'
     volume?: number
@@ -402,7 +421,7 @@ export async function musicCommand(cmd: {
     entity_type?: string
 }): Promise<void> {
     // Try WebSocket first, fallback to HTTP
-    const wsHub = (window as any).wsHub;
+    const wsHub = window.wsHub;
     if (wsHub && wsHub.getConnectionStatus('music').isOpen) {
         return new Promise((resolve, reject) => {
             // Send WebSocket message
@@ -415,16 +434,17 @@ export async function musicCommand(cmd: {
             };
 
             // Remove command field as it's now in type
-            delete (msg as any).command;
+            const { command, ...msgWithoutCommand } = msg;
+            const finalMsg = { ...msgWithoutCommand, type: command };
 
             try {
-                wsHub.send('music', JSON.stringify(msg));
+                wsHub.send('music', JSON.stringify(finalMsg));
 
                 // Listen for ack or error response
                 const handleAck = (event: Event) => {
-                    const customEvent = event as CustomEvent;
+                    const customEvent = event as CustomEvent<{ req_id: string; type: string }>;
                     const detail = customEvent.detail;
-                    if (detail.req_id === msg.req_id) {
+                    if (detail.req_id === finalMsg.req_id) {
                         window.removeEventListener('music.ack', handleAck);
                         window.removeEventListener('music.error', handleError);
                         if (detail.type === 'ack') {
@@ -436,9 +456,9 @@ export async function musicCommand(cmd: {
                 };
 
                 const handleError = (event: Event) => {
-                    const customEvent = event as CustomEvent;
+                    const customEvent = event as CustomEvent<{ req_id: string; message?: string }>;
                     const detail = customEvent.detail;
-                    if (detail.req_id === msg.req_id) {
+                    if (detail.req_id === finalMsg.req_id) {
                         window.removeEventListener('music.ack', handleAck);
                         window.removeEventListener('music.error', handleError);
                         reject(new Error(detail.message || 'Command failed'));
@@ -464,7 +484,7 @@ export async function musicCommand(cmd: {
         const httpCmd = { ...cmd };
         // Map new command names to old HTTP format
         if (cmd.command === 'setVolume') {
-            (httpCmd as any).command = 'volume';
+            httpCmd.command = 'volume' as typeof cmd.command;
         } else if (cmd.command === 'seek') {
             // HTTP might not support seek, handle gracefully
         }
@@ -494,16 +514,84 @@ export async function setVibe(v: Partial<{
     if (!res?.ok) throw new Error(await res?.text?.() || 'Request failed')
 }
 
-export async function getQueue(): Promise<{ current: any; up_next: any[]; skip_count?: number }> {
+export type QueueItem = {
+    id: string;
+    track: {
+        id: string;
+        title: string;
+        artist: string;
+        album?: string;
+        duration_ms: number;
+        explicit: boolean;
+        provider: string;
+    };
+    requested_by?: string;
+    vibe?: Record<string, unknown>;
+};
+
+export async function getQueue(): Promise<{ current: QueueItem | null; up_next: QueueItem[]; skip_count?: number }> {
     const device = getActiveDeviceId();
-    return _dedup(`/v1/queue`, device ? [`device:${device}`] : undefined);
+    return _dedup(`/v1/queue`, device ? [`device:${device}`] : undefined) as Promise<{ current: QueueItem | null; up_next: QueueItem[]; skip_count?: number }>;
 }
 
-export async function getRecommendations(): Promise<{ recommendations: any[] }> {
-    return _dedup(`/v1/recommendations`);
+export type Recommendation = {
+    id: string;
+    title: string;
+    artist: string;
+    album?: string;
+    duration_ms: number;
+    explicit: boolean;
+    provider: string;
+};
+
+export async function getRecommendations(): Promise<{ recommendations: Recommendation[] }> {
+    return _dedup(`/v1/recommendations`) as Promise<{ recommendations: Recommendation[] }>;
 }
 
-export async function listDevices(): Promise<{ ok: boolean; status?: number; code?: string; devices: any[] }> {
+export async function fetchDevices() {
+    const res = await apiFetch("/v1/music/devices", { auth: true, dedupe: false, cache: 'no-store' });
+    if (res.status === 401) {
+        // attempt to parse structured code
+        let body: unknown = {};
+        try { body = await res.json(); } catch { }
+        if (body && typeof body === 'object' && body !== null) {
+            const bodyObj = body as Record<string, unknown>;
+            if (bodyObj.detail && typeof bodyObj.detail === 'object' &&
+                (bodyObj.detail as Record<string, unknown>).code === "spotify_not_authenticated" ||
+                bodyObj.code === "spotify_not_authenticated") {
+                const err = new Error("Spotify not connected") as Error & { code: string };
+                err.code = "spotify_not_authenticated";
+                throw err;
+            }
+        }
+    }
+    if (!res.ok) {
+        const err = new Error(`devices ${res.status}`) as Error & { status: number };
+        err.status = res.status;
+        throw err;
+    }
+    return res.json();
+}
+
+export async function fetchSpotifyStatus() {
+    const res = await apiFetch("/v1/spotify/status", { auth: true, dedupe: false, cache: 'no-store' });
+    if (!res.ok) {
+        const err = new Error(`spotify status ${res.status}`) as Error & { status: number };
+        err.status = res.status;
+        throw err;
+    }
+    return res.json();
+}
+
+export type Device = {
+    id: string;
+    name: string;
+    type: string;
+    volume_percent: number;
+    is_active: boolean;
+};
+
+export async function listDevices(): Promise<{ ok: boolean; status?: number; code?: string; devices: Device[] }> {
     // Gate devices fetching on backend online OR recent whoami success
     try {
         const authOrchestrator = getAuthOrchestrator();
@@ -516,17 +604,24 @@ export async function listDevices(): Promise<{ ok: boolean; status?: number; cod
     } catch { /* ignore and proceed */ }
 
     try {
-        const res = await apiFetch(`/v1/music/devices`, { auth: true, dedupe: false, cache: 'no-store' } as any);
+        const res = await apiFetch(`/v1/music/devices`, { auth: true, dedupe: false, cache: 'no-store' });
         const status = res?.status ?? 0;
         if (!res || !res.ok) {
             return { ok: false, status, code: 'request_failed', devices: [] };
         }
         const json = await res.json().catch(() => null);
-        const devices = json?.items ?? json?.devices ?? [];
+        const devices = (json?.items ?? json?.devices ?? []) as Device[];
         return { ok: true, status, devices };
-    } catch (err: any) {
-        const status = err?.status ?? 0;
-        const code = err?.code ?? err?.error ?? 'unknown';
+    } catch (err: unknown) {
+        const error = err as Error & { status?: number; code?: string; error?: string };
+        const status = error?.status ?? 0;
+        const code = error?.code ?? error?.error ?? 'unknown';
+
+        // Handle 401 Unauthorized as Spotify auth error
+        if (status === 401) {
+            return { ok: false, status, code: 'spotify_not_authenticated', devices: [] };
+        }
+
         return { ok: false, status, code, devices: [] };
     }
 }
@@ -773,25 +868,29 @@ export function getAuthErrorMessage(error: AuthErrorEvent): {
 }
 
 // Supporting functions for legacy exports
-const _inflight: Record<string, Promise<any> | undefined> = Object.create(null);
-const _cache: Record<string, { ts: number; data: any } | undefined> = Object.create(null);
+const _inflight: Record<string, Promise<unknown> | undefined> = Object.create(null);
+const _cache: Record<string, { ts: number; data: unknown } | undefined> = Object.create(null);
 const STALE_MS = Number(process.env.NEXT_PUBLIC_READ_CACHE_MS || 1500);
 
 function _dedupKey(path: string, contextKey?: string | string[]): string {
     const authNs = getAuthNamespace();
     const device = getActiveDeviceId();
-    const ctx = normalizeContextKey([contextKey as any].flat().filter(Boolean).concat(device ? [`device:${device}`] : []));
+    const ctx = normalizeContextKey(
+        (Array.isArray(contextKey) ? contextKey : [contextKey])
+            .filter((key): key is string => Boolean(key))
+            .concat(device ? [`device:${device}`] : [])
+    );
     return `dedup ${path} ${authNs}${ctx ? ` ${ctx}` : ''}`;
 }
 
-async function _dedup(path: string, contextKey?: string | string[]): Promise<any> {
+async function _dedup(path: string, contextKey?: string | string[]): Promise<unknown> {
     const key = _dedupKey(path, contextKey);
     const now = Date.now();
     const cached = _cache[key];
     if (cached && now - cached.ts < STALE_MS) return cached.data;
     if (_inflight[key]) return _inflight[key]!;
     const p = (async () => {
-        const res = await apiFetch(path, { auth: true, contextKey });
+        const res = await apiFetch(path, { auth: true, dedupe: false, contextKey });
         if (!res?.ok) throw new Error(await res?.text?.() || 'Request failed');
         const json = await res.json();
         _cache[key] = { ts: Date.now(), data: json };

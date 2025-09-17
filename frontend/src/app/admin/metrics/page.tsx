@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useAdminMetrics } from "@/lib/api";
 
 export default function AdminMetrics() {
@@ -14,7 +15,15 @@ export default function AdminMetrics() {
 
   return (
     <div className="mx-auto max-w-5xl p-6 space-y-8">
-      <h1 className="text-2xl font-semibold">Admin Metrics</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Admin Metrics</h1>
+        <Link
+          href="/admin/metrics/music"
+          className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 text-sm"
+        >
+          🎵 Music Dashboard
+        </Link>
+      </div>
       <div className="flex items-center gap-2">
         <input value={token} onChange={(e) => setToken(e.target.value)} onBlur={() => { try { localStorage.setItem('admin:token', token || '') } catch { } }} className="border rounded px-2 py-1 text-sm min-w-48" placeholder="admin token" />
         <button className="border rounded px-2 py-1 text-xs" onClick={() => { try { localStorage.setItem('admin:token', token || '') } catch { } }}>Save</button>

@@ -10,18 +10,26 @@ from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 
+from app.db.core import SyncSessionLocal as SessionLocal
+from app.deps.user import resolve_user_id
+from app.http_errors import unauthorized
 from app.security import jwt_decode
 
 from . import oauth  # import module so tests can monkey‑patch its attributes
-from .db import GoogleToken, SessionLocal
+from .db import GoogleToken, init_db
 
 router = APIRouter(tags=["Auth"])
 
 
-# Note: this sample integration uses a stubbed session layer for demo purposes.
-def _current_user_id(req: Request) -> str:
-    # Legacy stub; prefer dependency injection when available
-    return "anon"
+def _require_user_id(req: Request) -> str:
+    """Resolve the current user id and raise 401 when unauthenticated."""
+    user_id = resolve_user_id(request=req)
+    if not user_id or user_id == "anon":
+        raise unauthorized(
+            message="authentication required",
+            hint="login or include Authorization header",
+        )
+    return user_id
 
 
 def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "anon"):
@@ -60,7 +68,10 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
     except Exception as e:
         import logging
 
-        logging.getLogger(__name__).warning(f"Failed to create session ID: {e}")
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"Failed to create session ID: {e}", extra={"meta": {"error": str(e)}}
+        )
         session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
 
     # Use centralized cookie functions
@@ -115,13 +126,22 @@ def test_endpoint():
     return {"message": "Google router is working"}
 
 
-@router.get("/connect")
+@router.get("/integration/connect")
 def connect_endpoint(request: Request):
     """Compatibility endpoint for tests expecting /connect instead of /auth/google/login_url."""
     # Generate a simple OAuth URL for testing (similar to the real endpoint)
     import secrets
 
     state = secrets.token_urlsafe(32)
+
+    # Normalize next redirect target using canonical sanitizer
+    raw_next = request.query_params.get("next") or "/"
+    try:
+        from app.security.redirects import sanitize_next_path
+
+        next_url = sanitize_next_path(raw_next)
+    except Exception:
+        next_url = "/"
 
     # Use test OAuth config
     client_id = os.getenv("GOOGLE_CLIENT_ID", "test-client-id")
@@ -148,7 +168,7 @@ def connect_endpoint(request: Request):
 
     from fastapi import Response
 
-    response_data = {"authorize_url": oauth_url}
+    response_data = {"authorize_url": oauth_url, "state": state}
 
     http_response = Response(
         content=json.dumps(response_data), media_type="application/json"
@@ -160,7 +180,9 @@ def connect_endpoint(request: Request):
     set_oauth_state_cookies(
         resp=http_response,
         state=state,
+        next_url=next_url,
         ttl=300,  # 5 minutes
+        provider="g",
         request=request,
     )
 
@@ -168,7 +190,7 @@ def connect_endpoint(request: Request):
 
 
 # Compatibility: legacy OAuth callback path used by some tests and older clients.
-@router.get("/oauth/callback")
+@router.get("/integration/oauth/callback")
 def legacy_oauth_callback(request: Request):
     """Compatibility shim: mint application cookies and redirect to root.
 
@@ -178,7 +200,26 @@ def legacy_oauth_callback(request: Request):
     integration path.
     """
     # Reuse existing helper to mint cookies and return a redirect response.
-    return _mint_cookie_redirect(request, "/")
+    raw_next = request.cookies.get("g_next") or request.query_params.get("next") or "/"
+    try:
+        from app.security.redirects import sanitize_next_path
+
+        next_path = sanitize_next_path(raw_next)
+    except Exception:
+        next_path = "/"
+
+    target_url = _build_origin_aware_url(request, next_path)
+    resp = _mint_cookie_redirect(request, target_url)
+
+    # Clear state cookies now that we've completed the flow
+    try:
+        from app.web.cookies import clear_oauth_state_cookies
+
+        clear_oauth_state_cookies(resp, provider="g")
+    except Exception:
+        pass
+
+    return resp
 
 
 # REMOVED: Duplicate route /auth/login_url - replaced by stateless endpoint in app.api.google_oauth
@@ -216,7 +257,8 @@ class SendEmailIn(BaseModel):
     },
 )
 def gmail_send(payload: SendEmailIn, request: Request):
-    uid = _current_user_id(request)
+    uid = _require_user_id(request)
+    init_db()
     with SessionLocal() as s:
         row = s.get(GoogleToken, uid)
         if not row:
@@ -296,7 +338,8 @@ class CreateEventIn(BaseModel):
     },
 )
 def calendar_create(evt: CreateEventIn, request: Request):
-    uid = _current_user_id(request)
+    uid = _require_user_id(request)
+    init_db()
     with SessionLocal() as s:
         row = s.get(GoogleToken, uid)
         if not row:

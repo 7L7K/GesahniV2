@@ -29,5 +29,18 @@ async def send_sms(to_number: str, body: str) -> bool:
             resp = await client.post(url, data=data, auth=auth)
             resp.raise_for_status()
         return True
-    except Exception:
+    except Exception as e:
+        # Log the error for debugging but don't expose details
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            "Twilio SMS send failed",
+            extra={
+                "meta": {
+                    "error_type": type(e).__name__,
+                    "to_number": to_number[:4] + "****",
+                }
+            },
+        )
         return False

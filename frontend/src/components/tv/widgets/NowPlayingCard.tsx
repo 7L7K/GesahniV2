@@ -2,12 +2,19 @@
 
 import { useEffect, useState } from "react";
 
+// Extend window interface for music state
+declare global {
+    interface Window {
+        __musicState?: { title?: string; artist?: string; playing?: boolean };
+    }
+}
+
 type MusicState = { title?: string; artist?: string; playing?: boolean };
 
 export function NowPlayingCard() {
     const [state, setState] = useState<MusicState>({});
     useEffect(() => {
-        const update = () => setState((window as any).__musicState || {});
+        const update = () => setState(window.__musicState || {});
         update();
         const t = setInterval(update, 2000);
         return () => clearInterval(t);

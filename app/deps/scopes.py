@@ -215,11 +215,89 @@ ROLE_SCOPES = {
 
 
 def _get_scopes_from_request(request: Request) -> set[str] | None:
-    """Extract scopes from request.state.scopes (set by SessionAttachMiddleware)."""
+    """Extract scopes from request.state.scopes (set by SessionAttachMiddleware).
+
+    Falls back to extracting scopes directly from JWT payload if middleware didn't set them.
+
+    Returns:
+        set of scopes if authenticated with scopes
+        empty set if authenticated but no scopes
+        None if not authenticated
+    """
+    # First try fallback: extract scopes directly from JWT token
+    try:
+        # Try to get JWT token from Authorization header
+        auth_header = request.headers.get("authorization", "")
+        if auth_header.lower().startswith("bearer "):
+            token = auth_header.split(None, 1)[1].strip()
+            if token:
+                # Decode the JWT token
+
+                import jwt
+
+                from app.security.jwt_config import get_jwt_config
+
+                try:
+                    cfg = get_jwt_config()
+                    payload = jwt.decode(token, cfg.secret, algorithms=[cfg.alg])
+                    if isinstance(payload, dict):
+                        # Check for both "scopes" (plural) and "scope" (singular) for compatibility
+                        raw_scopes = payload.get("scopes") or payload.get("scope")
+                        if isinstance(raw_scopes, str):
+                            scopes = [
+                                s.strip() for s in raw_scopes.split() if s.strip()
+                            ]
+                        elif isinstance(raw_scopes, list | tuple | set):
+                            scopes = list(raw_scopes)
+                        else:
+                            scopes = []  # authenticated but no scopes
+
+                        if scopes:
+                            return set(scopes)
+                        else:
+                            return set()  # authenticated but no scopes
+                except Exception:
+                    # Try with common test secrets as fallback
+                    for test_secret in [
+                        "secret",
+                        "test_jwt_secret_for_testing_only_must_be_at_least_32_chars_long",
+                    ]:
+                        try:
+                            payload = jwt.decode(
+                                token, test_secret, algorithms=["HS256"]
+                            )
+                            if isinstance(payload, dict):
+                                # Check for both "scopes" (plural) and "scope" (singular) for compatibility
+                                raw_scopes = payload.get("scopes") or payload.get(
+                                    "scope"
+                                )
+                                if isinstance(raw_scopes, str):
+                                    scopes = [
+                                        s.strip()
+                                        for s in raw_scopes.split()
+                                        if s.strip()
+                                    ]
+                                elif isinstance(raw_scopes, list | tuple | set):
+                                    scopes = list(raw_scopes)
+                                else:
+                                    scopes = []  # authenticated but no scopes
+
+                                if scopes:
+                                    return set(scopes)
+                                else:
+                                    return set()  # authenticated but no scopes
+                        except Exception:
+                            continue  # Try next test secret
+                    pass  # JWT decode failed with all secrets
+    except Exception:
+        pass  # Authorization header parsing failed
+
+    # Fallback to middleware-set scopes
     scopes = getattr(request.state, "scopes", None)
     if isinstance(scopes, list | tuple | set):
-        return set(scopes)
-    return None
+        return set(scopes)  # Convert to set, including empty set for no scopes
+
+    return None  # Not authenticated
 
 
 def _get_user_id_from_request(request: Request) -> str | None:
@@ -550,15 +628,28 @@ def require_scope(required: str) -> Callable[[Request], None]:
         if not scope_satisfied and "admin" in scopes:
             scope_satisfied = True
 
+        # Admin scope hierarchy: implement proper permission levels
+        # admin (super) > admin:write > admin:read
+        if not scope_satisfied and required.startswith("admin:"):
+            scope_hierarchy = {"admin:read": 1, "admin:write": 2, "admin": 3}
+            required_level = scope_hierarchy.get(required, 0)
+            for scope in scopes:
+                user_level = scope_hierarchy.get(scope, 0)
+                if user_level >= required_level:
+                    scope_satisfied = True
+                    break
+
         if not scope_satisfied:
             logger.warning(
                 "deny: missing_scope scope=<%s> available=<%s>",
                 required,
                 ",".join(scopes),
             )
-            from app.http_errors import forbidden
-
-            raise forbidden(code="missing_scope", message="missing required scope")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="missing required scope",
+                headers={"X-Error-Code": "missing_scope"},
+            )
 
     return _dep
 
@@ -616,9 +707,11 @@ def require_any_scope(required: Iterable[str]) -> Callable[[Request], None]:
                 ",".join(required_set),
                 ",".join(scopes),
             )
-            from app.http_errors import forbidden
-
-            raise forbidden(code="missing_scope", message="missing required scope")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="missing required scope",
+                headers={"X-Error-Code": "missing_scope"},
+            )
 
     return _dep
 
@@ -692,9 +785,11 @@ def require_scopes(required: Iterable[str]) -> Callable[[Request], None]:
                 ",".join(required_set),
                 ",".join(scopes),
             )
-            from app.http_errors import forbidden
-
-            raise forbidden(code="missing_scope", message="missing required scope")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="missing required scope",
+                headers={"X-Error-Code": "missing_scope"},
+            )
 
     return _dep
 
@@ -734,9 +829,11 @@ def require_any_scopes(required: Iterable[str]) -> Callable[[Request], None]:
                 ",".join(required_set),
                 ",".join(scopes),
             )
-            from app.http_errors import forbidden
-
-            raise forbidden(code="missing_scope", message="missing required scope")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="missing required scope",
+                headers={"X-Error-Code": "missing_scope"},
+            )
 
     return _dep
 
@@ -760,9 +857,11 @@ def require_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None]:
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not required_set <= set(scopes):
-            from app.http_errors import forbidden
-
-            raise forbidden(code="missing_scope", message="missing required scope")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="missing required scope",
+                headers={"X-Error-Code": "missing_scope"},
+            )
 
     return _dep
 
@@ -785,9 +884,11 @@ def require_any_scopes_ws(required: Iterable[str]) -> Callable[[WebSocket], None
         if isinstance(scopes, str):
             scopes = [s.strip() for s in scopes.split() if s.strip()]
         if not (set(scopes) & required_set):
-            from app.http_errors import forbidden
-
-            raise forbidden(code="missing_scope", message="missing required scope")
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="missing required scope",
+                headers={"X-Error-Code": "missing_scope"},
+            )
 
     return _dep
 

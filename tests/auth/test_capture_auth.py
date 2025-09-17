@@ -42,7 +42,9 @@ def _build_client(monkeypatch):
 
 def test_capture_start_sets_user_id_from_token(monkeypatch):
     client, captured = _build_client(monkeypatch)
-    token = client.post("/v1/auth/login").json()["access_token"]
+    token = client.post("/v1/auth/dev/login", json={"username": "test"}).json()[
+        "access_token"
+    ]
     resp = client.post("/capture/start", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 200
     assert captured["user_id"] == "alice"

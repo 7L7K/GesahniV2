@@ -54,7 +54,7 @@ def test_login_and_me(tmp_path, monkeypatch):
     headers = {"Authorization": "token123"}
 
     client.post(
-        "/register",
+        "/v1/auth/register",
         json={"username": "alice", "password": "wonderland"},
         headers=headers,
     )

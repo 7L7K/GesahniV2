@@ -88,9 +88,13 @@ def require_roles(required: Iterable[str], *, any_of: bool = True):
             )
         # Authorize based on roles (403 if missing)
         if not has_roles(request, required, any_of=any_of):
-            from app.http_errors import forbidden
+            from app.http_errors import http_error
 
-            raise forbidden(message="insufficient permissions")
+            raise http_error(
+                code="insufficient_permissions",
+                message="insufficient permissions",
+                status=403,
+            )
         return None
 
     return _dep

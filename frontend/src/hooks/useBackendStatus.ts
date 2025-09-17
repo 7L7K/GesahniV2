@@ -12,6 +12,12 @@ export function useBackendStatus() {
     const [hasChecked, setHasChecked] = useState(false);
     const readyTimer = useRef<number | null>(null);
     const depsTimer = useRef<number | null>(null);
+    const readyRef = useRef<ReadyStatus>('offline');
+
+    // Keep ref in sync with state
+    useEffect(() => {
+        readyRef.current = ready;
+    }, [ready]);
 
     useEffect(() => {
         let mounted = true;
@@ -53,7 +59,8 @@ export function useBackendStatus() {
                 setReady(newReady);
 
                 // Dispatch event if status changed
-                if (prevReady !== newReady && typeof window !== 'undefined') {
+                const prevReadyFromRef = readyRef.current;
+                if (prevReadyFromRef !== newReady && typeof window !== 'undefined') {
                     window.dispatchEvent(new CustomEvent('backend:status_changed', {
                         detail: {
                             online: newReady === 'online',
@@ -75,7 +82,8 @@ export function useBackendStatus() {
                 setHasChecked(true);
 
                 // Dispatch offline event if we were previously online
-                if (ready === 'online' && typeof window !== 'undefined') {
+                // Dispatch offline event if we were previously online
+                if (readyRef.current === 'online' && typeof window !== 'undefined') {
                     window.dispatchEvent(new CustomEvent('backend:status_changed', {
                         detail: {
                             online: false,
@@ -99,6 +107,7 @@ export function useBackendStatus() {
         };
     }, []);
 
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         let mounted = true;
         const pollDeps = async () => {

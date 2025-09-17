@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import asdict
 from typing import Any
@@ -20,6 +21,7 @@ except ImportError:
     jose_jwt = None
 
 router = APIRouter(tags=["Auth"])
+logger = logging.getLogger(__name__)
 
 
 def _to_dict(x) -> dict:
@@ -54,7 +56,7 @@ async def me(
     if not is_auth and (
         is_test_mode()
         or os.getenv("JWT_OPTIONAL_IN_TESTS", "0").lower() in {"1", "true", "yes", "on"}
-        or os.getenv("PYTEST_RUNNING")
+        or os.getenv("PYTEST_RUNNING", "").strip().lower() in {"1", "true", "yes", "on"}
     ):
         user_id = "test_user"
         is_auth = True
@@ -174,6 +176,17 @@ def _to_session_info(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
+async def _list_user_sessions_safe(user_id: str) -> list[dict[str, Any]]:
+    try:
+        return await sessions_store.list_user_sessions(user_id)
+    except Exception as exc:  # pragma: no cover - defensive logging path
+        logger.warning(
+            "sessions.list_failed",
+            extra={"meta": {"user_id": user_id, "error": str(exc)}},
+        )
+        return []
+
+
 @router.get("/sessions")
 async def sessions(
     request: Request,
@@ -190,7 +203,7 @@ async def sessions(
             message="authentication required",
             hint="login or include Authorization header",
         )
-    rows = await sessions_store.list_user_sessions(user_id)
+    rows = await _list_user_sessions_safe(user_id)
     items = _to_session_info(rows)
     try:
         if str(legacy or "").strip() in {"1", "true", "yes"}:
@@ -214,7 +227,7 @@ async def sessions_paginated(
             message="authentication required",
             hint="login or include Authorization header",
         )
-    rows = await sessions_store.list_user_sessions(user_id)
+    rows = await _list_user_sessions_safe(user_id)
     start = 0
     try:
         if cursor is not None and str(cursor).strip() != "":

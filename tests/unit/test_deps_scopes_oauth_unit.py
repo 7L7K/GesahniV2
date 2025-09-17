@@ -14,7 +14,14 @@ from app.deps.scopes import (
 
 
 def _make_token(scopes=None) -> str:
-    payload = {"user_id": "u1"}
+    import time
+
+    now = int(time.time())
+    payload = {
+        "user_id": "u1",
+        "iat": now,
+        "exp": now + 3600,  # 1 hour expiry
+    }
     if scopes:
         if isinstance(scopes, list | tuple | set):
             payload["scope"] = " ".join(sorted(set(scopes)))
@@ -45,10 +52,15 @@ def test_openapi_includes_oauth2_security_scheme(monkeypatch):
 
 
 def test_require_any_scope_allows_when_present(monkeypatch):
+    from app.security_legacy import verify_token
+
     monkeypatch.setenv("JWT_SECRET", "secret")
     app = FastAPI()
 
-    @app.get("/any", dependencies=[Depends(require_any_scope(["a", "b"]))])
+    @app.get(
+        "/any",
+        dependencies=[Depends(verify_token), Depends(require_any_scope(["a", "b"]))],
+    )
     async def handler():
         return {"ok": True}
 
@@ -58,10 +70,15 @@ def test_require_any_scope_allows_when_present(monkeypatch):
 
 
 def test_require_any_scope_blocks_when_missing(monkeypatch):
+    from app.security_legacy import verify_token
+
     monkeypatch.setenv("JWT_SECRET", "secret")
     app = FastAPI()
 
-    @app.get("/any", dependencies=[Depends(require_any_scope(["a", "b"]))])
+    @app.get(
+        "/any",
+        dependencies=[Depends(verify_token), Depends(require_any_scope(["a", "b"]))],
+    )
     async def handler():
         return {"ok": True}
 
@@ -85,11 +102,23 @@ def test_optional_require_any_scope_noop_when_env_not_set(monkeypatch):
 
 
 def test_optional_require_scope_enforces_when_enabled(monkeypatch):
+    from app.security_legacy import verify_token
+
     monkeypatch.setenv("JWT_SECRET", "secret")
     monkeypatch.setenv("ENFORCE_JWT_SCOPES", "1")
+    # Disable test bypasses that would allow anonymous access
+    monkeypatch.setenv("JWT_OPTIONAL_IN_TESTS", "false")
+    monkeypatch.setenv("PYTEST_RUNNING", "false")
+    monkeypatch.setenv("ENV", "prod")  # Use prod to avoid dev-mode bypasses
     app = FastAPI()
 
-    @app.get("/opt", dependencies=[Depends(optional_require_scope("admin:write"))])
+    @app.get(
+        "/opt",
+        dependencies=[
+            Depends(verify_token),
+            Depends(optional_require_scope("admin:write")),
+        ],
+    )
     async def handler():
         return {"ok": True}
 

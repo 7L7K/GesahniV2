@@ -1,13 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { apiFetch } from '@/lib/api';
 import { useAuthState } from '@/hooks/useAuth';
 
 export default function FooterRibbon() {
     const [lastUser, setLastUser] = useState<string>("");
     const [lastBot, setLastBot] = useState<string>("");
-    const [quiet, setQuiet] = useState<boolean>(false);
+    const [quiet, _setQuiet] = useState<boolean>(false);
     const authState = useAuthState();
 
     useEffect(() => {

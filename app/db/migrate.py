@@ -6,8 +6,10 @@ Safe to call from startup, tests, and manual operations.
 
 import asyncio
 import logging
+import os
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,12 @@ class MigrationError(Exception):
     """Raised when a migration fails."""
 
     pass
+
+
+def _is_sqlite(url: str | None) -> bool:
+    if not url:
+        return False
+    return (urlparse(url).scheme or "").startswith("sqlite")
 
 
 async def run_all_migrations(db_dir: Path | None = None) -> None:
@@ -37,36 +45,52 @@ async def run_all_migrations(db_dir: Path | None = None) -> None:
 
     # Token store migration
     async def migrate_token_store():
+        # In CI/sqlite, skip token store migration (handled by runtime schema)
+        if os.getenv("ENV", "dev").lower() in {"test", "ci"} or _is_sqlite(
+            os.getenv("DATABASE_URL")
+        ):
+            logger.debug("Skipping token store migration in test/ci or sqlite mode")
+            return
         try:
             from app.auth_store_tokens import TokenDAO
 
-            dao = TokenDAO(str(db_dir / "third_party_tokens.db") if db_dir else None)
+            dao = TokenDAO()
             await dao.ensure_schema_migrated()
             logger.info("Token store migration completed")
         except Exception as e:
             logger.error("Token store migration failed", exc_info=True)
             raise MigrationError(f"Token store migration failed: {e}")
 
-    # User store migration
-    async def migrate_user_store():
+    # Auth store migration (PostgreSQL tables are managed externally)
+    async def migrate_auth_store():
         try:
-            if db_dir:
-                from app.user_store import UserDAO
-
-                user_dao = UserDAO(db_dir / "users.db")
-            else:
-                from app.user_store import user_dao
-            await user_dao.ensure_schema_migrated()
-            logger.info("User store migration completed")
+            # PostgreSQL auth tables are managed by external migrations
+            # No runtime schema creation needed for auth_store
+            logger.debug("Auth store uses PostgreSQL with external schema management")
+            return
         except Exception as e:
-            logger.error("User store migration failed", exc_info=True)
-            raise MigrationError(f"User store migration failed: {e}")
+            logger.error("Auth store migration failed", exc_info=True)
+            raise MigrationError(f"Auth store migration failed: {e}")
+
+    # User stats store migration (PostgreSQL tables are managed externally)
+    async def migrate_user_stats_store():
+        try:
+            # PostgreSQL user stats tables are managed by external migrations
+            # No runtime schema creation needed for user_store
+            logger.debug(
+                "User stats store uses PostgreSQL with external schema management"
+            )
+            return
+        except Exception as e:
+            logger.error("User stats store migration failed", exc_info=True)
+            raise MigrationError(f"User stats store migration failed: {e}")
 
     # Add all migration tasks
     migration_tasks.extend(
         [
             migrate_token_store,
-            migrate_user_store,
+            migrate_auth_store,
+            migrate_user_stats_store,
         ]
     )
 
