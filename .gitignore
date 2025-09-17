@@ -77,3 +77,6 @@ venv311/*
 migrations/*
 *.sh
 *.txt
+
+# Backup environment files
+backpu/.env*
