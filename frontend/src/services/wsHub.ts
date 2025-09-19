@@ -1,6 +1,6 @@
 "use client";
 
-import { wsUrl, apiFetch } from "@/lib/api";
+import { wsUrl, apiFetch, fetchHealth } from "@/lib/api";
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 
 type WSName = "music" | "care";
@@ -192,7 +192,7 @@ class WsHub {
       }
       const controller = new AbortController();
       const t = setTimeout(() => controller.abort(), 1500);
-      const res = await apiFetch('/v1/health', { auth: true, dedupe: false, cache: 'no-store', signal: controller.signal });
+      const res = await fetchHealth('/v1/health');
       clearTimeout(t);
       // Treat 200 responses as online (even if degraded); only offline for network errors or 5xx
       let ok = false;

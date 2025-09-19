@@ -36,11 +36,13 @@ SAFE_ROUTER_MODULES = (
             "app.routers.",
             "app.status",
             "app.skills.",
+            "app.auth",  # For auth module
             "app.auth.",  # For auth endpoints and related modules
             "app.auth_device",
             "app.api.auth_router_dev",
             "app.integrations.",  # For integration modules
             "app.security.",  # For security utilities
+            "app.home_assistant",  # For home assistant integration
         }
     )
     | SAFE_STDLIB_MODULES
@@ -55,6 +57,8 @@ SAFE_UTILITY_MODULES = (
             "app.deps.scheduler",
             "app.router.alias_api",
             "app.security.",  # For security utilities
+            "app.auth",  # For auth module
+            "app.home_assistant",  # For home assistant integration
         }
     )
     | SAFE_STDLIB_MODULES

@@ -5,7 +5,7 @@ from datetime import datetime
 from sqlalchemy import Column, DateTime, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import declarative_base
 
-from app.db.core import sync_engine
+from app.db.core import sync_engine, SyncSessionLocal as SessionLocal
 
 # Use PostgreSQL through app.db.core instead of direct legacy file-backed store engine
 Base = declarative_base()

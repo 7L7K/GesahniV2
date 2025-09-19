@@ -15,7 +15,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.auth_core import require_scope as require_scope_core
 from app.db.chat_repo import get_messages_by_rid
-from app.db.core import get_db
+from app.db.core import get_async_db
 from app.deps.user import get_current_user_id
 from app.errors import BackendUnavailableError, json_error
 from app.otel_utils import get_trace_id_hex, start_span
@@ -1609,10 +1609,37 @@ async def ask_replay(
     """Replay endpoint for retrieving persisted chat messages by request ID."""
     # Auth is already enforced by FastAPI dependencies
     try:
-        # Get messages from database
-        async for session in get_db():
+        # Get messages from database with proper async session management
+        logger.info("🗄️ ASK_REPLAY_DB_START", extra={
+            "user_id": user_id,
+            "rid": rid,
+            "endpoint": "/ask/replay/{rid}",
+            "timestamp": __import__('time').time(),
+        })
+
+        async with get_async_db() as session:
+            logger.debug("🗄️ ASK_REPLAY_DB_SESSION_ACQUIRED", extra={
+                "user_id": user_id,
+                "rid": rid,
+                "session_type": "async_context_manager",
+                "timestamp": __import__('time').time(),
+            })
+
             messages = await get_messages_by_rid(session, user_id, rid)
-            break
+
+            logger.debug("🗄️ ASK_REPLAY_DB_QUERY_COMPLETE", extra={
+                "user_id": user_id,
+                "rid": rid,
+                "message_count": len(messages) if messages else 0,
+                "timestamp": __import__('time').time(),
+            })
+
+        logger.info("🗄️ ASK_REPLAY_DB_SUCCESS", extra={
+            "user_id": user_id,
+            "rid": rid,
+            "message_count": len(messages) if messages else 0,
+            "timestamp": __import__('time').time(),
+        })
 
         if not messages:
             # No messages found for this RID
@@ -1641,13 +1668,23 @@ async def ask_replay(
         }
 
     except HTTPException:
-        # Re-raise HTTP exceptions (like 404)
+        # Re-raise HTTP exceptions (like 404) - these are expected and don't indicate DB issues
+        logger.info("🗄️ ASK_REPLAY_HTTP_EXCEPTION", extra={
+            "user_id": user_id,
+            "rid": rid,
+            "exception_type": "HTTPException",
+            "timestamp": __import__('time').time(),
+        })
         raise
     except Exception as e:
-        logger.error(
-            "Failed to retrieve chat messages",
-            extra={"meta": {"rid": rid, "user_id": user_id, "error": str(e)}},
-        )
+        logger.error("🗄️ ASK_REPLAY_DB_ERROR", extra={
+            "user_id": user_id,
+            "rid": rid,
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "endpoint": "/ask/replay/{rid}",
+            "timestamp": __import__('time').time(),
+        })
         from app.error_envelope import raise_enveloped
 
         raise_enveloped("internal", "Failed to retrieve chat messages", status=500)

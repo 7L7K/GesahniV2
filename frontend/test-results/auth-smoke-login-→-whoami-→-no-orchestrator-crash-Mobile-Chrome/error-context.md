@@ -1,0 +1,55 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - navigation [ref=e6]:
+        - link "Login" [ref=e7] [cursor=pointer]:
+          - /url: /login
+          - button "Login" [ref=e8] [cursor=pointer]
+        - button "Toggle theme" [ref=e9] [cursor=pointer]:
+          - img
+        - generic "is_authenticated=false session_ready=false user_id=null" [ref=e10]: auth:none
+        - generic [ref=e11]: Local
+    - link "Skip to content" [ref=e13] [cursor=pointer]:
+      - /url: "#main"
+    - generic [ref=e16]:
+      - generic [ref=e17]:
+        - heading "Sign In" [level=2] [ref=e18]
+        - paragraph [ref=e19]: Welcome back to Gesahni
+      - generic [ref=e20]:
+        - button "Continue with Google" [ref=e21] [cursor=pointer]:
+          - img [ref=e22] [cursor=pointer]
+          - generic [ref=e27] [cursor=pointer]: Continue with Google
+        - generic [ref=e32]: Or continue with email
+        - generic [ref=e33]:
+          - generic [ref=e34]:
+            - generic [ref=e35]:
+              - generic [ref=e36]: Username
+              - textbox "Username" [ref=e37]: admin
+            - generic [ref=e38]:
+              - generic [ref=e39]: Password
+              - textbox "Password" [active] [ref=e40]: ChangeMe!
+          - button "Sign In" [ref=e42] [cursor=pointer]
+          - button "Mock Login (E2E Test)" [ref=e44] [cursor=pointer]
+          - button "Don't have an account? Sign up" [ref=e46] [cursor=pointer]
+  - generic [ref=e47]:
+    - img [ref=e49]
+    - button "Open Tanstack query devtools" [ref=e97] [cursor=pointer]:
+      - img [ref=e98] [cursor=pointer]
+  - generic [ref=e150] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e151] [cursor=pointer]:
+      - img [ref=e152] [cursor=pointer]
+    - generic [ref=e155] [cursor=pointer]:
+      - button "Open issues overlay" [ref=e156] [cursor=pointer]:
+        - generic [ref=e157] [cursor=pointer]:
+          - generic [ref=e158] [cursor=pointer]: "1"
+          - generic [ref=e159] [cursor=pointer]: "2"
+        - generic [ref=e160] [cursor=pointer]:
+          - text: Issue
+          - generic [ref=e161] [cursor=pointer]: s
+      - button "Collapse issues badge" [ref=e162] [cursor=pointer]:
+        - img [ref=e163] [cursor=pointer]
+  - alert [ref=e165]
+```

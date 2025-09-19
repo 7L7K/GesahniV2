@@ -32,6 +32,7 @@ from app.middleware import (
     TraceRequestMiddleware,
     add_mw,
 )
+from app.middleware.middleware_core import APILoggingMiddleware
 from app.middleware.audit_mw import AuditMiddleware
 
 # Deprecated custom CORS layers removed; use a single Starlette CORSMiddleware only when needed
@@ -104,6 +105,7 @@ def setup_middleware_stack(
         "HealthCheckFilterMiddleware",
         "RedactHashMiddleware",
         "TraceRequestMiddleware",
+        "APILoggingMiddleware",
         "RequestIDMiddleware",
         "CORSMiddleware",  # if enabled
     ]
@@ -141,6 +143,7 @@ def setup_middleware_stack(
 
     # Request ID and tracing
     add_mw(app, RequestIDMiddleware, name="RequestIDMiddleware")
+    add_mw(app, APILoggingMiddleware, name="APILoggingMiddleware")
     add_mw(app, TraceRequestMiddleware, name="TraceRequestMiddleware")
 
     # Hygiene filters
@@ -200,7 +203,7 @@ def setup_middleware_stack(
         elif name == "ReloadEnvMiddleware" and not (dev_mode and not in_ci):
             continue
         elif name == "SessionAttachMiddleware" and not _is_truthy(
-            os.getenv("SESSION_ATTACH_ENABLED", "0")
+            os.getenv("SESSION_ATTACH_ENABLED", "1")
         ):
             continue
         if name == "CORSMiddleware" and not cors_enabled:

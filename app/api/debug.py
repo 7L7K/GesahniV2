@@ -7,7 +7,7 @@ router = APIRouter(tags=["Admin"])
 
 
 def _is_dev():
-    return os.getenv("ENV", "dev").lower() in {"dev", "local"} or os.getenv(
+    return os.getenv("ENV", "dev").lower() in {"dev", "local", "test"} or os.getenv(
         "DEV_MODE", "0"
     ).lower() in {"1", "true", "yes", "on"}
 
@@ -69,8 +69,155 @@ async def ws_helper_page():
         raise http_error(
             code="debug_access_forbidden", message="debug access forbidden", status=403
         )
-    # Reuse your existing HTML page (shortened here)
-    html = "<html><body><h1>WS Helper</h1></body></html>"
+
+    # Full WebSocket helper page implementation
+    html = """<!DOCTYPE html>
+<html>
+<head>
+    <title>WS Helper • Granny Mode API</title>
+    <style>
+        body { font-family: monospace; margin: 20px; }
+        input, button { margin: 5px; padding: 5px; }
+        #events { border: 1px solid #ccc; height: 300px; overflow-y: scroll; padding: 10px; background: #f9f9f9; }
+        .error { color: red; }
+        .success { color: green; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>WebSocket helper</h1>
+
+    <div>
+        <label>WebSocket URL:</label>
+        <input type="text" id="url" size="50" value="/v1/ws/care">
+    </div>
+
+    <div>
+        <label>Token:</label>
+        <input type="text" id="token" size="50">
+    </div>
+
+    <div>
+        <label>Resident ID:</label>
+        <input type="text" id="resident" size="20" value="test-resident">
+    </div>
+
+    <div>
+        <label>Topic:</label>
+        <input type="text" id="topic" size="30" value="resident:test-resident">
+    </div>
+
+    <div>
+        <button id="btnConnect">Connect</button>
+        <button id="btnDisconnect">Disconnect</button>
+        <button id="btnSubscribe">Subscribe</button>
+        <button id="btnPing">Ping</button>
+    </div>
+
+    <div id="events"></div>
+
+    <script>
+        let ws = null;
+        const events = document.getElementById('events');
+
+        function log(message, type = 'info') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.textContent = new Date().toLocaleTimeString() + ': ' + message;
+            events.appendChild(div);
+            events.scrollTop = events.scrollHeight;
+        }
+
+        function getTokenFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('token');
+        }
+
+        function buildWebSocketUrl() {
+            const baseUrl = document.getElementById('url').value;
+            const t = document.getElementById('token').value || getTokenFromUrl();
+            if (t) {
+                return 'ws://' + window.location.host + baseUrl + '?token=' + encodeURIComponent(t);
+            }
+            return 'ws://' + window.location.host + baseUrl;
+        }
+
+        document.getElementById('btnConnect').onclick = function() {
+            if (ws) {
+                ws.close();
+            }
+
+            const wsUrl = buildWebSocketUrl();
+            log('Connecting to: ' + wsUrl);
+
+            try {
+                ws = new WebSocket(wsUrl);
+
+                ws.onopen = function() {
+                    log('Connected!', 'success');
+                };
+
+                ws.onmessage = function(event) {
+                    log('Received: ' + event.data, 'info');
+                };
+
+                ws.onclose = function() {
+                    log('Disconnected', 'error');
+                    ws = null;
+                };
+
+                ws.onerror = function(error) {
+                    log('WebSocket error: ' + error, 'error');
+                };
+            } catch (e) {
+                log('Connection failed: ' + e.message, 'error');
+            }
+        };
+
+        document.getElementById('btnDisconnect').onclick = function() {
+            if (ws) {
+                ws.close();
+                ws = null;
+            }
+        };
+
+        document.getElementById('btnSubscribe').onclick = function() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                const topic = document.getElementById('topic').value;
+                const payload = JSON.stringify({
+                    action: 'subscribe',
+                    topic: topic
+                });
+                ws.send(payload);
+                log('Sent: ' + payload, 'info');
+            } else {
+                log('Not connected', 'error');
+            }
+        };
+
+        document.getElementById('btnPing').onclick = function() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send('ping');
+                log('Sent: ping', 'info');
+            } else {
+                log('Not connected', 'error');
+            }
+        };
+
+        // Auto-populate token from URL if present
+        window.onload = function() {
+            const token = getTokenFromUrl();
+            if (token) {
+                document.getElementById('token').value = token;
+                log('Token loaded from URL', 'success');
+            }
+        };
+    </script>
+
+    <p><strong>Subscribe Payload Hint:</strong> {\\"action\\":\\"subscribe\\",\\"topic\\":\\"resident:{id}\\"}</p>
+</body>
+</html>"""
+
     return HTMLResponse(content=html, media_type="text/html")
 
 
@@ -267,3 +414,285 @@ load();
 </body></html>
 """
     return HTMLResponse(content=html, media_type="text/html")
+
+
+# Lightweight request echo endpoints for cookie/header/auth inspection
+@router.get("/debug/headers", include_in_schema=False)
+async def debug_headers(request: Request):
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info("🔍 DEBUG_HEADERS: Processing headers debug request", extra={
+        "meta": {
+            "method": request.method,
+            "url": str(request.url),
+            "user_agent": request.headers.get("user-agent", "unknown"),
+            "origin": request.headers.get("origin", "unknown"),
+            "referer": request.headers.get("referer", "unknown"),
+            "timestamp": request.headers.get("date", "unknown")
+        }
+    })
+
+    try:
+        headers = {str(k).lower(): str(v) for k, v in request.headers.items()}
+        logger.info(f"🔍 DEBUG_HEADERS: Successfully parsed {len(headers)} headers", extra={
+            "meta": {
+                "header_count": len(headers),
+                "has_authorization": "authorization" in headers,
+                "has_csrf": any(k.startswith("x-csrf") for k in headers),
+                "has_cookies": "cookie" in headers,
+                "cookie_length": len(headers.get("cookie", ""))
+            }
+        })
+    except Exception as e:
+        logger.error(f"🔍 DEBUG_HEADERS: Failed to parse headers: {e}", extra={
+            "meta": {"error": str(e), "error_type": type(e).__name__}
+        })
+        headers = {}
+
+    client = None
+    try:
+        client = request.client.host if request.client else None
+        logger.info(f"🔍 DEBUG_HEADERS: Client info: {client}", extra={
+            "meta": {"client_host": client, "client_port": getattr(request.client, 'port', None) if request.client else None}
+        })
+    except Exception as e:
+        logger.error(f"🔍 DEBUG_HEADERS: Failed to get client info: {e}", extra={
+            "meta": {"error": str(e), "error_type": type(e).__name__}
+        })
+        client = None
+
+    result = {
+        "method": request.method,
+        "url": str(request.url),
+        "client": client,
+        "headers": headers,
+        "debug_info": {
+            "parsed_successfully": len(headers) > 0,
+            "client_info_available": client is not None,
+            "request_id": getattr(request.state, 'request_id', None) if hasattr(request, 'state') else None
+        }
+    }
+
+    logger.info("🔍 DEBUG_HEADERS: Returning result", extra={
+        "meta": {
+            "result_keys": list(result.keys()),
+            "has_debug_info": "debug_info" in result
+        }
+    })
+
+    return result
+
+
+@router.get("/debug/cookies", include_in_schema=False)
+async def debug_cookies_full(request: Request):
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info("🍪 DEBUG_COOKIES: Processing cookies debug request", extra={
+        "meta": {
+            "method": request.method,
+            "url": str(request.url),
+            "user_agent": request.headers.get("user-agent", "unknown"),
+            "origin": request.headers.get("origin", "unknown")
+        }
+    })
+
+    raw_cookie = ""
+    try:
+        raw_cookie = request.headers.get("cookie", "")
+        logger.info(f"🍪 DEBUG_COOKIES: Raw cookie header length: {len(raw_cookie)}", extra={
+            "meta": {
+                "has_cookie_header": len(raw_cookie) > 0,
+                "cookie_header_length": len(raw_cookie),
+                "cookie_header_preview": raw_cookie[:200] + "..." if len(raw_cookie) > 200 else raw_cookie
+            }
+        })
+    except Exception as e:
+        logger.error(f"🍪 DEBUG_COOKIES: Failed to get raw cookie header: {e}", extra={
+            "meta": {"error": str(e), "error_type": type(e).__name__}
+        })
+        raw_cookie = ""
+
+    parsed = {}
+    try:
+        parsed = dict(request.cookies)
+        logger.info(f"🍪 DEBUG_COOKIES: Successfully parsed {len(parsed)} cookies", extra={
+            "meta": {
+                "cookie_names": list(parsed.keys()),
+                "has_access_token": "GSNH_AT" in parsed,
+                "has_refresh_token": "GSNH_RT" in parsed,
+                "has_session": "GSNH_SESS" in parsed,
+                "has_csrf": "csrf_token" in parsed,
+                "has_device_id": "device_id" in parsed,
+                "cookie_value_lengths": {k: len(str(v)) for k, v in parsed.items()}
+            }
+        })
+    except Exception as e:
+        logger.error(f"🍪 DEBUG_COOKIES: Failed to parse cookies: {e}", extra={
+            "meta": {"error": str(e), "error_type": type(e).__name__}
+        })
+        parsed = {}
+
+    # Include presence map for convenience without exposing values
+    presence = {k: ("present" if (v is not None and v != "") else "") for k, v in parsed.items()}
+
+    # Additional debug info
+    debug_info = {
+        "parsing_successful": len(parsed) > 0,
+        "raw_header_present": len(raw_cookie) > 0,
+        "parsed_vs_raw_match": len(parsed) > 0 and len(raw_cookie) > 0,
+        "auth_cookies_present": any(k in ["GSNH_AT", "GSNH_RT", "GSNH_SESS"] for k in parsed.keys()),
+        "csrf_present": "csrf_token" in parsed,
+        "total_cookies": len(parsed)
+    }
+
+    result = {"raw": raw_cookie, "parsed": parsed, "presence": presence, "debug_info": debug_info}
+
+    logger.info("🍪 DEBUG_COOKIES: Returning result", extra={
+        "meta": {
+            "result_keys": list(result.keys()),
+            "debug_info": debug_info,
+            "cookie_summary": {
+                "total": len(parsed),
+                "auth_cookies": sum(1 for k in parsed.keys() if k in ["GSNH_AT", "GSNH_RT", "GSNH_SESS"]),
+                "other_cookies": sum(1 for k in parsed.keys() if k not in ["GSNH_AT", "GSNH_RT", "GSNH_SESS"])
+            }
+        }
+    })
+
+    return result
+
+
+@router.get("/debug/whoami/full", include_in_schema=False)
+async def debug_whoami_full(request: Request):
+    import logging
+    logger = logging.getLogger(__name__)
+
+    logger.info("👤 DEBUG_WHOAMI_FULL: Processing full whoami debug request", extra={
+        "meta": {
+            "method": request.method,
+            "url": str(request.url),
+            "user_agent": request.headers.get("user-agent", "unknown"),
+            "origin": request.headers.get("origin", "unknown"),
+            "has_authorization": bool(request.headers.get("authorization")),
+            "has_cookie_header": bool(request.headers.get("cookie"))
+        }
+    })
+
+    # Resolve a best-effort user id without raising on unauthenticated
+    user_id = None
+    auth_error = None
+    try:
+        from app.deps.user import resolve_user_id
+        logger.info("👤 DEBUG_WHOAMI_FULL: Attempting to resolve user ID", extra={
+            "meta": {"attempting_resolution": True}
+        })
+
+        user_id = await resolve_user_id(request=request)
+        logger.info(f"👤 DEBUG_WHOAMI_FULL: User ID resolution result: {user_id}", extra={
+            "meta": {
+                "resolved_user_id": user_id,
+                "is_authenticated": bool(user_id and user_id != "anon"),
+                "is_anonymous": user_id == "anon" or user_id is None
+            }
+        })
+    except Exception as e:
+        auth_error = str(e)
+        user_id = "anon"
+        logger.error(f"👤 DEBUG_WHOAMI_FULL: User ID resolution failed: {e}", extra={
+            "meta": {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "fallback_to_anon": True
+            }
+        })
+
+    headers = {}
+    try:
+        headers = {str(k).lower(): str(v) for k, v in request.headers.items()}
+        logger.info(f"👤 DEBUG_WHOAMI_FULL: Successfully parsed {len(headers)} headers", extra={
+            "meta": {
+                "header_count": len(headers),
+                "has_authorization": "authorization" in headers,
+                "has_csrf": any(k.startswith("x-csrf") for k in headers),
+                "has_cookies": "cookie" in headers,
+                "has_origin": "origin" in headers,
+                "has_user_agent": "user-agent" in headers
+            }
+        })
+    except Exception as e:
+        logger.error(f"👤 DEBUG_WHOAMI_FULL: Failed to parse headers: {e}", extra={
+            "meta": {"error": str(e), "error_type": type(e).__name__}
+        })
+        headers = {}
+
+    cookies = {}
+    try:
+        cookies = dict(request.cookies)
+        logger.info(f"👤 DEBUG_WHOAMI_FULL: Successfully parsed {len(cookies)} cookies", extra={
+            "meta": {
+                "cookie_count": len(cookies),
+                "cookie_names": list(cookies.keys()),
+                "has_access_token": "GSNH_AT" in cookies,
+                "has_refresh_token": "GSNH_RT" in cookies,
+                "has_session": "GSNH_SESS" in cookies,
+                "has_csrf": "csrf_token" in cookies,
+                "has_device_id": "device_id" in cookies
+            }
+        })
+    except Exception as e:
+        logger.error(f"👤 DEBUG_WHOAMI_FULL: Failed to parse cookies: {e}", extra={
+            "meta": {"error": str(e), "error_type": type(e).__name__}
+        })
+        cookies = {}
+
+    # Additional debug analysis
+    auth_analysis = {
+        "is_authenticated": bool(user_id and user_id != "anon"),
+        "user_id": user_id if user_id and user_id != "anon" else None,
+        "auth_method": "unknown",
+        "has_auth_header": "authorization" in headers,
+        "has_auth_cookies": any(k in ["GSNH_AT", "GSNH_RT", "GSNH_SESS"] for k in cookies.keys()),
+        "has_csrf_token": "csrf_token" in cookies,
+        "auth_error": auth_error,
+        "resolution_successful": auth_error is None
+    }
+
+    # Try to determine auth method
+    if "authorization" in headers:
+        auth_analysis["auth_method"] = "bearer_token"
+    elif any(k in ["GSNH_AT", "GSNH_RT", "GSNH_SESS"] for k in cookies.keys()):
+        auth_analysis["auth_method"] = "cookie_auth"
+    elif auth_analysis["is_authenticated"]:
+        auth_analysis["auth_method"] = "other"
+    else:
+        auth_analysis["auth_method"] = "none"
+
+    result = {
+        "is_authenticated": auth_analysis["is_authenticated"],
+        "user": auth_analysis["user_id"],
+        "cookies": cookies,
+        "headers": headers,
+        "auth_analysis": auth_analysis,
+        "debug_info": {
+            "user_resolution_error": auth_error,
+            "headers_parsed": len(headers) > 0,
+            "cookies_parsed": len(cookies) > 0,
+            "request_id": getattr(request.state, 'request_id', None) if hasattr(request, 'state') else None,
+            "timestamp": str(request.headers.get("date", "unknown"))
+        }
+    }
+
+    logger.info("👤 DEBUG_WHOAMI_FULL: Returning result", extra={
+        "meta": {
+            "result_keys": list(result.keys()),
+            "auth_analysis": auth_analysis,
+            "is_authenticated": auth_analysis["is_authenticated"],
+            "user_id": auth_analysis["user_id"],
+            "auth_method": auth_analysis["auth_method"],
+            "has_auth_error": auth_error is not None
+        }
+    })
+
+    return result

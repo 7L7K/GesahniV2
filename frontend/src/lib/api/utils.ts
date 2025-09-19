@@ -8,9 +8,58 @@ export const SHORT_CACHE: Map<string, { ts: number; res: Response }> = new Map()
 export const DEFAULT_DEDUPE_MS = Number(process.env.NEXT_PUBLIC_FETCH_DEDUPE_MS || 300) || 300;
 export const DEFAULT_SHORT_CACHE_MS = Number(process.env.NEXT_PUBLIC_FETCH_SHORT_CACHE_MS || 750) || 750;
 
+// --- Memoization utilities ------------------------------------------------
+interface MemoizeOptions {
+  ttlMs: number;
+}
+
+interface CacheEntry<T> {
+  value: T;
+  timestamp: number;
+}
+
+/**
+ * Memoizes a promise-returning function with TTL-based caching
+ */
+export function memoizePromise<T extends any[], R>(
+  fn: (...args: T) => Promise<R>,
+  options: MemoizeOptions
+): (...args: T) => Promise<R> {
+  const cache = new Map<string, CacheEntry<Promise<R>>>();
+
+  return async (...args: T): Promise<R> => {
+    const key = JSON.stringify(args);
+    const now = Date.now();
+    const cached = cache.get(key);
+
+    if (cached && (now - cached.timestamp) < options.ttlMs) {
+      console.debug('🔄 MEMOIZE: Using cached result', { key, age: now - cached.timestamp });
+      return cached.value;
+    }
+
+    console.debug('🔄 MEMOIZE: Computing fresh result', { key });
+    const result = fn(...args);
+    cache.set(key, { value: result, timestamp: now });
+
+    // Clean up expired entries periodically
+    if (cache.size > 10) {
+      for (const [k, v] of cache.entries()) {
+        if ((now - v.timestamp) >= options.ttlMs) {
+          cache.delete(k);
+        }
+      }
+    }
+
+    return result;
+  };
+}
+
 // --- Storage utilities ------------------------------------------------------
 export function getLocalStorage(key: string): string | null {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return null; // SSR or localStorage not available
+    }
     return window.localStorage.getItem(key);
   } catch (e) {
     console.warn('localStorage.getItem failed:', e);
@@ -20,6 +69,9 @@ export function getLocalStorage(key: string): string | null {
 
 export function setLocalStorage(key: string, value: string): void {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return; // SSR or localStorage not available
+    }
     window.localStorage.setItem(key, value);
   } catch (e) {
     console.warn('localStorage.setItem failed:', e);
@@ -28,6 +80,9 @@ export function setLocalStorage(key: string, value: string): void {
 
 export function removeLocalStorage(key: string): void {
   try {
+    if (typeof window === 'undefined' || !window.localStorage) {
+      return; // SSR or localStorage not available
+    }
     window.localStorage.removeItem(key);
   } catch (e) {
     console.warn('localStorage.removeItem failed:', e);

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, fetchHealth } from '@/lib/api';
 import { useAuthState } from '@/hooks/useAuth';
 
 export type HealthChecks = Record<string, 'ok' | 'error' | 'degraded' | 'skipped' | string>;
@@ -18,7 +18,7 @@ export function useHealthPolling(intervalMs: number = 15000) {
     const poll = async () => {
       if (!(auth.is_authenticated && auth.whoamiOk)) return;
       try {
-        const res = await apiFetch('/v1/health', { auth: true, dedupe: false, cache: 'no-store' });
+        const res = await fetchHealth('/v1/health');
         setHasChecked(true);
         if (!mounted) return;
         if (res.ok) {

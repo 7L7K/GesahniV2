@@ -11,7 +11,7 @@ async def test_user_crud_cycle():
     from app.db.core import get_async_db
     from app.db.models import AuthUser
 
-    async for session in get_async_db():
+    async with get_async_db() as session:
         await session.execute(delete(AuthUser).where(AuthUser.username == "alice"))
         await session.commit()
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from uuid import uuid4
 
 from fastapi import HTTPException, Request, Response, WebSocket
@@ -9,6 +10,7 @@ from fastapi import HTTPException, Request, Response, WebSocket
 from app.web.cookies import clear_all_auth
 
 log = logging.getLogger("auth")
+logger = logging.getLogger(__name__)
 
 
 async def _ensure_jwt_user_exists(user_id: str, request: Request) -> None:
@@ -95,7 +97,7 @@ try:
     decode_jwt = security_module.decode_jwt
 except AttributeError:
     # Fallback: define decode_jwt locally if not available in module
-    import jwt
+    from app.security import jwt_decode
     from jwt import ExpiredSignatureError, PyJWTError
 
     from app.security.jwt_config import get_jwt_config
@@ -104,7 +106,7 @@ except AttributeError:
         cfg = get_jwt_config()
         try:
             if cfg.alg == "HS256":
-                return jwt.decode(
+                return jwt_decode(
                     token,
                     cfg.secret,
                     algorithms=["HS256"],
@@ -119,7 +121,7 @@ except AttributeError:
                     # Fallback: try any key to tolerate older tokens without kid
                     for k in cfg.public_keys.values():
                         try:
-                            return jwt.decode(
+                            return jwt_decode(
                                 token,
                                 k,
                                 algorithms=[cfg.alg],
@@ -131,7 +133,7 @@ except AttributeError:
                             continue
                     return None
                 key = cfg.public_keys[kid]
-                return jwt.decode(
+                return jwt_decode(
                     token,
                     key,
                     algorithms=[cfg.alg],
@@ -165,7 +167,7 @@ def _is_clerk_enabled() -> bool:
     return False  # Clerk support removed
 
 
-def get_current_user_id(
+async def get_current_user_id(
     request: Request = None,
     websocket: WebSocket = None,
     response: Response = None,  # type: ignore[assignment]
@@ -195,6 +197,31 @@ def get_current_user_id(
     user_id = ""
     token = None
     token_source = "none"
+
+    # OPTIMIZATION: Quick check for auth tokens to avoid expensive operations
+    has_potential_auth = False
+
+    # Check for Authorization header
+    if target and target.headers.get("Authorization"):
+        has_potential_auth = True
+
+    # Check for auth cookies in request
+    if not has_potential_auth and request:
+        cookie_names = list(request.cookies.keys()) if hasattr(request, 'cookies') else []
+        if any(name in ["GSNH_AT", "GSNH_SESS", "GSNH_RT", "access_token", "__session"] for name in cookie_names):
+            has_potential_auth = True
+
+    # Check for WS query params
+    if not has_potential_auth and websocket:
+        try:
+            if websocket.query_params.get("access_token") or websocket.query_params.get("token"):
+                has_potential_auth = True
+        except Exception:
+            pass
+
+    # If no potential auth sources, return anon immediately without expensive operations
+    if not has_potential_auth:
+        return "anon"
 
     # 2) Try access_token first (Authorization bearer, WS query param, or cookie)
     auth_header = None
@@ -525,6 +552,39 @@ def get_current_user_id(
     ):
         payload = decode_jwt(token)
         if payload:
+            # Validate session if JWT contains session information
+            if isinstance(payload, dict) and payload.get("sid"):
+                try:
+                    from app.sessions_store import sessions_store
+                    sid = payload["sid"]
+                    token_version = payload.get("sess_ver", 1)
+                    jti = payload.get("jti", "")
+
+                    is_valid, reason = await sessions_store.validate_session_token(
+                        sid, token_version, jti
+                    )
+
+                    if not is_valid:
+                        logger.warning(
+                            f"Session validation failed for user {payload.get('sub')}: {reason}",
+                            extra={"meta": {"reason": reason, "sid": sid, "jti": jti}}
+                        )
+
+                        # Return unauthorized for session validation failures
+                        if reason in ["session.version_mismatch", "session.revoked", "token.blacklisted"]:
+                            from app.http_errors import unauthorized
+                            raise unauthorized(message=f"authentication failed: {reason}")
+
+                        # For session.not_found, continue with JWT auth (might be older token)
+                        pass
+
+                except Exception as e:
+                    logger.error(
+                        f"Session validation error: {e}",
+                        extra={"meta": {"error": str(e), "sid": payload.get("sid")}}
+                    )
+                    # Continue with JWT auth on validation errors (fail open for compatibility)
+
             user_id = payload.get("user_id") or payload.get("sub") or user_id
 
             # Store JWT payload in request state for scope enforcement
@@ -660,7 +720,7 @@ def get_current_user_id(
     return user_id
 
 
-def resolve_user_id(
+async def resolve_user_id(
     request: Request | None = None, websocket: WebSocket | None = None
 ) -> str:
     """Safe wrapper to resolve a user id from a Request or WebSocket.
@@ -670,7 +730,7 @@ def resolve_user_id(
     use a stable API.
     """
     try:
-        return get_current_user_id(request=request, websocket=websocket)
+        return await get_current_user_id(request=request, websocket=websocket)
     except Exception:
         return "anon"
 
@@ -686,7 +746,7 @@ async def require_user(request: Request) -> str:
         return "anon"
 
     try:
-        user_id = get_current_user_id(request=request)
+        user_id = await get_current_user_id(request=request)
 
         # If no valid user found, return 401 or 503 when session-only and store down
         if not user_id or user_id == "anon":
@@ -829,7 +889,7 @@ def resolve_session_id(
     except Exception:
         pass
 
-    # 6. Try to extract user_id from Authorization header
+    # 6. Try to extract session ID from Authorization header
     try:
         if isinstance(request, Request):
             auth_header = request.headers.get("Authorization", "")
@@ -839,10 +899,57 @@ def resolve_session_id(
                 from ..api.auth import _decode_any
 
                 payload = _decode_any(token)
-                extracted_user_id = payload.get("sub") or payload.get("user_id")
-                if extracted_user_id and extracted_user_id != "anon":
-                    return extracted_user_id
+                # Extract session ID (sid) from JWT payload, not user_id
+                extracted_sid = payload.get("sid")
+                if extracted_sid and extracted_sid != "anon":
+                    return extracted_sid
     except Exception:
+        pass
+    
+    # 6b. Try to extract session ID from access cookie
+    try:
+        if isinstance(request, Request):
+            from ..web.cookies import read_access_cookie
+            access_token = read_access_cookie(request)
+            if access_token:
+                # Import here to avoid circular imports
+                from ..api.auth import _decode_any
+                
+                logger.info(f"🔍 RESOLVE_SESSION_ID_COOKIE: Found access cookie, attempting to decode", extra={
+                    "meta": {
+                        "token_length": len(access_token),
+                        "timestamp": time.time()
+                    }
+                })
+                
+                payload = _decode_any(access_token)
+                extracted_sid = payload.get("sid")
+                
+                logger.info(f"🔍 RESOLVE_SESSION_ID_COOKIE_RESULT: Decoded payload", extra={
+                    "meta": {
+                        "payload_keys": list(payload.keys()),
+                        "extracted_sid": extracted_sid,
+                        "has_sid": "sid" in payload,
+                        "timestamp": time.time()
+                    }
+                })
+                
+                if extracted_sid and extracted_sid != "anon":
+                    logger.info(f"🔍 RESOLVE_SESSION_ID_SUCCESS: Found valid session ID from cookie", extra={
+                        "meta": {
+                            "session_id": extracted_sid,
+                            "timestamp": time.time()
+                        }
+                    })
+                    return extracted_sid
+    except Exception as e:
+        logger.warning(f"🔍 RESOLVE_SESSION_ID_COOKIE_ERROR: Failed to decode access cookie", extra={
+            "meta": {
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "timestamp": time.time()
+            }
+        })
         pass
 
     # 7. Use provided user_id if available and not None

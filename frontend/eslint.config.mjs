@@ -14,13 +14,16 @@ export default [
   ...compat.extends("next/core-web-vitals", "next/typescript"),
   {
     rules: {
-      "no-restricted-globals": [
-        "error",
-        {
-          name: "fetch",
-          message: "Use apiFetch from @/lib/api instead of global fetch",
-        },
-      ],
+      "no-restricted-imports": ["error", {
+        paths: [{
+          name: 'node-fetch',
+          message: 'Use apiFetch()',
+        }],
+        patterns: [{
+          group: ['**/fetch'],
+          message: 'Use apiFetch()',
+        }],
+      }],
     },
   },
 ];

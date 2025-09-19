@@ -432,6 +432,12 @@ AUTH_FAIL = Counter(
     labelnames=("reason",),  # e.g., "missing_token", "expired", "invalid"
 )
 
+COOKIE_CONFLICT = Counter(
+    "auth_cookie_conflict_total",
+    "Auth cookie conflicts detected when legacy cookies coexist with canonical cookies",
+    labelnames=("cookie_type",),
+)
+
 # Auth refresh operations
 AUTH_REFRESH_OK = Counter(
     "auth_refresh_ok_total",
@@ -441,6 +447,13 @@ AUTH_REFRESH_OK = Counter(
 AUTH_REFRESH_FAIL = Counter(
     "auth_refresh_fail_total",
     "Failed auth refresh operations",
+)
+
+# Hints when Authorization header likely used due to third-party cookie blocking
+THIRD_PARTY_BLOCKED_HINT = Counter(
+    "auth_third_party_blocked_hint_total",
+    "Requests authenticated via header because cookies were absent",
+    labelnames=("route",),
 )
 
 # Whoami operations

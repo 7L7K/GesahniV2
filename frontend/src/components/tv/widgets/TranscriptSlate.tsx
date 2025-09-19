@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { wsUrl, apiFetch } from "@/lib/api";
+import { wsUrl, apiFetch, fetchHealth } from "@/lib/api";
 import { useSceneManager } from "@/state/sceneManager";
 
 export function TranscriptSlate() {
@@ -24,7 +24,7 @@ export function TranscriptSlate() {
       try {
         const controller = new AbortController();
         const t = setTimeout(() => controller.abort(), 1500);
-        const res = await apiFetch('/v1/health', { auth: true, dedupe: false, cache: 'no-store', signal: controller.signal });
+        const res = await fetchHealth('/v1/health');
         clearTimeout(t);
         if (!res.ok) return false;
         const body = await res.json().catch(() => ({ status: 'fail' }));

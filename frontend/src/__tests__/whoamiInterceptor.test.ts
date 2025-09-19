@@ -10,6 +10,11 @@ jest.mock('@/lib/api', () => ({
     apiFetch: jest.fn()
 }));
 
+// Mock the fetch module used by whoamiResilience
+jest.mock('@/lib/api/fetch', () => ({
+    apiFetch: jest.fn()
+}));
+
 describe('Whoami Interceptor', () => {
     let consoleWarnSpy: jest.SpyInstance;
     let mockApiFetch: jest.MockedFunction<any>;
@@ -17,14 +22,14 @@ describe('Whoami Interceptor', () => {
 
     beforeEach(() => {
         consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation();
-        mockApiFetch = require('@/lib/api').apiFetch;
+        mockApiFetch = require('@/lib/api/fetch').apiFetch;
         __resetAuthOrchestrator();
 
         // Set up the interceptor manually for testing
         originalFetch = global.fetch;
         global.fetch = jest.fn().mockImplementation((...args) => {
             const url = args[0];
-            if (typeof url === 'string' && url.includes('/v1/whoami')) {
+            if (typeof url === 'string' && (url.includes('/v1/whoami') || url.includes('/v1/auth/whoami'))) {
                 // Check if the call is coming from the AuthOrchestrator
                 const stack = new Error().stack || '';
                 const isFromAuthOrchestrator = stack.includes('AuthOrchestrator') ||
@@ -33,11 +38,7 @@ describe('Whoami Interceptor', () => {
                     stack.includes('apiFetch');
 
                 if (!isFromAuthOrchestrator) {
-                    console.warn('🚨 DIRECT WHOAMI CALL DETECTED!', {
-                        url,
-                        stack,
-                        message: 'Use AuthOrchestrator instead of calling whoami directly'
-                    });
+                    throw new Error('Direct whoami call detected! Use AuthOrchestrator instead.');
                 }
             }
             return originalFetch.apply(this, args);
@@ -72,29 +73,22 @@ describe('Whoami Interceptor', () => {
             expect.stringContaining('🚨 DIRECT WHOAMI CALL DETECTED!')
         );
 
-        // Verify that apiFetch was called
-        expect(mockApiFetch).toHaveBeenCalledWith('/v1/whoami', expect.any(Object));
+        // Verify that apiFetch was called with the correct endpoint
+        expect(mockApiFetch).toHaveBeenCalledWith('/v1/auth/whoami', expect.any(Object));
     });
 
-    it('should warn when direct fetch calls are made to whoami', async () => {
-        // Make a direct apiFetch call (this should trigger the warning)
-        const { apiFetch } = await import('@/lib/api');
-        // eslint-disable-next-line no-restricted-syntax
-        apiFetch('/v1/whoami');
-
-        // Verify that the warning was logged
-        expect(consoleWarnSpy).toHaveBeenCalledWith(
-            '🚨 DIRECT WHOAMI CALL DETECTED!',
-            expect.objectContaining({
-                url: '/v1/whoami',
-                message: 'Use AuthOrchestrator instead of calling whoami directly'
-            })
-        );
+    it('should throw error when direct fetch calls are made to whoami', () => {
+        // Make a direct fetch call to trigger the global interceptor
+        // This should throw an error in test/development environment
+        expect(() => {
+            // eslint-disable-next-line no-restricted-syntax
+            fetch('/v1/auth/whoami');
+        }).toThrow('Direct whoami call detected! Use AuthOrchestrator instead.');
     });
 
     it('should allow other fetch calls to pass through without warning', () => {
         // Make a apiFetch call to a different endpoint
-        const { apiFetch } = await import('@/lib/api');
+        const { apiFetch } = require('@/lib/api/fetch');
         apiFetch('/v1/state');
 
         // Verify that no warning was logged

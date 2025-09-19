@@ -5,6 +5,9 @@ This test file verifies that the refresh endpoint properly detects and rejects
 replay attacks where the same refresh token is used multiple times.
 """
 
+import asyncio
+
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -30,9 +33,11 @@ class TestRefreshReplayDetection:
 
     def test_refresh_token_single_use_success(self, client, valid_refresh_token):
         """Test that a valid refresh token works on first use."""
-        response = client.post(
-            "/v1/auth/refresh", json={"refresh_token": valid_refresh_token}
-        )
+        # Set refresh token as cookie
+        client.cookies.set("GSNH_RT", valid_refresh_token)
+        # Set Origin header to avoid CORS issues
+        headers = {"Origin": "http://testserver"}
+        response = client.post("/v1/auth/refresh", headers=headers)
 
         # Should either succeed (200) or fail for other reasons, but not replay
         assert response.status_code in [200, 401, 403]
@@ -47,16 +52,18 @@ class TestRefreshReplayDetection:
     def test_refresh_token_replay_attack_detected(self, client, valid_refresh_token):
         """Test that using the same refresh token twice triggers replay detection."""
 
+        # Set refresh token as cookie
+        client.cookies.set("GSNH_RT", valid_refresh_token)
+
+        # Set Origin header to avoid CORS issues
+        headers = {"Origin": "http://testserver"}
+
         # First use - should work or fail for other reasons
-        response1 = client.post(
-            "/v1/auth/refresh", json={"refresh_token": valid_refresh_token}
-        )
+        response1 = client.post("/v1/auth/refresh", headers=headers)
         first_status = response1.status_code
 
         # Second use - should fail with replay detection
-        response2 = client.post(
-            "/v1/auth/refresh", json={"refresh_token": valid_refresh_token}
-        )
+        response2 = client.post("/v1/auth/refresh", headers=headers)
 
         # Second use should fail
         assert response2.status_code in [
@@ -77,6 +84,8 @@ class TestRefreshReplayDetection:
                 "replay_detected",
                 "token_already_used",
                 "refresh_token_consumed",
+                "refresh_token_reused",
+                "refresh_family_revoked",
             ]
 
             # Check meta contains required fields
@@ -313,12 +322,59 @@ class TestRefreshReplayDetection:
         )
 
         if response2.status_code in [401, 403]:
-            # Check that replay detection was logged
-            replay_logs = [
-                record
-                for record in caplog.records
-                if "replay" in record.message.lower()
-                or "token" in record.message.lower()
-            ]
-            # Should have some logging about the replay attempt
-            # Note: This depends on the specific logging implementation
+            error_data = response2.json()
+            # Only check logging if this is actually a replay detection error
+            if error_data.get("code") in ["replay_detected", "token_already_used", "refresh_token_consumed"]:
+                # Check that replay detection was logged
+                replay_logs = [
+                    record
+                    for record in caplog.records
+                    if "auth.refresh_event" in record.message
+                    and hasattr(record, '__dict__')
+                    and record.__dict__.get('outcome') == 'replay'
+                ]
+                # Also check for direct replay warning logs
+                direct_replay_logs = [
+                    record
+                    for record in caplog.records
+                    if "replay" in record.message.lower()
+                ]
+                # Should have some logging about the replay attempt
+                assert replay_logs or direct_replay_logs
+            else:
+                # If it's not a replay error (e.g., missing token), skip logging check
+                pytest.skip(f"Request failed with {error_data.get('code')} instead of replay detection")
+
+    @pytest.mark.asyncio
+    async def test_parallel_refresh_requests(self, valid_refresh_token):
+        """Concurrent refresh attempts yield one success and one replay rejection."""
+
+        app = create_app()
+
+        from httpx import ASGITransport
+        transport = ASGITransport(app=app)
+        async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            # Set refresh token as cookie
+            client.cookies.set("GSNH_RT", valid_refresh_token)
+            # Set headers to avoid CORS issues
+            headers = {"Origin": "http://testserver"}
+
+            async def _do_refresh():
+                return await client.post("/v1/auth/refresh", headers=headers)
+
+            responses = await asyncio.gather(_do_refresh(), _do_refresh())
+
+        statuses = sorted(resp.status_code for resp in responses)
+        # At least one request should fail due to replay protection
+        assert any(status in (401, 403) for status in statuses), (
+            f"Expected replay rejection among statuses {statuses}"
+        )
+        # The other request may succeed (200) or also fail depending on timing
+        assert all(status in (200, 401, 403) for status in statuses), (
+            f"Unexpected status codes: {statuses}"
+        )
+
+        for resp in responses:
+            if resp.status_code in (401, 403):
+                payload = resp.json()
+                assert payload

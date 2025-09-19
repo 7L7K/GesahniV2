@@ -72,7 +72,9 @@ def _decode_jwt(token: str) -> Identity | None:
         leeway = int(os.getenv("JWT_CLOCK_SKEW_S", "60") or 60)
         if not secret:
             return None
-        payload = jwt.decode(token, secret, algorithms=["HS256"], leeway=leeway)
+        # Use central JWT decoder with issuer/audience/leeway support
+        from app.security import jwt_decode
+        payload = jwt_decode(token, key=secret, algorithms=["HS256"], leeway=leeway)
         return dict(payload) if isinstance(payload, dict) else None
     except Exception:
         return None

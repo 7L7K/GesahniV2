@@ -7,9 +7,14 @@ def _is_rate_limit_enabled() -> bool:
     """Return True when in-app endpoint rate limits should apply.
 
     Disabled by default in test unless explicitly enabled, and always disabled
-    when RATE_LIMIT_MODE=off.
+    when RATE_LIMIT_MODE=off or RATE_LIMIT_ENABLED=0.
     """
     try:
+        # Check if rate limiting is explicitly disabled
+        enabled = (os.getenv("RATE_LIMIT_ENABLED", "1").strip().lower())
+        if enabled in {"0", "false", "no", "off"}:
+            return False
+        
         v = (os.getenv("RATE_LIMIT_MODE") or "").strip().lower()
         if v == "off":
             return False
@@ -28,22 +33,25 @@ def _is_rate_limit_enabled() -> bool:
 
 def _get_refresh_ttl_seconds() -> int:
     """Return refresh token TTL in seconds using consistent precedence.
-
-    Precedence:
-    1) JWT_REFRESH_TTL_SECONDS (seconds)
-    2) JWT_REFRESH_EXPIRE_MINUTES (minutes → seconds)
-    Default: 7 days.
+    
+    Order: RATE_LIMIT_REFRESH_TTL > JWT_REFRESH_EXPIRE_MINUTES > 1440 minutes
     """
     try:
-        v = os.getenv("JWT_REFRESH_TTL_SECONDS")
-        if v is not None and str(v).strip() != "":
-            return max(1, int(v))
+        # Check for explicit rate limit refresh TTL
+        ttl_str = os.getenv("RATE_LIMIT_REFRESH_TTL")
+        if ttl_str:
+            return int(ttl_str.strip())
+        
+        # Fall back to JWT refresh expire minutes
+        refresh_minutes = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
+        return refresh_minutes * 60
     except Exception:
-        pass
+        return 86400  # Default to 24 hours
+
+
+def _get_rate_limit_per_minute() -> int:
+    """Return rate limit per minute from environment or default."""
     try:
-        vmin = os.getenv("JWT_REFRESH_EXPIRE_MINUTES")
-        if vmin is not None and str(vmin).strip() != "":
-            return max(60, int(vmin) * 60)
+        return int(os.getenv("RATE_LIMIT_PER_MIN", "60"))
     except Exception:
-        pass
-    return 7 * 24 * 60 * 60
+        return 60

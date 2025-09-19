@@ -13,6 +13,8 @@ import jwt
 from fastapi import APIRouter, HTTPException, Request, Response
 from jwt import PyJWKClient
 
+from ..auth.cookie_utils import rotate_session_id
+from ..security import jwt_decode
 from ..sessions_store import sessions_store
 
 router = APIRouter(tags=["Auth"], include_in_schema=False)
@@ -54,7 +56,7 @@ def _decode_apple_id_token(id_token: str, client_id: str) -> dict:
         client = _get_apple_jwk_client(jwks_url)
         signing_key = client.get_signing_key_from_jwt(id_token)
         algorithm = signing_key.algorithm or "RS256"
-        return jwt.decode(
+        return jwt_decode(
             id_token,
             signing_key.key,
             algorithms=[algorithm],
@@ -76,7 +78,7 @@ def _decode_apple_id_token(id_token: str, client_id: str) -> dict:
                 exc,
             )
             try:
-                return jwt.decode(id_token, options={"verify_signature": False})
+                return jwt_decode(id_token, options={"verify_signature": False})
             except Exception as fallback_exc:
                 logger.error(
                     "Apple ID token fallback decode failed: %s",
@@ -227,20 +229,24 @@ async def apple_callback(request: Request, response: Response) -> Response:
     get_cookie_config(request)
     access_ttl, refresh_ttl = get_token_ttls()
 
-    # Create opaque session ID instead of using JWT
     try:
-        from ..auth import _create_session_id
+        request.state.user_id = user_id  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
+    try:
         access_payload = decode_jwt_token(access)
-        jti = access_payload.get("jti")
-        expires_at = access_payload.get("exp", time.time() + access_ttl)
-        if jti:
-            session_id = _create_session_id(jti, expires_at)
-        else:
-            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-    except Exception as e:
-        logger.warning("Failed to create session ID from access token: %s", e)
-        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+    except Exception as exc:
+        logger.warning("Failed to decode access token for Apple session rotation: %s", exc)
+        access_payload = {}
+
+    session_id = rotate_session_id(
+        response,
+        request,
+        user_id=user_id,
+        access_token=access,
+        access_payload=access_payload,
+    )
 
     # Use centralized cookie functions
     from ..web.cookies import clear_oauth_state_cookies, set_auth_cookies

@@ -7,8 +7,7 @@ import { Button } from '@/components/ui/button';
 import ThemeToggle from '@/components/ThemeToggle';
 // Clerk removed - using cookie authentication only
 import { useAuthState } from '@/hooks/useAuth';
-import { clearTokens, getBudget, apiFetch } from '@/lib/api';
-import { getAuthOrchestrator } from '@/services/authOrchestrator';
+import { getBudget } from '@/lib/api';
 import ClientOnly from './ClientOnly';
 import SessionBadge from '@/components/SessionBadge';
 
@@ -25,36 +24,45 @@ export default function Header() {
     // Use centralized auth state instead of making direct whoami calls
     const authed = authState.is_authenticated;
 
+    // Debug: Track Header re-renders to verify reactive auth state updates
+    console.info('🎨 HEADER_RENDER:', {
+        authed,
+        source: authState.source,
+        userId: authState.user_id,
+        sessionReady: authState.session_ready,
+        pathname,
+        timestamp: new Date().toISOString(),
+    });
+
+    // Debug: Track when auth state actually changes
+    useEffect(() => {
+        console.info('🔄 HEADER_AUTH_STATE_CHANGED:', {
+            is_authenticated: authState.is_authenticated,
+            session_ready: authState.session_ready,
+            source: authState.source,
+            user_id: authState.user_id,
+            whoamiOk: authState.whoamiOk,
+            version: authState.version,
+            timestamp: new Date().toISOString(),
+        });
+    }, [authState.is_authenticated, authState.session_ready, authState.source, authState.user_id, authState.whoamiOk, authState.version]);
+
+    // Debug logging for auth state
+    console.log('🔍 HEADER_AUTH_DEBUG:', {
+        is_authenticated: authState.is_authenticated,
+        session_ready: authState.session_ready,
+        user_id: authState.user_id,
+        source: authState.source,
+        whoamiOk: authState.whoamiOk,
+        timestamp: new Date().toISOString()
+    });
+
     // Cookie mode only - show auth buttons if not authenticated
     const _shouldShowAuthButtons = !authed;
 
-    const doLogout = async () => {
-        // Clear tokens and state immediately for better UX
-        try {
-            clearTokens()
-            console.info('LOGOUT: Tokens cleared');
-        } catch (error) {
-            console.error('LOGOUT: Error clearing tokens:', error);
-        }
-
-        // Trigger auth refresh to update state
-        try {
-            const authOrchestrator = getAuthOrchestrator();
-            await authOrchestrator.refreshAuth();
-            console.info('LOGOUT: Auth state refreshed');
-        } catch (error) {
-            console.error('LOGOUT: Error refreshing auth state:', error);
-        }
-
-        // Navigate immediately with logout parameter to prevent token recreation
-        router.push('/login?logout=true')
-
-        // Fire-and-forget backend logout
-        try {
-            await apiFetch('/v1/auth/logout', { method: 'POST' })
-        } catch {
-            /* ignore - user already navigated away */
-        }
+    const doLogout = () => {
+        console.info('🚪 HEADER_LOGOUT: Navigating to logout flow');
+        router.replace('/logout');
     }
 
     const [localMode, setLocalMode] = useState(false);

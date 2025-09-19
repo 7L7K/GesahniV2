@@ -1,880 +1,241 @@
-<testsuites id="" name="" tests="20" failures="15" skipped="0" errors="0" time="40.37065">
-<testsuite name="basic-functionality.spec.ts" timestamp="2025-09-16T23:44:13.930Z" hostname="chromium" tests="4" failures="3" skipped="0" time="12.026" errors="0">
-<testcase name="Basic Functionality › page loads and shows basic content" classname="basic-functionality.spec.ts" time="8.359">
-<system-out>
-<![CDATA[Page content after loading: ((e, i, s, u, m, a, l, h)=>{
-    let d = document.documentElement, w = [
-        "light",
-        "dark"
-    ];
-    function p(n) {
-        (Array.isArray(e) ? e : [
-            e
-        ]).forEach((y)=>{
-            let k = y === "class", S = k && a ? m.map((f)=>a[f] || f) : m;
-            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);
-        }), R(n);
-    }
-    function R(n) {
-        h && w.includes(n) && (d.style.colorScheme = n);
-    }
-    function c() {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    if (u) p(u);
-    else try {
-        let n = localStorage.getItem(i) || s, y = l && n === "system" ? c() : n;
-        p(y);
-    } catch (n) {}
-})("class","theme","system",null,["light","dark"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a
-Page has substantial content: [33mtrue[39m
-React root found: [33mfalse[39m
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › authentication works end-to-end" classname="basic-functionality.spec.ts" time="1.06">
-<failure message="basic-functionality.spec.ts:32:7 authentication works end-to-end" type="FAILURE">
-<![CDATA[  [chromium] › basic-functionality.spec.ts:32:7 › Basic Functionality › authentication works end-to-end
+<testsuites id="" name="" tests="5" failures="5" skipped="0" errors="0" time="79.542736">
+<testsuite name="auth-smoke.spec.ts" timestamp="2025-09-18T23:11:46.854Z" hostname="chromium" tests="1" failures="1" skipped="0" time="37.142" errors="0">
+<testcase name="login → whoami → no orchestrator crash" classname="auth-smoke.spec.ts" time="37.142">
+<failure message="auth-smoke.spec.ts:3:5 login → whoami → no orchestrator crash" type="FAILURE">
+<![CDATA[  [chromium] › auth-smoke.spec.ts:3:5 › login → whoami → no orchestrator crash ─────────────────────
 
-    Error: expect(received).toBe(expected) // Object.is equality
+    Test timeout of 30000ms exceeded.
 
-    Expected: true
-    Received: false
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /log in/i })
 
-      33 |     // First authenticate via API
-      34 |     const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 35 |     expect(loginResponse.ok()).toBe(true);
-         |                                ^
-      36 |
-      37 |     const loginData = await loginResponse.json();
-      38 |     console.log('Login successful:', loginData.status);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32
+
+       9 |     await page.getByLabel(/username/i).fill('admin');
+      10 |     await page.getByLabel(/password/i).fill('ChangeMe!');
+    > 11 |     await page.getByRole('button', { name: /log in/i }).click();
+         |                                                         ^
+      12 |
+      13 |     await page.waitForURL(/dashboard|chat|\/$/, { timeout: 15000 });
+      14 |
+        at /Users/kingal/2025/GesahniV2/frontend/e2e/auth-smoke.spec.ts:11:57
 
     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/test-failed-1.png
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/test-failed-1.png
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
     attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/video.webm
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/video.webm
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/trace.zip
+    Error Context: ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/trace.zip
     Usage:
 
-        npx playwright show-trace ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/trace.zip
+        npx playwright show-trace ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 ]]>
 </failure>
 <system-out>
 <![CDATA[
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/test-failed-1.png]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/test-failed-1.png]]
 
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/video.webm]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/video.webm]]
 
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-chromium/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › can access basic routes" classname="basic-functionality.spec.ts" time="0.965">
-<failure message="basic-functionality.spec.ts:62:7 can access basic routes" type="FAILURE">
-<![CDATA[  [chromium] › basic-functionality.spec.ts:62:7 › Basic Functionality › can access basic routes ────
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/error-context.md]]
 
-    Error: expect(received).toBe(expected) // Object.is equality
-
-    Expected: true
-    Received: false
-
-      69 |       // Authenticate first
-      70 |       const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 71 |       expect(loginResponse.ok()).toBe(true);
-         |                                  ^
-      72 |
-      73 |       // Visit the route
-      74 |       await page.goto(route);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing route: /
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-chromium/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › API endpoints respond correctly" classname="basic-functionality.spec.ts" time="1.642">
-<failure message="basic-functionality.spec.ts:88:7 API endpoints respond correctly" type="FAILURE">
-<![CDATA[  [chromium] › basic-functionality.spec.ts:88:7 › Basic Functionality › API endpoints respond correctly
-
-    Error: expect(received).toContain(expected) // indexOf
-
-    Expected value: 405
-    Received array: [200, 401, 403]
-
-      100 |
-      101 |       // Most endpoints should return some response
-    > 102 |       expect([200, 401, 403]).toContain(response.status());
-          |                               ^
-      103 |     }
-      104 |   });
-      105 | });
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing endpoint: /v1/health
-Endpoint /v1/health status: [33m200[39m
-Testing endpoint: /v1/whoami
-Endpoint /v1/whoami status: [33m200[39m
-Testing endpoint: /v1/auth/csrf
-Endpoint /v1/auth/csrf status: [33m405[39m
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-chromium/trace.zip]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-chromium/trace.zip]]
 ]]>
 </system-out>
 </testcase>
 </testsuite>
-<testsuite name="basic-functionality.spec.ts" timestamp="2025-09-16T23:44:13.930Z" hostname="firefox" tests="4" failures="3" skipped="0" time="21.196" errors="0">
-<testcase name="Basic Functionality › page loads and shows basic content" classname="basic-functionality.spec.ts" time="13.64">
-<system-out>
-<![CDATA[Page content after loading: ((e, i, s, u, m, a, l, h)=>{
-    let d = document.documentElement, w = [
-        "light",
-        "dark"
-    ];
-    function p(n) {
-        (Array.isArray(e) ? e : [
-            e
-        ]).forEach((y)=>{
-            let k = y === "class", S = k && a ? m.map((f)=>a[f] || f) : m;
-            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);
-        }), R(n);
-    }
-    function R(n) {
-        h && w.includes(n) && (d.style.colorScheme = n);
-    }
-    function c() {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    if (u) p(u);
-    else try {
-        let n = localStorage.getItem(i) || s, y = l && n === "system" ? c() : n;
-        p(y);
-    } catch (n) {}
-})("class","theme","system",null,["light","dark"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a
-Page has substantial content: [33mtrue[39m
-React root found: [33mfalse[39m
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › authentication works end-to-end" classname="basic-functionality.spec.ts" time="1.582">
-<failure message="basic-functionality.spec.ts:32:7 authentication works end-to-end" type="FAILURE">
-<![CDATA[  [firefox] › basic-functionality.spec.ts:32:7 › Basic Functionality › authentication works end-to-end
+<testsuite name="auth-smoke.spec.ts" timestamp="2025-09-18T23:11:46.854Z" hostname="firefox" tests="1" failures="1" skipped="0" time="39.95" errors="0">
+<testcase name="login → whoami → no orchestrator crash" classname="auth-smoke.spec.ts" time="39.95">
+<failure message="auth-smoke.spec.ts:3:5 login → whoami → no orchestrator crash" type="FAILURE">
+<![CDATA[  [firefox] › auth-smoke.spec.ts:3:5 › login → whoami → no orchestrator crash ──────────────────────
 
-    Error: expect(received).toBe(expected) // Object.is equality
+    Test timeout of 30000ms exceeded.
 
-    Expected: true
-    Received: false
+    Error: page.goto: Test timeout of 30000ms exceeded.
+    Call log:
+      - navigating to "http://localhost:3000/login", waiting until "load"
 
-      33 |     // First authenticate via API
-      34 |     const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 35 |     expect(loginResponse.ok()).toBe(true);
-         |                                ^
-      36 |
-      37 |     const loginData = await loginResponse.json();
-      38 |     console.log('Login successful:', loginData.status);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32
+
+       6 |     expect(h.ok()).toBeTruthy();
+       7 |
+    >  8 |     await page.goto('http://localhost:3000/login');
+         |                ^
+       9 |     await page.getByLabel(/username/i).fill('admin');
+      10 |     await page.getByLabel(/password/i).fill('ChangeMe!');
+      11 |     await page.getByRole('button', { name: /log in/i }).click();
+        at /Users/kingal/2025/GesahniV2/frontend/e2e/auth-smoke.spec.ts:8:16
 
     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/test-failed-1.png
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/test-failed-1.png
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
     attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/video.webm
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/video.webm
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/trace.zip
+    Error Context: ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/trace.zip
     Usage:
 
-        npx playwright show-trace ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/trace.zip
+        npx playwright show-trace ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 ]]>
 </failure>
 <system-out>
 <![CDATA[
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/test-failed-1.png]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/test-failed-1.png]]
 
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/video.webm]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/video.webm]]
 
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-firefox/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › can access basic routes" classname="basic-functionality.spec.ts" time="3.322">
-<failure message="basic-functionality.spec.ts:62:7 can access basic routes" type="FAILURE">
-<![CDATA[  [firefox] › basic-functionality.spec.ts:62:7 › Basic Functionality › can access basic routes ─────
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/error-context.md]]
 
-    Error: expect(received).toBe(expected) // Object.is equality
-
-    Expected: true
-    Received: false
-
-      69 |       // Authenticate first
-      70 |       const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 71 |       expect(loginResponse.ok()).toBe(true);
-         |                                  ^
-      72 |
-      73 |       // Visit the route
-      74 |       await page.goto(route);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing route: /
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-firefox/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › API endpoints respond correctly" classname="basic-functionality.spec.ts" time="2.652">
-<failure message="basic-functionality.spec.ts:88:7 API endpoints respond correctly" type="FAILURE">
-<![CDATA[  [firefox] › basic-functionality.spec.ts:88:7 › Basic Functionality › API endpoints respond correctly
-
-    Error: expect(received).toContain(expected) // indexOf
-
-    Expected value: 405
-    Received array: [200, 401, 403]
-
-      100 |
-      101 |       // Most endpoints should return some response
-    > 102 |       expect([200, 401, 403]).toContain(response.status());
-          |                               ^
-      103 |     }
-      104 |   });
-      105 | });
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing endpoint: /v1/health
-Endpoint /v1/health status: [33m200[39m
-Testing endpoint: /v1/whoami
-Endpoint /v1/whoami status: [33m200[39m
-Testing endpoint: /v1/auth/csrf
-Endpoint /v1/auth/csrf status: [33m405[39m
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-firefox/trace.zip]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-firefox/trace.zip]]
 ]]>
 </system-out>
 </testcase>
 </testsuite>
-<testsuite name="basic-functionality.spec.ts" timestamp="2025-09-16T23:44:13.930Z" hostname="webkit" tests="4" failures="3" skipped="0" time="15.461" errors="0">
-<testcase name="Basic Functionality › page loads and shows basic content" classname="basic-functionality.spec.ts" time="9.424">
-<system-out>
-<![CDATA[Page content after loading: ((e, i, s, u, m, a, l, h)=>{
-    let d = document.documentElement, w = [
-        "light",
-        "dark"
-    ];
-    function p(n) {
-        (Array.isArray(e) ? e : [
-            e
-        ]).forEach((y)=>{
-            let k = y === "class", S = k && a ? m.map((f)=>a[f] || f) : m;
-            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);
-        }), R(n);
-    }
-    function R(n) {
-        h && w.includes(n) && (d.style.colorScheme = n);
-    }
-    function c() {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    if (u) p(u);
-    else try {
-        let n = localStorage.getItem(i) || s, y = l && n === "system" ? c() : n;
-        p(y);
-    } catch (n) {}
-})("class","theme","system",null,["light","dark"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a
-Page has substantial content: [33mtrue[39m
-React root found: [33mfalse[39m
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › authentication works end-to-end" classname="basic-functionality.spec.ts" time="1.402">
-<failure message="basic-functionality.spec.ts:32:7 authentication works end-to-end" type="FAILURE">
-<![CDATA[  [webkit] › basic-functionality.spec.ts:32:7 › Basic Functionality › authentication works end-to-end
+<testsuite name="auth-smoke.spec.ts" timestamp="2025-09-18T23:11:46.854Z" hostname="webkit" tests="1" failures="1" skipped="0" time="60.004" errors="0">
+<testcase name="login → whoami → no orchestrator crash" classname="auth-smoke.spec.ts" time="60.004">
+<failure message="auth-smoke.spec.ts:3:5 login → whoami → no orchestrator crash" type="FAILURE">
+<![CDATA[  [webkit] › auth-smoke.spec.ts:3:5 › login → whoami → no orchestrator crash ───────────────────────
 
-    Error: expect(received).toBe(expected) // Object.is equality
+    Test timeout of 30000ms exceeded.
 
-    Expected: true
-    Received: false
+    Error: page.goto: Test timeout of 30000ms exceeded.
+    Call log:
+      - navigating to "http://localhost:3000/login", waiting until "load"
 
-      33 |     // First authenticate via API
-      34 |     const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 35 |     expect(loginResponse.ok()).toBe(true);
-         |                                ^
-      36 |
-      37 |     const loginData = await loginResponse.json();
-      38 |     console.log('Login successful:', loginData.status);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32
 
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
+       6 |     expect(h.ok()).toBeTruthy();
+       7 |
+    >  8 |     await page.goto('http://localhost:3000/login');
+         |                ^
+       9 |     await page.getByLabel(/username/i).fill('admin');
+      10 |     await page.getByLabel(/password/i).fill('ChangeMe!');
+      11 |     await page.getByRole('button', { name: /log in/i }).click();
+        at /Users/kingal/2025/GesahniV2/frontend/e2e/auth-smoke.spec.ts:8:16
 
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
+    Tearing down "context" exceeded the test timeout of 30000ms.
 
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/trace.zip
+    attachment #1: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-webkit/trace.zip
     Usage:
 
-        npx playwright show-trace ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/trace.zip
+        npx playwright show-trace ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-webkit/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 ]]>
 </failure>
 <system-out>
 <![CDATA[
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-webkit/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › can access basic routes" classname="basic-functionality.spec.ts" time="1.904">
-<failure message="basic-functionality.spec.ts:62:7 can access basic routes" type="FAILURE">
-<![CDATA[  [webkit] › basic-functionality.spec.ts:62:7 › Basic Functionality › can access basic routes ──────
-
-    Error: expect(received).toBe(expected) // Object.is equality
-
-    Expected: true
-    Received: false
-
-      69 |       // Authenticate first
-      70 |       const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 71 |       expect(loginResponse.ok()).toBe(true);
-         |                                  ^
-      72 |
-      73 |       // Visit the route
-      74 |       await page.goto(route);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing route: /
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-webkit/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › API endpoints respond correctly" classname="basic-functionality.spec.ts" time="2.731">
-<failure message="basic-functionality.spec.ts:88:7 API endpoints respond correctly" type="FAILURE">
-<![CDATA[  [webkit] › basic-functionality.spec.ts:88:7 › Basic Functionality › API endpoints respond correctly
-
-    Error: expect(received).toContain(expected) // indexOf
-
-    Expected value: 405
-    Received array: [200, 401, 403]
-
-      100 |
-      101 |       // Most endpoints should return some response
-    > 102 |       expect([200, 401, 403]).toContain(response.status());
-          |                               ^
-      103 |     }
-      104 |   });
-      105 | });
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing endpoint: /v1/health
-Endpoint /v1/health status: [33m200[39m
-Testing endpoint: /v1/whoami
-Endpoint /v1/whoami status: [33m200[39m
-Testing endpoint: /v1/auth/csrf
-Endpoint /v1/auth/csrf status: [33m405[39m
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-webkit/trace.zip]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-webkit/trace.zip]]
 ]]>
 </system-out>
 </testcase>
 </testsuite>
-<testsuite name="basic-functionality.spec.ts" timestamp="2025-09-16T23:44:13.930Z" hostname="Mobile Chrome" tests="4" failures="3" skipped="0" time="12.229" errors="0">
-<testcase name="Basic Functionality › page loads and shows basic content" classname="basic-functionality.spec.ts" time="8.162">
-<system-out>
-<![CDATA[Page content after loading: ((e, i, s, u, m, a, l, h)=>{
-    let d = document.documentElement, w = [
-        "light",
-        "dark"
-    ];
-    function p(n) {
-        (Array.isArray(e) ? e : [
-            e
-        ]).forEach((y)=>{
-            let k = y === "class", S = k && a ? m.map((f)=>a[f] || f) : m;
-            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);
-        }), R(n);
-    }
-    function R(n) {
-        h && w.includes(n) && (d.style.colorScheme = n);
-    }
-    function c() {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    if (u) p(u);
-    else try {
-        let n = localStorage.getItem(i) || s, y = l && n === "system" ? c() : n;
-        p(y);
-    } catch (n) {}
-})("class","theme","system",null,["light","dark"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a
-Page has substantial content: [33mtrue[39m
-React root found: [33mfalse[39m
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › authentication works end-to-end" classname="basic-functionality.spec.ts" time="1.02">
-<failure message="basic-functionality.spec.ts:32:7 authentication works end-to-end" type="FAILURE">
-<![CDATA[  [Mobile Chrome] › basic-functionality.spec.ts:32:7 › Basic Functionality › authentication works end-to-end
+<testsuite name="auth-smoke.spec.ts" timestamp="2025-09-18T23:11:46.854Z" hostname="Mobile Chrome" tests="1" failures="1" skipped="0" time="39.504" errors="0">
+<testcase name="login → whoami → no orchestrator crash" classname="auth-smoke.spec.ts" time="39.504">
+<failure message="auth-smoke.spec.ts:3:5 login → whoami → no orchestrator crash" type="FAILURE">
+<![CDATA[  [Mobile Chrome] › auth-smoke.spec.ts:3:5 › login → whoami → no orchestrator crash ────────────────
 
-    Error: expect(received).toBe(expected) // Object.is equality
+    Test timeout of 30000ms exceeded.
 
-    Expected: true
-    Received: false
+    Error: locator.click: Test timeout of 30000ms exceeded.
+    Call log:
+      - waiting for getByRole('button', { name: /log in/i })
 
-      33 |     // First authenticate via API
-      34 |     const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 35 |     expect(loginResponse.ok()).toBe(true);
-         |                                ^
-      36 |
-      37 |     const loginData = await loginResponse.json();
-      38 |     console.log('Login successful:', loginData.status);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32
+
+       9 |     await page.getByLabel(/username/i).fill('admin');
+      10 |     await page.getByLabel(/password/i).fill('ChangeMe!');
+    > 11 |     await page.getByRole('button', { name: /log in/i }).click();
+         |                                                         ^
+      12 |
+      13 |     await page.waitForURL(/dashboard|chat|\/$/, { timeout: 15000 });
+      14 |
+        at /Users/kingal/2025/GesahniV2/frontend/e2e/auth-smoke.spec.ts:11:57
 
     attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/test-failed-1.png
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/test-failed-1.png
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
     attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/video.webm
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/video.webm
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/trace.zip
+    Error Context: ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/error-context.md
+
+    attachment #4: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/trace.zip
     Usage:
 
-        npx playwright show-trace ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/trace.zip
+        npx playwright show-trace ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 ]]>
 </failure>
 <system-out>
 <![CDATA[
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/test-failed-1.png]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/test-failed-1.png]]
 
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/video.webm]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/video.webm]]
 
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Chrome/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › can access basic routes" classname="basic-functionality.spec.ts" time="1.021">
-<failure message="basic-functionality.spec.ts:62:7 can access basic routes" type="FAILURE">
-<![CDATA[  [Mobile Chrome] › basic-functionality.spec.ts:62:7 › Basic Functionality › can access basic routes
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/error-context.md]]
 
-    Error: expect(received).toBe(expected) // Object.is equality
-
-    Expected: true
-    Received: false
-
-      69 |       // Authenticate first
-      70 |       const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 71 |       expect(loginResponse.ok()).toBe(true);
-         |                                  ^
-      72 |
-      73 |       // Visit the route
-      74 |       await page.goto(route);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing route: /
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Chrome/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › API endpoints respond correctly" classname="basic-functionality.spec.ts" time="2.026">
-<failure message="basic-functionality.spec.ts:88:7 API endpoints respond correctly" type="FAILURE">
-<![CDATA[  [Mobile Chrome] › basic-functionality.spec.ts:88:7 › Basic Functionality › API endpoints respond correctly
-
-    Error: expect(received).toContain(expected) // indexOf
-
-    Expected value: 405
-    Received array: [200, 401, 403]
-
-      100 |
-      101 |       // Most endpoints should return some response
-    > 102 |       expect([200, 401, 403]).toContain(response.status());
-          |                               ^
-      103 |     }
-      104 |   });
-      105 | });
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing endpoint: /v1/health
-Endpoint /v1/health status: [33m200[39m
-Testing endpoint: /v1/whoami
-Endpoint /v1/whoami status: [33m200[39m
-Testing endpoint: /v1/auth/csrf
-Endpoint /v1/auth/csrf status: [33m405[39m
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Chrome/trace.zip]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Chrome/trace.zip]]
 ]]>
 </system-out>
 </testcase>
 </testsuite>
-<testsuite name="basic-functionality.spec.ts" timestamp="2025-09-16T23:44:13.930Z" hostname="Mobile Safari" tests="4" failures="3" skipped="0" time="14.026" errors="0">
-<testcase name="Basic Functionality › page loads and shows basic content" classname="basic-functionality.spec.ts" time="8.732">
-<system-out>
-<![CDATA[Page content after loading: ((e, i, s, u, m, a, l, h)=>{
-    let d = document.documentElement, w = [
-        "light",
-        "dark"
-    ];
-    function p(n) {
-        (Array.isArray(e) ? e : [
-            e
-        ]).forEach((y)=>{
-            let k = y === "class", S = k && a ? m.map((f)=>a[f] || f) : m;
-            k ? (d.classList.remove(...S), d.classList.add(a && a[n] ? a[n] : n)) : d.setAttribute(y, n);
-        }), R(n);
-    }
-    function R(n) {
-        h && w.includes(n) && (d.style.colorScheme = n);
-    }
-    function c() {
-        return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-    }
-    if (u) p(u);
-    else try {
-        let n = localStorage.getItem(i) || s, y = l && n === "system" ? c() : n;
-        p(y);
-    } catch (n) {}
-})("class","theme","system",null,["light","dark"],null,true,true)Checking configuration...Skip to contentChecking authentication...requestAnimationFrame(function(){$RT=performance.now()});$RB=[];$RV=function(b){$RT=performance.now();for(var a
-Page has substantial content: [33mtrue[39m
-React root found: [33mfalse[39m
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › authentication works end-to-end" classname="basic-functionality.spec.ts" time="1.16">
-<failure message="basic-functionality.spec.ts:32:7 authentication works end-to-end" type="FAILURE">
-<![CDATA[  [Mobile Safari] › basic-functionality.spec.ts:32:7 › Basic Functionality › authentication works end-to-end
+<testsuite name="auth-smoke.spec.ts" timestamp="2025-09-18T23:11:46.854Z" hostname="Mobile Safari" tests="1" failures="1" skipped="0" time="47.643" errors="0">
+<testcase name="login → whoami → no orchestrator crash" classname="auth-smoke.spec.ts" time="47.643">
+<failure message="auth-smoke.spec.ts:3:5 login → whoami → no orchestrator crash" type="FAILURE">
+<![CDATA[  [Mobile Safari] › auth-smoke.spec.ts:3:5 › login → whoami → no orchestrator crash ────────────────
 
-    Error: expect(received).toBe(expected) // Object.is equality
+    Test timeout of 30000ms exceeded.
 
-    Expected: true
-    Received: false
+    Error: page.goto: Test timeout of 30000ms exceeded.
+    Call log:
+      - navigating to "http://localhost:3000/login", waiting until "load"
 
-      33 |     // First authenticate via API
-      34 |     const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 35 |     expect(loginResponse.ok()).toBe(true);
-         |                                ^
-      36 |
-      37 |     const loginData = await loginResponse.json();
-      38 |     console.log('Login successful:', loginData.status);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:35:32
 
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/test-failed-1.png
+       6 |     expect(h.ok()).toBeTruthy();
+       7 |
+    >  8 |     await page.goto('http://localhost:3000/login');
+         |                ^
+       9 |     await page.getByLabel(/username/i).fill('admin');
+      10 |     await page.getByLabel(/password/i).fill('ChangeMe!');
+      11 |     await page.getByRole('button', { name: /log in/i }).click();
+        at /Users/kingal/2025/GesahniV2/frontend/e2e/auth-smoke.spec.ts:8:16
+
+    attachment #1: video (video/webm) ──────────────────────────────────────────────────────────────
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Safari/video.webm
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/trace.zip
+    attachment #2: trace (application/zip) ─────────────────────────────────────────────────────────
+    ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Safari/trace.zip
     Usage:
 
-        npx playwright show-trace ../test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/trace.zip
+        npx playwright show-trace ../test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Safari/trace.zip
 
     ────────────────────────────────────────────────────────────────────────────────────────────────
 ]]>
 </failure>
 <system-out>
 <![CDATA[
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/test-failed-1.png]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Safari/video.webm]]
 
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--27aaf-entication-works-end-to-end-Mobile-Safari/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › can access basic routes" classname="basic-functionality.spec.ts" time="1.721">
-<failure message="basic-functionality.spec.ts:62:7 can access basic routes" type="FAILURE">
-<![CDATA[  [Mobile Safari] › basic-functionality.spec.ts:62:7 › Basic Functionality › can access basic routes
-
-    Error: expect(received).toBe(expected) // Object.is equality
-
-    Expected: true
-    Received: false
-
-      69 |       // Authenticate first
-      70 |       const loginResponse = await page.request.post('/v1/auth/login?username=testuser');
-    > 71 |       expect(loginResponse.ok()).toBe(true);
-         |                                  ^
-      72 |
-      73 |       // Visit the route
-      74 |       await page.goto(route);
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:71:34
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing route: /
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--83130-ity-can-access-basic-routes-Mobile-Safari/trace.zip]]
-]]>
-</system-out>
-</testcase>
-<testcase name="Basic Functionality › API endpoints respond correctly" classname="basic-functionality.spec.ts" time="2.413">
-<failure message="basic-functionality.spec.ts:88:7 API endpoints respond correctly" type="FAILURE">
-<![CDATA[  [Mobile Safari] › basic-functionality.spec.ts:88:7 › Basic Functionality › API endpoints respond correctly
-
-    Error: expect(received).toContain(expected) // indexOf
-
-    Expected value: 405
-    Received array: [200, 401, 403]
-
-      100 |
-      101 |       // Most endpoints should return some response
-    > 102 |       expect([200, 401, 403]).toContain(response.status());
-          |                               ^
-      103 |     }
-      104 |   });
-      105 | });
-        at /Users/kingal/2025/GesahniV2/frontend/e2e/basic-functionality.spec.ts:102:31
-
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/test-failed-1.png
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/video.webm
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-
-    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
-    ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/trace.zip
-    Usage:
-
-        npx playwright show-trace ../test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/trace.zip
-
-    ────────────────────────────────────────────────────────────────────────────────────────────────
-]]>
-</failure>
-<system-out>
-<![CDATA[Testing endpoint: /v1/health
-Endpoint /v1/health status: [33m200[39m
-Testing endpoint: /v1/whoami
-Endpoint /v1/whoami status: [33m200[39m
-Testing endpoint: /v1/auth/csrf
-Endpoint /v1/auth/csrf status: [33m405[39m
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/test-failed-1.png]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/video.webm]]
-
-[[ATTACHMENT|test-results/basic-functionality-Basic--cc3fb-endpoints-respond-correctly-Mobile-Safari/trace.zip]]
+[[ATTACHMENT|test-results/auth-smoke-login-→-whoami-→-no-orchestrator-crash-Mobile-Safari/trace.zip]]
 ]]>
 </system-out>
 </testcase>

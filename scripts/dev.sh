@@ -117,6 +117,38 @@ ensure_redis() {
   return 1
 }
 
+# Ensure PostgreSQL is running
+ensure_postgres() {
+  # Check if PostgreSQL is already running on port 5432
+  if pgrep -f postgres >/dev/null && netstat -an 2>/dev/null | grep -q ":5432.*LISTEN" || lsof -i :5432 >/dev/null 2>&1; then
+    echo "✅ PostgreSQL already running on port 5432"
+    return 0
+  fi
+  
+  # Try to start PostgreSQL via Docker Compose
+  if command -v docker >/dev/null 2>&1 && [ -f "docker-compose.yml" ]; then
+    echo "▶️  Starting PostgreSQL via Docker Compose..."
+    docker compose up -d db
+    
+    # Wait for database to be ready
+    echo -n "⏳ Waiting for PostgreSQL to be ready"
+    for i in {1..30}; do
+      if docker exec gesahni-db-1 pg_isready -U app -d gesahni >/dev/null 2>&1 || psql -h localhost -U app -d gesahni -c "SELECT 1;" >/dev/null 2>&1; then
+        echo; echo "✅ PostgreSQL ready"
+        return 0
+      fi
+      echo -n "."
+      sleep 1
+    done
+    
+    echo; echo "❌ PostgreSQL failed to become ready"
+    return 1
+  fi
+  
+  echo "❌ No PostgreSQL installation found. Please install PostgreSQL or ensure Docker is available."
+  return 1
+}
+
 # Start Redis (optional but recommended for stable sessions)
 if command -v redis-server >/dev/null 2>&1 || command -v docker >/dev/null 2>&1; then
     if ensure_redis; then
@@ -126,6 +158,14 @@ if command -v redis-server >/dev/null 2>&1 || command -v docker >/dev/null 2>&1;
     fi
 else
     echo "ℹ️  Redis not available - using in-memory session store"
+fi
+
+# Start PostgreSQL (required for database operations)
+if ensure_postgres; then
+    echo "✅ PostgreSQL available"
+else
+    echo "❌ PostgreSQL startup failed - database operations will fail"
+    echo "   Please ensure PostgreSQL is running on port 5432"
 fi
 
 # Start Qdrant if Docker is available
@@ -182,6 +222,24 @@ done
 # Start backend
 echo "🔧 Starting backend (bound to 127.0.0.1)..."
 cd "$(dirname "$0")/.."
+
+# Load environment variables
+echo "📝 Loading environment variables..."
+if [ -f ".env" ]; then
+    # Use python-dotenv to load environment variables properly
+    export $(python3 -c "
+import os
+from dotenv import load_dotenv
+load_dotenv()
+for key, value in os.environ.items():
+    if key.startswith(('DATABASE_URL', 'ENV', 'LOG_LEVEL', 'JWT_SECRET', 'OPENAI_API_KEY')):
+        print(f'{key}={value}')
+" 2>/dev/null | xargs)
+    echo "✅ Environment variables loaded"
+else
+    echo "⚠️  Warning: .env file not found"
+fi
+
 source .venv/bin/activate
 uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload &
 BACKEND_PID=$!

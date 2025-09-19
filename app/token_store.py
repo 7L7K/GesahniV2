@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import secrets
 import threading
 import time
 from dataclasses import dataclass
@@ -92,6 +93,7 @@ _local_counters = LocalStorage()
 _local_last_used_jti = LocalStorage()
 _local_revoked_families = LocalStorage()
 _local_revoked_access = LocalStorage()
+_local_rotation_locks = LocalStorage()
 
 # Threading lock for operations that need coordination
 try:
@@ -212,6 +214,77 @@ async def stop_cleanup_task() -> None:
             pass
         _cleanup_task = None
     logger.info("Stopped local storage cleanup task")
+
+
+# ------------------------- Refresh rotation locks ---------------------------
+
+
+def _rotation_lock_key(sid: str) -> str:
+    return f"refresh_rotation_lock:{sid}"
+
+
+async def acquire_refresh_rotation_lock(
+    sid: str, ttl_seconds: int = 5, retries: int = 3
+) -> str | None:
+    """Acquire a distributed refresh rotation lock for a session."""
+
+    lock_key = _rotation_lock_key(sid)
+    redis_client = await _get_redis()
+    token = secrets.token_hex(16)
+
+    if redis_client is not None:
+        for attempt in range(max(1, retries)):
+            try:
+                ok = await redis_client.set(
+                    lock_key,
+                    token,
+                    ex=max(1, int(ttl_seconds)),
+                    nx=True,
+                )
+                if ok:
+                    return token
+            except Exception as exc:
+                logger.warning(
+                    "Redis acquire_refresh_rotation_lock failed: %s", exc,
+                )
+                break
+            await asyncio.sleep(0.05 * (attempt + 1))
+
+    with _local_lock:
+        current = _local_rotation_locks.get(lock_key)
+        if current and current != token:
+            return None
+        _local_rotation_locks.set(lock_key, token, ttl_seconds)
+        return token
+
+
+async def release_refresh_rotation_lock(sid: str, token: str | None) -> None:
+    """Release a previously acquired refresh rotation lock."""
+
+    if not token:
+        return
+
+    lock_key = _rotation_lock_key(sid)
+    redis_client = await _get_redis()
+
+    if redis_client is not None:
+        try:
+            lua = """
+            if redis.call('get', KEYS[1]) == ARGV[1] then
+                return redis.call('del', KEYS[1])
+            end
+            return 0
+            """
+            await redis_client.eval(lua, 1, lock_key, token)
+        except Exception as exc:
+            logger.debug(
+                "Redis release_refresh_rotation_lock failed: %s", exc,
+            )
+
+    with _local_lock:
+        current = _local_rotation_locks.get(lock_key)
+        if current == token:
+            _local_rotation_locks.delete(lock_key)
 
 
 # ------------------------- Refresh token rotation ----------------------------
@@ -380,14 +453,13 @@ async def get_last_used_jti(sid: str) -> str | None:
 
 
 async def revoke_refresh_family(sid: str, ttl_seconds: int) -> None:
-    """Revoke a refresh token family."""
+    """Revoke a refresh token family and invalidate the session."""
     r = await _get_redis()
     if r is not None:
         try:
             await r.set(
                 _key_revoked_refresh_family(sid), "1", ex=max(1, int(ttl_seconds))
             )
-            return
         except Exception as e:
             logger.warning(
                 f"Redis revoke_refresh_family failed, falling back to local: {e}"
@@ -396,6 +468,14 @@ async def revoke_refresh_family(sid: str, ttl_seconds: int) -> None:
     # Local fallback
     key = f"fam:{sid}"
     _local_revoked_families.set(key, "1", ttl_seconds)
+
+    # Also invalidate the session by incrementing its version
+    try:
+        from .sessions_store import sessions_store
+        await sessions_store.increment_session_version(sid)
+        logger.info(f"Session {sid} invalidated due to refresh token reuse")
+    except Exception as e:
+        logger.error(f"Failed to invalidate session {sid} on refresh token reuse: {e}")
 
 
 async def is_refresh_family_revoked(sid: str) -> bool:
@@ -557,6 +637,8 @@ __all__ = [
     "is_refresh_family_revoked",
     "revoke_access",
     "is_access_revoked",
+    "acquire_refresh_rotation_lock",
+    "release_refresh_rotation_lock",
     "_key_login_ip",
     "_key_login_user",
     "incr_login_counter",

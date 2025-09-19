@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { apiFetch, wsUrl } from "@/lib/api";
+import { apiFetch, fetchHealth, wsUrl } from "@/lib/api";
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
 
 export type RecorderState =
@@ -161,7 +161,7 @@ export function useRecorder(): RecorderExports {
         try {
             const controller = new AbortController();
             const to = setTimeout(() => controller.abort(), 1500);
-            const h = await apiFetch('/healthz/ready', { auth: false, dedupe: false, cache: 'no-store', signal: controller.signal });
+            const h = await fetchHealth('/healthz/ready');
             clearTimeout(to);
             const ok = h.ok && ((await h.json().catch(() => ({ status: 'fail' }))).status === 'ok');
             if (!ok) {

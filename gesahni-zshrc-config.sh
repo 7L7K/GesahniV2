@@ -159,67 +159,37 @@ gesahni-stop() {
 
     echo "🛑 Stopping Gesahni Development Environment"
 
-    # More specific patterns scoped to Gesahni directory and exact commands
-    # Avoid overly broad patterns that match unrelated processes
-    patterns=("uvicorn app.main:app" "next dev" "next-server" "npm run dev" "pnpm dev")
-    ports=(8000 3000)
+    # 1) Try graceful termination first
+    pkill -f 'uvicorn .*app\.main:app' || true
+    pkill -f 'next dev' || true
+    pkill -f 'npm run dev' || true
+    pkill -f 'pnpm dev' || true
 
-    found=false
+    sleep 1
 
-    # Stop by specific Gesahni-scoped process patterns
-    for pat in "${patterns[@]}"; do
-      pids=$(pgrep -f -- "$pat" || true)
-      if [ -n "$pids" ]; then
-        found=true
-        echo "Found Gesahni processes for '$pat': $pids"
-        for pid in $pids; do
-          if kill -0 "$pid" 2>/dev/null; then
-            kill -TERM "$pid" 2>/dev/null || true
-          fi
-        done
+    # 2) Hard kill any leftovers by port (includes Qdrant on 6333)
+    kill_listeners() {
+      local port="$1"
+      local pids
+      pids="$(_safe_lsof -n -P -iTCP:$port -sTCP:LISTEN -t 2>/dev/null || true)"
+      if [[ -n "${pids}" ]]; then
+        echo "Force killing listeners on port ${port}: ${pids}"
+        # shellcheck disable=SC2086
+        kill -9 ${pids} || true
       fi
+    }
+
+    for port in 8000 3000 6333; do
+      kill_listeners "$port"
     done
 
-    # Stop only LISTENING processes on specific ports (not all connected processes)
-    for port in "${ports[@]}"; do
-      pids=$(_safe_lsof -t -iTCP:$port -sTCP:LISTEN 2>/dev/null || true)
-      if [ -n "$pids" ]; then
-        found=true
-        echo "Found LISTENING processes on port $port: $pids"
-        for pid in $pids; do
-          if kill -0 "$pid" 2>/dev/null; then
-            kill -TERM "$pid" 2>/dev/null || true
-          fi
-        done
-        sleep 1
-        # Force kill any remaining listeners
-        remaining_pids=$(_safe_lsof -t -iTCP:$port -sTCP:LISTEN 2>/dev/null || true)
-        for pid in $remaining_pids; do
-          if kill -0 "$pid" 2>/dev/null; then
-            echo "Force-killing remaining listener on port $port: $pid"
-            kill -KILL "$pid" 2>/dev/null || true
-          fi
-        done
-      fi
+    # 3) Verify cleanup
+    echo "Remaining listeners:"
+    for port in 8000 3000 6333; do
+      _safe_lsof -n -P -iTCP:$port -sTCP:LISTEN 2>/dev/null || echo "Port $port: clean"
     done
 
-    # Final cleanup - kill any remaining processes on our ports
-    sleep 2
-    for port in "${ports[@]}"; do
-      remaining_pids=$(_safe_lsof -t -iTCP:$port 2>/dev/null || true)
-      if [ -n "$remaining_pids" ]; then
-        echo "⚠️  Force-killing remaining processes on port $port: $remaining_pids"
-        for pid in $remaining_pids; do
-          kill -KILL "$pid" 2>/dev/null || true
-        done
-      fi
-    done
-
-    if [ "$found" = true ]; then
-      echo "✅ Stopped all development processes and cleaned up stragglers"
-    else
-      echo "ℹ️  No matching development processes found"
-    fi
+    echo "✅ Stopped all development processes and cleaned up zombies"
 }
 
 # Function to restart Gesahni development environment

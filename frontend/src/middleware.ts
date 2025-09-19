@@ -2,6 +2,46 @@ import { NextFetchEvent, NextRequest, NextResponse } from 'next/server'
 
 export default function middleware(req: NextRequest, ev: NextFetchEvent) {
     const { pathname } = req.nextUrl
+    const timestamp = new Date().toISOString()
+
+    // Very simple console logging to verify middleware is working
+    console.log('='.repeat(80))
+    console.log(`MIDDLEWARE TRIGGERED: ${timestamp}`)
+    console.log(`PATH: ${pathname}`)
+    console.log(`METHOD: ${req.method}`)
+    console.log(`USER-AGENT: ${req.headers.get('user-agent')}`)
+    console.log('='.repeat(80))
+
+    // Log all page requests (excluding static assets and internal Next.js routes)
+    if (!pathname.startsWith('/_next/') &&
+        !pathname.startsWith('/assets/') &&
+        !pathname.startsWith('/api/') &&
+        !pathname.includes('.') &&
+        pathname !== '/favicon.ico') {
+
+        const userAgent = req.headers.get('user-agent') || 'unknown'
+        const referer = req.headers.get('referer') || 'direct'
+        const clientIP = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown'
+
+        // Special logging for logout-related pages
+        if (pathname.includes('logout') || pathname.includes('login')) {
+            console.log('🚪'.repeat(10))
+            console.log(`🚪 AUTH_PAGE_LOAD: ${timestamp}`)
+            console.log(`🚪 Path: ${pathname}`)
+            console.log(`🚪 User-Agent: ${userAgent.substring(0, 50)}...`)
+            console.log(`🚪 Referer: ${referer}`)
+            console.log(`🚪 IP: ${clientIP}`)
+            console.log('🚪'.repeat(10))
+        } else {
+            console.log('📄'.repeat(10))
+            console.log(`📄 PAGE_LOAD: ${timestamp}`)
+            console.log(`📄 Path: ${pathname}`)
+            console.log(`📄 User-Agent: ${userAgent.substring(0, 50)}...`)
+            console.log(`📄 Referer: ${referer}`)
+            console.log(`📄 IP: ${clientIP}`)
+            console.log('📄'.repeat(10))
+        }
+    }
 
     // Bypass health endpoints and metrics completely - no auth, no redirects
     if (pathname.startsWith('/healthz/') || pathname === '/metrics') {

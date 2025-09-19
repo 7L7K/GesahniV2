@@ -10,17 +10,47 @@ router = APIRouter(tags=["auth"], include_in_schema=False)
 async def legacy_google_callback(request: Request):
     """Legacy compatibility endpoint for /v1/auth/google/callback.
 
-    Returns a 303 redirect and clears OAuth state cookies set during login.
+    Performs OAuth token exchange and sets auth cookies, then redirects.
     Cookie names use the short 'g_' provider prefix consistent with tests.
     """
     from app.web.cookies import clear_oauth_state_cookies
+    from fastapi.responses import RedirectResponse
+    import os
 
-    resp = RedirectResponse(url="/", status_code=303)
+    code = request.query_params.get("code")
+    state = request.query_params.get("state")
+
+    # If no code/state, just redirect to home
+    if not code or not state:
+        resp = RedirectResponse(url="/", status_code=302)
+        try:
+            clear_oauth_state_cookies(resp, provider="g")
+        except Exception:
+            pass
+        return resp
+
     try:
-        clear_oauth_state_cookies(resp, provider="g")
-    except Exception:
-        pass
-    return resp
+        # Import OAuth processing functions
+        from app.integrations.google.oauth import exchange_code
+        from app.api.google_oauth import _mint_cookie_redirect
+
+        # Exchange the code for tokens
+        creds = exchange_code(code, state)
+
+        # Create user ID from OAuth response
+        user_id = f"google_{creds.token[:16]}"  # Simple user ID from token
+
+        # Mint cookies and redirect
+        return _mint_cookie_redirect(request, "/", user_id=user_id)
+
+    except Exception as e:
+        # On OAuth failure, clear state and redirect to finisher
+        resp = RedirectResponse(url="/auth/finish", status_code=302)
+        try:
+            clear_oauth_state_cookies(resp, provider="g")
+        except Exception:
+            pass
+        return resp
 
 
 # POST shim: some clients POST to the callback URL; respond with 303 to canonical GET

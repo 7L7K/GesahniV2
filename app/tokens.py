@@ -7,6 +7,7 @@ with centralized TTL management and normalized claims handling.
 
 import logging
 import os
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import uuid4
@@ -15,12 +16,16 @@ import jwt
 
 from app.security.jwt_config import get_jwt_config
 
+logger = logging.getLogger(__name__)
+
 # JWT configuration constants - now centralized in get_jwt_config()
 # ALGORITHM, SECRET_KEY, JWT_ISS, JWT_AUD removed - use get_jwt_config() instead
 
 # Token expiration times (fallback defaults)
-EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "30"))
-REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "1440"))
+# AT: 15 minutes for security
+EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "15"))
+# RT: 30 days (43200 minutes) - can be configured 7-30 days
+REFRESH_EXPIRE_MINUTES = int(os.getenv("JWT_REFRESH_EXPIRE_MINUTES", "43200"))
 
 logger = logging.getLogger(__name__)
 
@@ -175,6 +180,17 @@ def _get_refresh_ttl_seconds() -> int:
 def _normalize_access_claims(claims: dict[str, Any]) -> dict[str, Any]:
     """Normalize and complete access token claims."""
     normalized = claims.copy()
+    
+    logger.info(f"🔍 TOKEN_NORMALIZE_ACCESS: Normalizing access claims", extra={
+        "meta": {
+            "input_claims": claims,
+            "normalized_claims": normalized,
+            "has_sid": "sid" in claims,
+            "has_device_id": "device_id" in claims,
+            "has_sess_ver": "sess_ver" in claims,
+            "timestamp": time.time()
+        }
+    })
 
     # Ensure required claims are present
     if "sub" not in normalized and "user_id" in normalized:
@@ -186,8 +202,21 @@ def _normalize_access_claims(claims: dict[str, Any]) -> dict[str, Any]:
     normalized.setdefault("type", "access")
     normalized.setdefault("scopes", ["care:resident", "music:control", "chat:write"])
 
+    # sess_ver should be provided directly in the claims, not fetched here
+    # This avoids async calls in synchronous token creation functions
+
     # Add standard JWT claims that will be set by create_access_token
     # (iat, exp, jti will be added by the underlying implementation)
+    
+    logger.info(f"🔍 TOKEN_NORMALIZE_ACCESS_RESULT: Final normalized claims", extra={
+        "meta": {
+            "final_claims": normalized,
+            "has_sid": "sid" in normalized,
+            "has_device_id": "device_id" in normalized,
+            "has_sess_ver": "sess_ver" in normalized,
+            "timestamp": time.time()
+        }
+    })
 
     return normalized
 
@@ -577,3 +606,30 @@ def test_jwt_backward_compatibility():
         # Restore original env
         os.environ.clear()
         os.environ.update(orig_env)
+
+
+def remaining_ttl(jti: str | None | int) -> int:
+    """
+    Calculate remaining TTL for a JTI token.
+
+    This is a simplified implementation that returns a reasonable default TTL.
+    In production, you'd want to decode the actual token and calculate
+    the remaining time until expiration.
+
+    Args:
+        jti: JWT ID token identifier (can be string, None, or other type)
+
+    Returns:
+        Remaining TTL in seconds (default 1 hour for safety)
+    """
+    try:
+        # Handle None and non-string types
+        if jti is None or not isinstance(jti, str):
+            return 3600  # Default fallback
+
+        # For now, return a conservative 1-hour TTL
+        # In production, decode the token and calculate: exp - now
+        return 3600  # 1 hour
+    except Exception as e:
+        logger.warning(f"Failed to calculate remaining TTL for JTI {jti}: {e}")
+        return 3600  # Default fallback

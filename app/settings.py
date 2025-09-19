@@ -50,12 +50,16 @@ else:
             )
             self.TEST_MODE = _truthy(os.getenv(prefix + "TEST_MODE", "0"))
 
-    settings = Settings()
+settings = Settings()
 
 
 # ----------------------------------------------------------------------------
 # Functional settings API used by router leaf modules
 # ----------------------------------------------------------------------------
+
+# Feature toggles for authentication helpers
+AUTH_ENABLE_PARTITIONED = _truthy(os.getenv("AUTH_ENABLE_PARTITIONED", "0"))
+AUTH_ENABLE_CLEAR_SITE_DATA = _truthy(os.getenv("AUTH_ENABLE_CLEAR_SITE_DATA", "0"))
 
 
 def _split_csv(env_value: str | None, default: Iterable[str]) -> list[str]:

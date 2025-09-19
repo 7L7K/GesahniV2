@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -10,6 +11,37 @@ import aiofiles  # pip install aiofiles
 
 from .logging_config import req_id_var
 from .telemetry import LogRecord
+
+# --------------------------------------------------------------------------
+# SAFE JSON SERIALIZATION
+# --------------------------------------------------------------------------
+
+def _safe_json_dumps(obj: Any, **kwargs) -> str:
+    """Safe JSON dumps that handles coroutines and other non-serializable objects."""
+    def _sanitize(item: Any) -> Any:
+        if asyncio.iscoroutine(item):
+            return f"<coroutine: {item.__name__ if hasattr(item, '__name__') else str(type(item))}>"
+        elif hasattr(item, '__call__') and asyncio.iscoroutinefunction(item):
+            return f"<coroutine_function: {item.__name__}>"
+        elif isinstance(item, dict):
+            return {k: _sanitize(v) for k, v in item.items()}
+        elif isinstance(item, (list, tuple)):
+            return [_sanitize(v) for v in item]
+        elif hasattr(item, '__dict__'):
+            # Handle objects with complex state
+            try:
+                return str(item)
+            except Exception:
+                return f"<object: {type(item).__name__}>"
+        else:
+            return item
+    
+    try:
+        return json.dumps(obj, **kwargs)
+    except (TypeError, ValueError):
+        # Sanitize and retry
+        sanitized = _sanitize(obj)
+        return json.dumps(sanitized, **kwargs)
 
 # --------------------------------------------------------------------------
 # CONFIG
@@ -108,6 +140,13 @@ async def append_history(
         try:
             file_path = Path(HISTORY_FILE)
             file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Check file size and rotate if too large (>100MB)
+            if file_path.exists() and file_path.stat().st_size > 100 * 1024 * 1024:
+                backup_path = file_path.with_suffix(f".backup.{int(time.time())}.jsonl")
+                file_path.rename(backup_path)
+                logger.info("Rotated history file due to size: %s -> %s", file_path, backup_path)
+
             if file_path.suffix == ".json":
                 existing = []
                 if file_path.exists():
@@ -116,13 +155,22 @@ async def append_history(
                         existing = json.loads(content) if content else []
                 existing.append(record)
                 async with aiofiles.open(file_path, "w", encoding="utf-8") as f:
-                    await f.write(json.dumps(existing, ensure_ascii=False))
+                    await f.write(_safe_json_dumps(existing, ensure_ascii=False))
             else:
                 async with aiofiles.open(file_path, "a", encoding="utf-8") as f:
-                    await f.write(json.dumps(record, ensure_ascii=False) + "\n")
+                    await f.write(_safe_json_dumps(record, ensure_ascii=False) + "\n")
             logger.debug("history_write_ok", extra={"meta": record})
-        except Exception:
-            logger.exception("Failed to append history")
+        except Exception as e:
+            logger.error("Failed to append history: %s", e)
+            logger.exception("Full traceback for history failure")
+            # Try to write to a fallback location if main file fails
+            try:
+                fallback_path = file_path.with_suffix(".fallback.jsonl")
+                async with aiofiles.open(fallback_path, "a", encoding="utf-8") as f:
+                    await f.write(_safe_json_dumps(record, ensure_ascii=False) + "\n")
+                logger.warning("Wrote history record to fallback file: %s", fallback_path)
+            except Exception as fallback_e:
+                logger.error("Fallback history write also failed: %s", fallback_e)
 
 
 async def get_record_by_req_id(req_id: str) -> dict[str, Any] | None:

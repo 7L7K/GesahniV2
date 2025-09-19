@@ -1,11 +1,18 @@
 """Cookie utilities for GesahniV2 authentication."""
 
+from __future__ import annotations
+
+import hashlib
+import ipaddress
 import logging
 import os
-import random
-from typing import TYPE_CHECKING
+import secrets
+import time
+from typing import TYPE_CHECKING, Any
 
 from fastapi import Response
+
+from app.session_store import new_session_id
 
 if TYPE_CHECKING:
     from fastapi import Request
@@ -97,6 +104,176 @@ def _append_legacy_auth_cookie_headers(
         )
 
 
+def _truncate_ip(ip: str) -> str:
+    if not ip:
+        return ""
+    try:
+        addr = ipaddress.ip_address(ip)
+        ip_str = addr.exploded
+        if isinstance(addr, ipaddress.IPv4Address):
+            return ".".join(ip_str.split(".")[:3])
+        return ":".join(ip_str.split(":")[:4])
+    except Exception:
+        return ""
+
+
+def _fingerprint_request(request: "Request | None") -> dict[str, str]:
+    if request is None:
+        return {"ua_hash": "", "ip_hash": "", "device_id": "", "version": 2}
+
+    try:
+        user_agent = request.headers.get("user-agent", "")
+    except Exception:
+        user_agent = ""
+    try:
+        client_ip = request.client.host if request.client else ""
+    except Exception:
+        client_ip = ""
+    try:
+        device_id = request.cookies.get("device_id") if request.cookies else ""
+    except Exception:
+        device_id = ""
+
+    def _hash(value: str) -> str:
+        if not value:
+            return ""
+        try:
+            return hashlib.sha256(value.encode("utf-8")).hexdigest()
+        except Exception:
+            return ""
+
+    ip_scope = _truncate_ip(client_ip)
+
+    return {
+        "ua_hash": _hash(user_agent)[:32],
+        "ip_hash": _hash(ip_scope)[:32] if ip_scope else "",
+        "device_id": device_id or "",
+        "version": 2,
+    }
+
+
+def rotate_session_id(
+    response: Response,
+    request: "Request",
+    *,
+    user_id: str | None = None,
+    access_token: str | None = None,
+    access_payload: dict[str, Any] | None = None,
+    access_expires_at: int | None = None,
+) -> str:
+    """Rotate the opaque session id and bind it to user + device fingerprint."""
+
+    from app.session_store import SessionStoreUnavailable, get_session_store
+    from app.web.cookies import read_session_cookie
+
+    payload = access_payload or {}
+    exp = access_expires_at
+    jti: str | None = None
+
+    if access_token and not payload:
+        try:
+            from app.tokens import decode_jwt_token
+
+            payload = decode_jwt_token(access_token) or {}
+        except Exception:
+            payload = {}
+
+    if payload:
+        jti = str(payload.get("jti") or "") or None
+        exp = exp or payload.get("exp")
+        if not user_id:
+            candidate = payload.get("user_id") or payload.get("sub")
+            user_id = str(candidate) if candidate else user_id
+
+    fingerprint = _fingerprint_request(request)
+    now = int(time.time())
+
+    if not exp:
+        try:
+            from app.cookie_config import get_token_ttls
+
+            access_ttl, _ = get_token_ttls()
+        except Exception:
+            access_ttl = 1800
+        exp = now + max(int(access_ttl), 60)
+
+    exp_int = int(exp)
+    jti = jti or secrets.token_hex(16)
+
+    store = get_session_store()
+
+    prior_session_id = None
+    try:
+        prior_session_id = read_session_cookie(request)
+    except Exception:
+        prior_session_id = None
+
+    if prior_session_id:
+        try:
+            store.delete_session(prior_session_id)
+        except SessionStoreUnavailable:
+            pass
+        except Exception:
+            pass
+
+    identity: dict[str, Any] = {}
+    if payload:
+        identity.update({k: v for k, v in payload.items() if isinstance(k, str)})
+    if user_id:
+        identity["user_id"] = user_id
+        identity.setdefault("sub", user_id)
+    identity["jti"] = jti
+    identity.setdefault("exp", exp_int)
+    identity["fingerprint"] = {
+        "ua_hash": fingerprint.get("ua_hash", ""),
+        "ip_hash": fingerprint.get("ip_hash", ""),
+        "device_id": fingerprint.get("device_id", ""),
+        "version": fingerprint.get("version", 2),
+    }
+
+    try:
+        session_id = store.create_session(
+            jti,
+            exp_int,
+            identity=identity,
+        )
+    except SessionStoreUnavailable:
+        session_id = new_session_id()
+    except Exception:
+        session_id = new_session_id()
+
+    # Ensure identity is persisted even when create_session fell back to legacy mode
+    try:
+        store.set_session_identity(session_id, identity, exp_int)
+    except SessionStoreUnavailable:
+        logger.debug(
+            "session_store.unavailable:set_identity",
+            extra={"meta": {"session_id": session_id}},
+        )
+    except Exception as exc:
+        logger.debug(
+            "session_store.error:set_identity",
+            extra={
+                "meta": {
+                    "session_id": session_id,
+                    "error": str(exc),
+                }
+            },
+        )
+
+    try:
+        request.state.session_id = session_id  # type: ignore[attr-defined]
+    except Exception:
+        pass
+
+    try:
+        response.headers["X-Session-Rotated"] = "true"
+    except Exception:
+        pass
+
+    return session_id
+
+
 def set_all_auth_cookies(
     response: Response,
     request: "Request",
@@ -142,7 +319,7 @@ def set_all_auth_cookies(
                 set_device_cookie(
                     response,
                     value=os.getenv("DEVICE_COOKIE_SEED")
-                    or f"{random.getrandbits(64):016x}",
+                    or secrets.token_hex(16),
                     ttl=365 * 24 * 3600,
                     request=request,
                     cookie_name="device_id",

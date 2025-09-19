@@ -250,6 +250,13 @@ def _configure_middlewares(app: FastAPI) -> None:
         app, csrf_enabled=csrf_enabled, cors_origins=cors_origins
     )
     logger.debug("✅ Canonical middleware stack configured")
+
+    # Cookie x-ray middleware (dev only)
+    if os.getenv("ENV", "dev").lower() == "dev":
+        from app.infra.mw_cookie_tap import CookieTap
+        app.add_middleware(CookieTap)
+        logger.debug("✅ CookieTap middleware registered (dev mode)")
+
     _validate_middleware_order(app)
 
 

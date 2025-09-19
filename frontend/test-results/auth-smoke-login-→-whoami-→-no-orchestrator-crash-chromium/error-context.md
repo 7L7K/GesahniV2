@@ -1,0 +1,73 @@
+# Page snapshot
+
+```yaml
+- generic [ref=e1]:
+  - generic [ref=e2]:
+    - banner [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - link "Gesahni" [ref=e6] [cursor=pointer]:
+            - /url: /
+            - generic [ref=e7] [cursor=pointer]: Gesahni
+          - navigation [ref=e8]:
+            - link "Chat" [ref=e9] [cursor=pointer]:
+              - /url: /
+            - link "Capture" [ref=e10] [cursor=pointer]:
+              - /url: /capture
+            - link "TV" [ref=e11] [cursor=pointer]:
+              - /url: /tv
+            - link "Settings" [ref=e12] [cursor=pointer]:
+              - /url: /settings
+            - link "Admin" [ref=e13] [cursor=pointer]:
+              - /url: /admin
+            - link "Debug" [ref=e14] [cursor=pointer]:
+              - /url: /debug
+        - navigation [ref=e16]:
+          - link "Login" [ref=e17] [cursor=pointer]:
+            - /url: /login
+            - button "Login" [ref=e18] [cursor=pointer]
+          - button "Toggle theme" [ref=e19] [cursor=pointer]:
+            - img
+          - generic "is_authenticated=false session_ready=false user_id=null" [ref=e20]: auth:none
+          - generic [ref=e21]: Local
+    - link "Skip to content" [ref=e23] [cursor=pointer]:
+      - /url: "#main"
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - heading "Sign In" [level=2] [ref=e28]
+        - paragraph [ref=e29]: Welcome back to Gesahni
+      - generic [ref=e30]:
+        - button "Continue with Google" [ref=e31] [cursor=pointer]:
+          - img [ref=e32] [cursor=pointer]
+          - generic [ref=e37] [cursor=pointer]: Continue with Google
+        - generic [ref=e42]: Or continue with email
+        - generic [ref=e43]:
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - generic [ref=e46]: Username
+              - textbox "Username" [ref=e47]: admin
+            - generic [ref=e48]:
+              - generic [ref=e49]: Password
+              - textbox "Password" [active] [ref=e50]: ChangeMe!
+          - button "Sign In" [ref=e52] [cursor=pointer]
+          - button "Mock Login (E2E Test)" [ref=e54] [cursor=pointer]
+          - button "Don't have an account? Sign up" [ref=e56] [cursor=pointer]
+  - generic [ref=e57]:
+    - img [ref=e59]
+    - button "Open Tanstack query devtools" [ref=e107] [cursor=pointer]:
+      - img [ref=e108] [cursor=pointer]
+  - generic [ref=e160] [cursor=pointer]:
+    - button "Open Next.js Dev Tools" [ref=e161] [cursor=pointer]:
+      - img [ref=e162] [cursor=pointer]
+    - generic [ref=e165] [cursor=pointer]:
+      - button "Open issues overlay" [ref=e166] [cursor=pointer]:
+        - generic [ref=e167] [cursor=pointer]:
+          - generic [ref=e168] [cursor=pointer]: "1"
+          - generic [ref=e169] [cursor=pointer]: "2"
+        - generic [ref=e170] [cursor=pointer]:
+          - text: Issue
+          - generic [ref=e171] [cursor=pointer]: s
+      - button "Collapse issues badge" [ref=e172] [cursor=pointer]:
+        - img [ref=e173] [cursor=pointer]
+  - alert [ref=e175]
+```

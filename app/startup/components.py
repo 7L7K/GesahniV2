@@ -77,8 +77,6 @@ async def init_database():
         return
 
     try:
-        import os
-
         from app.db.core import health_check_async
 
         logger.info("🔍 Checking PostgreSQL database connectivity...")

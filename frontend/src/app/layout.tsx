@@ -1,3 +1,13 @@
+// Check fetch availability and provide helpful debugging
+if (typeof window !== 'undefined' && typeof fetch === 'undefined') {
+  console.warn('⚠️  WARNING: Global fetch is not available in browser environment!');
+  console.warn('⚠️  This may cause "Cannot access uninitialized variable" errors');
+  console.warn('⚠️  Browser compatibility issue detected - continuing with fallback handling');
+
+  // Don't show error page immediately - let the app handle it gracefully
+  // The fetch.ts module will handle this case with proper error handling
+}
+
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
@@ -15,6 +25,7 @@ import ClientOnly from "@/components/ClientOnly";
 import { ConfigValidator } from "@/components/ConfigValidator";
 import AuthHud from "@/components/AuthHUD";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import NavigationLogger from "@/components/NavigationLogger";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -60,6 +71,7 @@ export default function RootLayout({
           <QueryClientProvider client={queryClient}>
             <AuthProvider>
               <div className="min-h-screen grid grid-rows-[auto_1fr]">
+                <NavigationLogger />
                 <WsBootstrap />
                 <ClientOnly>
                   <Header />

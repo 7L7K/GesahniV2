@@ -233,13 +233,12 @@ def _get_scopes_from_request(request: Request) -> set[str] | None:
             if token:
                 # Decode the JWT token
 
-                import jwt
-
+                from app.security import jwt_decode
                 from app.security.jwt_config import get_jwt_config
 
                 try:
                     cfg = get_jwt_config()
-                    payload = jwt.decode(token, cfg.secret, algorithms=[cfg.alg])
+                    payload = jwt_decode(token, cfg.secret, algorithms=[cfg.alg])
                     if isinstance(payload, dict):
                         # Check for both "scopes" (plural) and "scope" (singular) for compatibility
                         raw_scopes = payload.get("scopes") or payload.get("scope")

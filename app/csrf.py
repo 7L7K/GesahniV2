@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
 import logging
 import os
 import time
 from secrets import token_urlsafe
+from typing import Optional
 
-from fastapi import Request
+from fastapi import Request, Depends, HTTPException, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.errors import json_error
@@ -17,6 +20,168 @@ def _truthy(env_val: str | None) -> bool:
     if env_val is None:
         return False
     return str(env_val).strip().lower() in {"1", "true", "yes", "on"}
+
+
+class CSRFTokenService:
+    """Header-token CSRF protection service using HMAC-signed tokens with TTL."""
+
+    def __init__(self):
+        self.secret_key = os.getenv("CSRF_SECRET_KEY", os.getenv("JWT_SECRET", "dev-secret-key"))
+        self.ttl_seconds = int(os.getenv("CSRF_TTL_SECONDS", "900"))  # 15 minutes default
+        self._token_store: dict[str, float] = {}  # Simple in-memory store for demo
+
+    def generate_token(self) -> str:
+        """Generate a new CSRF token with timestamp and HMAC signature."""
+        # Generate random token
+        raw_token = token_urlsafe(16)  # 128-bit token
+        timestamp = str(int(time.time()))
+
+        # Create payload: token.timestamp
+        payload = f"{raw_token}.{timestamp}"
+
+        # Create HMAC signature
+        signature = hmac.new(
+            self.secret_key.encode(),
+            payload.encode(),
+            hashlib.sha256
+        ).hexdigest()
+
+        # Return signed token: token.timestamp.signature
+        return f"{payload}.{signature}"
+
+    def validate_token(self, token: str) -> bool:
+        """Validate CSRF token signature and TTL."""
+        try:
+            parts = token.split(".")
+            if len(parts) != 3:
+                return False
+
+            raw_token, timestamp_str, signature = parts
+
+            # Check TTL
+            timestamp = int(timestamp_str)
+            if time.time() - timestamp > self.ttl_seconds:
+                logger.warning("csrf.token_expired")
+                return False
+
+            # Recreate payload and verify signature
+            payload = f"{raw_token}.{timestamp_str}"
+            expected_signature = hmac.new(
+                self.secret_key.encode(),
+                payload.encode(),
+                hashlib.sha256
+            ).hexdigest()
+
+            if not hmac.compare_digest(signature, expected_signature):
+                logger.warning("csrf.token_invalid_signature")
+                return False
+
+            return True
+
+        except (ValueError, IndexError) as e:
+            logger.warning(f"csrf.token_malformed: {e}")
+            return False
+
+    def store_token(self, token: str) -> None:
+        """Store token for additional validation if needed."""
+        # For now, just track creation time
+        self._token_store[token] = time.time()
+
+    def cleanup_expired_tokens(self) -> None:
+        """Clean up expired tokens from store."""
+        current_time = time.time()
+        expired = [
+            token for token, created_time in self._token_store.items()
+            if current_time - created_time > self.ttl_seconds
+        ]
+        for token in expired:
+            del self._token_store[token]
+
+
+# Global CSRF token service instance
+_csrf_service = CSRFTokenService()
+
+
+def get_csrf_token() -> str:
+    """Generate a new CSRF token."""
+    token = _csrf_service.generate_token()
+    _csrf_service.store_token(token)
+    return token
+
+
+def issue_csrf_token(response: Response, request: Request | None = None) -> str:
+    """Mint a CSRF token, attach header + cookie, and persist for validation."""
+
+    token = get_csrf_token()
+    ttl = getattr(_csrf_service, "ttl_seconds", int(os.getenv("CSRF_TTL_SECONDS", "900")))
+
+    try:
+        response.headers["X-CSRF-Token"] = token
+    except Exception as exc:  # pragma: no cover - header assignment failure
+        logger.debug("csrf.header_set_failed: %s", exc)
+
+    try:
+        _csrf_token_store.store_token(token, ttl)
+    except Exception as exc:  # pragma: no cover - best effort store
+        logger.debug("csrf.store_failed: %s", exc)
+
+    try:
+        from app.web.cookies import set_csrf_cookie
+
+        set_csrf_cookie(response, token=token, ttl=ttl, request=request)
+    except Exception as exc:  # pragma: no cover - cookie best effort
+        logger.debug("csrf.cookie_set_failed: %s", exc)
+
+    return token
+
+
+def require_csrf(request: Request) -> None:
+    """Dependency to validate CSRF token from X-CSRF-Token header."""
+    if not _truthy(os.getenv("CSRF_ENABLED", "0")):
+        return  # CSRF disabled
+
+    # Skip for safe methods
+    if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
+        return
+
+    # Skip for Bearer-only auth
+    auth_header = request.headers.get("Authorization")
+    if auth_header and auth_header.startswith("Bearer "):
+        session_cookie = (
+            request.cookies.get("GSNH_AT") or
+            request.cookies.get("GSNH_SESS") or
+            request.cookies.get("access_token") or
+            request.cookies.get("session")
+        )
+        if not session_cookie:
+            return  # Bearer-only auth, skip CSRF
+
+    # Skip OAuth callbacks
+    path = getattr(getattr(request, "url", None), "path", "") or ""
+    oauth_callbacks = {
+        "/v1/auth/apple/callback",
+        "/auth/apple/callback",
+        "/v1/auth/google/callback",
+    }
+    if path in oauth_callbacks:
+        return
+
+    # Skip webhook endpoints with signature
+    webhook_paths = {"/v1/ha/webhook", "/ha/webhook"}
+    if path in webhook_paths:
+        signature = request.headers.get("X-Signature") or request.headers.get("X-Hub-Signature")
+        if signature:
+            return
+
+    # Require CSRF token
+    csrf_token = request.headers.get("X-CSRF-Token")
+    if not csrf_token:
+        logger.warning("csrf.missing_header")
+        raise HTTPException(status_code=403, detail="CSRF token required")
+
+    if not _csrf_service.validate_token(csrf_token):
+        logger.warning("csrf.token_invalid")
+        raise HTTPException(status_code=403, detail="Invalid CSRF token")
 
 
 def _extract_csrf_header(request: Request) -> tuple[str | None, bool, bool]:
@@ -43,13 +208,14 @@ def _extract_csrf_header(request: Request) -> tuple[str | None, bool, bool]:
 
 
 class CSRFMiddleware(BaseHTTPMiddleware):
-    """Simple double-submit CSRF with exemptions.
+    """Header-token CSRF protection service.
 
     - Allow safe methods (GET/HEAD/OPTIONS).
     - Skip for Bearer-only auth (Authorization header present, no session cookie).
     - Skip for webhooks with signature verification.
     - Skip OAuth callbacks with state/nonce validation.
-    - For POST/PUT/PATCH/DELETE, require header X-CSRF-Token to match cookie csrf_token.
+    - For POST/PUT/PATCH/DELETE, require valid X-CSRF-Token header.
+    - Uses HMAC-signed tokens with TTL instead of double-submit cookies.
     - Disabled when CSRF_ENABLED=0.
     """
 
@@ -58,7 +224,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if not _truthy(os.getenv("CSRF_ENABLED", "0")):
             return await call_next(request)
 
-        # For safe methods, ensure CSRF token is available and set in response header
+        # For safe methods, provide CSRF token in response header
         if request.method.upper() in {"GET", "HEAD", "OPTIONS"}:
             try:
                 response = await call_next(request)
@@ -70,52 +236,30 @@ class CSRFMiddleware(BaseHTTPMiddleware):
                     http_status=500,
                 )
 
-            # Ensure CSRF token cookie exists
-            csrf_cookie = request.cookies.get("csrf_token")
-            if not csrf_cookie:
-                csrf_cookie = token_urlsafe(16)
-                # Use centralized CSRF cookie helper
-                from app.web.cookies import set_csrf_cookie
-
-                set_csrf_cookie(
-                    resp=response,
-                    token=csrf_cookie,
-                    ttl=int(os.getenv("CSRF_TTL_SECONDS", "600")),
-                    request=request,
-                )
-
-            # Mirror CSRF token in response header for client access
-            response.headers["X-CSRF-Token"] = csrf_cookie
+            # Generate and provide CSRF token for client
+            try:
+                csrf_token = get_csrf_token()
+                response.headers["X-CSRF-Token"] = csrf_token
+            except Exception as e:
+                logger.debug(f"csrf.token_generation_failed: {e}")
 
             return response
 
-        # Bypass CSRF for Bearer-only auth (Authorization header present, no session cookie)
+        # Skip CSRF validation for Bearer-only auth
         auth_header = request.headers.get("Authorization")
-        try:
-            from .web.cookies import read_access_cookie, read_session_cookie
-
+        if auth_header and auth_header.startswith("Bearer "):
+            # Check if there are any session cookies
             session_cookie = (
-                read_access_cookie(request)
-                or read_session_cookie(request)
-                or request.cookies.get("session")
+                request.cookies.get("GSNH_AT") or
+                request.cookies.get("GSNH_SESS") or
+                request.cookies.get("access_token") or
+                request.cookies.get("session")
             )
-        except Exception:
-            # Fallback to direct cookie reads if helpers fail (should not happen in normal operation)
-            from .web.cookies import NAMES
+            if not session_cookie:
+                logger.info("bypass: csrf_bearer_only_auth")
+                return await call_next(request)
 
-            session_cookie = (
-                request.cookies.get(NAMES.access)
-                or request.cookies.get(NAMES.session)
-                or request.cookies.get("session")
-            )
-        if auth_header and auth_header.startswith("Bearer ") and not session_cookie:
-            logger.info(
-                "bypass: csrf_bearer_only_auth header=<%s>",
-                auth_header[:8] + "..." if auth_header else "None",
-            )
-            return await call_next(request)
-
-        # Allow-list OAuth provider callbacks which validate state/nonce explicitly
+        # Skip OAuth callbacks
         try:
             path = getattr(getattr(request, "url", None), "path", "") or ""
             oauth_callbacks = {
@@ -129,146 +273,66 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         except Exception:
             pass
 
-        # Allow-list webhook endpoints with signature verification
+        # Skip webhook endpoints with signature verification
         try:
             path = getattr(getattr(request, "url", None), "path", "") or ""
             webhook_paths = {"/v1/ha/webhook", "/ha/webhook"}
             if path in webhook_paths:
-                # Check for webhook signature headers
-                signature = request.headers.get("X-Signature") or request.headers.get(
-                    "X-Hub-Signature"
-                )
+                signature = request.headers.get("X-Signature") or request.headers.get("X-Hub-Signature")
                 if signature:
-                    logger.info(
-                        "bypass: csrf_webhook_signature path=<%s> signature=<%s>",
-                        path,
-                        signature[:8] + "..." if signature else "None",
-                    )
+                    logger.info("bypass: csrf_webhook_signature path=<%s>", path)
                     return await call_next(request)
         except Exception:
             pass
 
-        # Check for route-level CSRF opt-out (for testing/signature-based endpoints)
+        # Check for route-level CSRF opt-out
         try:
-            csrf_opt_out = request.headers.get(
-                "X-CSRF-Opt-Out"
-            ) or request.query_params.get("csrf_opt_out")
+            csrf_opt_out = request.headers.get("X-CSRF-Opt-Out") or request.query_params.get("csrf_opt_out")
             if csrf_opt_out and _truthy(csrf_opt_out):
-                logger.info(
-                    "bypass: csrf_route_opt_out header=<%s> query=<%s>",
-                    request.headers.get("X-CSRF-Opt-Out"),
-                    request.query_params.get("csrf_opt_out"),
-                )
+                logger.info("bypass: csrf_route_opt_out")
                 return await call_next(request)
         except Exception:
             pass
 
-        # Check if we're in a cross-site scenario (COOKIE_SAMESITE=none)
-        is_cross_site = os.getenv("COOKIE_SAMESITE", "lax").lower() == "none"
+        # Check if this is a public route (no CSRF required)
+        try:
+            # Access the endpoint function to check for public_route decorator
+            endpoint = getattr(request, 'scope', {}).get('endpoint')
+            if endpoint and hasattr(endpoint, '__doc__') and endpoint.__doc__:
+                docstring = endpoint.__doc__
+                if "@public_route - No auth, no CSRF required" in docstring:
+                    logger.info("bypass: csrf_public_route")
+                    return await call_next(request)
+        except Exception as e:
+            logger.debug(f"csrf.endpoint_check_failed: {e}")
 
-        token_hdr, used_legacy, legacy_allowed = _extract_csrf_header(request)
-
-        if is_cross_site:
-            # Cross-site CSRF validation: require token in header + basic validation
-            if not token_hdr:
-                logger.warning(
-                    "deny: csrf_missing_header_cross_site header=<%s>",
-                    token_hdr[:8] + "..." if token_hdr else "None",
-                )
-                return json_error(
-                    code="csrf.missing", message="CSRF token required", http_status=400
-                )
-
-            # Basic validation for cross-site tokens
-            if len(token_hdr) < 16:
-                logger.warning(
-                    "deny: csrf_invalid_format_cross_site header=<%s>",
-                    token_hdr[:8] + "..." if token_hdr else "None",
-                )
-                return json_error(
-                    code="csrf.invalid",
-                    message="CSRF token format invalid",
-                    http_status=400,
-                )
-
-            # Validate CSRF token against server-side storage
-            if not _csrf_store.validate_token(token_hdr):
-                logger.warning(
-                    "deny: csrf_invalid_cross_site header=<%s>",
-                    token_hdr[:8] + "..." if token_hdr else "None",
-                )
-                return json_error(
-                    code="csrf.invalid", message="Invalid CSRF token", http_status=403
-                )
-            logger.info(
-                "allow: csrf_cross_site_validation header=<%s>",
-                token_hdr[:8] + "..." if token_hdr else "None",
+        # Require valid CSRF token in header
+        csrf_token = request.headers.get("X-CSRF-Token")
+        if not csrf_token:
+            logger.warning("csrf.missing_header")
+            return json_error(
+                code="csrf.missing", message="CSRF token required", http_status=403
             )
-            return await call_next(request)
-        else:
-            # Standard same-origin CSRF validation (double-submit pattern)
-            token_cookie = request.cookies.get("csrf_token") or ""
-            # Reject legacy header when grace disabled
-            if used_legacy and not legacy_allowed:
-                logger.warning(
-                    "deny: csrf_legacy_header_disabled header=<%s>",
-                    token_hdr[:8] + "..." if token_hdr else "None",
-                )
-                return json_error(
-                    code="csrf.missing", message="CSRF token required", http_status=400
-                )
-            # Require both header and cookie, and match
-            if not token_hdr or not token_cookie:
-                logger.warning(
-                    "deny: csrf_missing_header header=<%s> cookie=<%s>",
-                    token_hdr[:8] + "..." if token_hdr else "None",
-                    token_cookie[:8] + "..." if token_cookie else "None",
-                )
-                return json_error(
-                    code="csrf.missing", message="CSRF token required", http_status=403
-                )
-            if token_hdr != token_cookie:
-                logger.warning(
-                    "deny: csrf_mismatch header=<%s> cookie=<%s>",
-                    token_hdr[:8] + "...",
-                    token_cookie[:8] + "...",
-                )
-                return json_error(
-                    code="csrf.invalid", message="CSRF token mismatch", http_status=400
-                )
 
-            # For unsafe methods, ensure CSRF headers are set even on success
-            try:
-                response = await call_next(request)
+        if not _csrf_service.validate_token(csrf_token):
+            logger.warning("csrf.token_invalid")
+            return json_error(
+                code="csrf.invalid", message="Invalid CSRF token", http_status=403
+            )
 
-                # Ensure CSRF token cookie exists for future requests
-                csrf_cookie = request.cookies.get("csrf_token") or token_cookie
-                if csrf_cookie:
-                    # Mirror CSRF token in response header for client access
-                    response.headers["X-CSRF-Token"] = csrf_cookie
-
-                return response
-            except Exception:
-                # Even on exceptions from downstream middlewares/routes, ensure CSRF headers
-                csrf_cookie = request.cookies.get("csrf_token") or token_cookie
-                response = json_error(
-                    code="internal_error",
-                    message="Something went wrong",
-                    http_status=500,
-                )
-                if csrf_cookie:
-                    response.headers["X-CSRF-Token"] = csrf_cookie
-                return response
+        logger.info("csrf.token_valid")
+        return await call_next(request)
 
 
-async def get_csrf_token() -> str:
-    """Return an existing csrf_token cookie or mint a new random value.
+def get_csrf_token() -> str:
+    """Generate a new CSRF token for header-based CSRF protection.
 
-    Middlewares that want to ensure presence can call this and set cookie.
-    The /v1/csrf endpoint returns this value for test flows.
+    Returns a cryptographically strong token with HMAC signature and TTL.
+    Used by the /v1/csrf endpoint and middleware.
     """
-    # For now, just return a random per-call token; a route should set cookie.
-    return token_urlsafe(16)
+    token = _csrf_service.generate_token()
+    _csrf_service.store_token(token)
+    return token
 
 
 class CSRFTokenStore:
@@ -383,4 +447,4 @@ class CSRFTokenStore:
 _csrf_token_store = CSRFTokenStore()
 
 
-__all__ = ["CSRFMiddleware", "get_csrf_token", "_extract_csrf_header"]
+__all__ = ["CSRFMiddleware", "get_csrf_token", "issue_csrf_token", "_extract_csrf_header"]

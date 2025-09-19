@@ -139,6 +139,9 @@ class Session(Base):
     mfa_passed: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default=sa.text("false")
     )
+    sess_ver: Mapped[int] = mapped_column(
+        Integer, nullable=False, server_default=sa.text("1")
+    )
 
     user: Mapped[AuthUser] = relationship(back_populates="sessions")
     device: Mapped[AuthDevice] = relationship(back_populates="sessions")

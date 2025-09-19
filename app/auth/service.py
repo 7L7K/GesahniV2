@@ -6,47 +6,161 @@ from typing import Any
 
 from fastapi import Request, Response
 
+from app.csrf import issue_csrf_token
 logger = logging.getLogger(__name__)
 
 
 async def log_request_meta(request: Request):
     """Log detailed request metadata for debugging auth issues."""
-    cookies = list(request.cookies.keys()) if hasattr(request, "cookies") else []
-    origin = request.headers.get("origin", "none")
-    referer = request.headers.get("referer", "none")
-    user_agent = request.headers.get("user-agent", "none")
-    content_type = request.headers.get("content-type", "none")
+    import time
+    import uuid
 
-    logger.info(
-        "\U0001f510 AUTH REQUEST DEBUG",
-        extra={
-            "meta": {
-                "path": request.url.path,
+    # Generate unique request ID for tracing
+    req_id = str(uuid.uuid4())[:8]
+    start_time = time.time()
+
+    try:
+        logger.info(
+            "\U0001f510 AUTH REQUEST DEBUG - START",
+            extra={
+                "req_id": req_id,
+                "function": "log_request_meta",
+                "phase": "entry",
+                "timestamp": start_time,
+                "request_id": getattr(request, "request_id", "none"),
+                "url": str(request.url),
                 "method": request.method,
-                "origin": origin,
-                "referer": referer,
-                "user_agent": (
-                    user_agent[:100] + "..."
-                    if user_agent and len(user_agent) > 100
-                    else user_agent
-                ),
-                "content_type": content_type,
-                "cookies_present": len(cookies) > 0,
-                "cookie_names": cookies,
-                "cookie_count": len(cookies),
-                "has_auth_header": "authorization"
-                in [h.lower() for h in request.headers.keys()],
-                "query_params": dict(request.query_params),
-                "client_ip": (
-                    getattr(request.client, "host", "unknown")
-                    if request.client
-                    else "unknown"
-                ),
             }
-        },
-    )
+        )
 
-    return request
+        # Extract request metadata with comprehensive logging
+        cookies = list(request.cookies.keys()) if hasattr(request, "cookies") else []
+        origin = request.headers.get("origin", "none")
+        referer = request.headers.get("referer", "none")
+        user_agent = request.headers.get("user-agent", "none")
+        content_type = request.headers.get("content-type", "none")
+        authorization = request.headers.get("authorization", "none")
+
+        # Log security-relevant headers
+        security_headers = {
+            "authorization": authorization[:50] + "..." if authorization and len(authorization) > 50 else authorization,
+            "x-forwarded-for": request.headers.get("x-forwarded-for", "none"),
+            "x-real-ip": request.headers.get("x-real-ip", "none"),
+            "cf-connecting-ip": request.headers.get("cf-connecting-ip", "none"),
+            "x-api-key": request.headers.get("x-api-key", "none"),
+        }
+
+        # Log cookie details
+        cookie_details = {}
+        if hasattr(request, "cookies") and request.cookies:
+            for name, value in request.cookies.items():
+                cookie_details[name] = {
+                    "present": True,
+                    "length": len(value),
+                    "prefix": value[:20] + "..." if len(value) > 20 else value,
+                }
+
+        client_ip = (
+            getattr(request.client, "host", "unknown")
+            if request.client
+            else "unknown"
+        )
+        client_port = (
+            getattr(request.client, "port", "unknown")
+            if request.client
+            else "unknown"
+        )
+
+        # Log comprehensive request metadata
+        logger.info(
+            "\U0001f510 AUTH REQUEST DEBUG - METADATA",
+            extra={
+                "req_id": req_id,
+                "function": "log_request_meta",
+                "phase": "metadata_extraction",
+                "meta": {
+                    "path": request.url.path,
+                    "method": request.method,
+                    "origin": origin,
+                    "referer": referer,
+                    "user_agent": user_agent,
+                    "content_type": content_type,
+                    "content_length": request.headers.get("content-length", "none"),
+                    "accept": request.headers.get("accept", "none"),
+                    "accept_encoding": request.headers.get("accept-encoding", "none"),
+                    "client_ip": client_ip,
+                    "client_port": client_port,
+                    "query_params": dict(request.query_params),
+                    "query_param_count": len(request.query_params),
+                    "cookies_present": len(cookies) > 0,
+                    "cookie_names": cookies,
+                    "cookie_count": len(cookies),
+                    "cookie_details": cookie_details,
+                    "has_auth_header": bool(authorization and authorization != "none"),
+                    "auth_header_type": authorization.split()[0] if authorization and " " in authorization else "none",
+                    "security_headers": security_headers,
+                    "all_headers_count": len(request.headers),
+                    "request_state": getattr(request, "state", {}),
+                }
+            }
+        )
+
+        # Log potential security issues
+        security_warnings = []
+        if not authorization or authorization == "none":
+            security_warnings.append("no_auth_header")
+        if len(cookies) == 0:
+            security_warnings.append("no_cookies")
+        if client_ip == "unknown":
+            security_warnings.append("unknown_client_ip")
+
+        if security_warnings:
+            logger.warning(
+                "\U0001f510 AUTH REQUEST DEBUG - SECURITY WARNINGS",
+                extra={
+                    "req_id": req_id,
+                    "function": "log_request_meta",
+                    "phase": "security_check",
+                    "warnings": security_warnings,
+                    "path": request.url.path,
+                    "client_ip": client_ip,
+                }
+            )
+
+        processing_time = time.time() - start_time
+
+        logger.info(
+            "\U0001f510 AUTH REQUEST DEBUG - COMPLETE",
+            extra={
+                "req_id": req_id,
+                "function": "log_request_meta",
+                "phase": "exit",
+                "processing_time_ms": round(processing_time * 1000, 2),
+                "timestamp": time.time(),
+                "success": True,
+            }
+        )
+
+        return request
+
+    except Exception as e:
+        processing_time = time.time() - start_time
+
+        logger.error(
+            "\U0001f510 AUTH REQUEST DEBUG - ERROR",
+            extra={
+                "req_id": req_id,
+                "function": "log_request_meta",
+                "phase": "error",
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "processing_time_ms": round(processing_time * 1000, 2),
+                "path": getattr(request, "url", {}).path if hasattr(request, "url") else "unknown",
+                "method": getattr(request, "method", "unknown"),
+            },
+            exc_info=True
+        )
+        raise
 
 
 def should_rotate_access(user_id: str) -> bool:
@@ -161,7 +275,7 @@ class AuthService:
         from app.deps.user import get_current_user_id
 
         try:
-            user_id = get_current_user_id(request=request)
+            user_id = await get_current_user_id(request=request)
             if user_id and user_id != "anon":
                 tokens = await rotate_refresh_token(user_id, request, response)
                 if tokens:
@@ -173,7 +287,7 @@ class AuthService:
             raise
 
     @staticmethod
-    async def refresh_tokens(request: Request, response: Response) -> dict[str, Any]:
+    async def refresh_tokens(request: Request, response: Response, refresh_token: str | None = None) -> dict[str, Any]:
         """Orchestrate token refresh with proper error handling and metrics."""
         import time
 
@@ -190,7 +304,7 @@ class AuthService:
         start_time = time.time()
 
         try:
-            user_id = get_current_user_id(request=request)
+            user_id = await get_current_user_id(request=request)
             if not user_id or user_id == "anon":
                 from app.auth.errors import ERR_INVALID_REFRESH
                 from app.http_errors import unauthorized
@@ -201,8 +315,8 @@ class AuthService:
                     code=ERR_INVALID_REFRESH, message="invalid refresh token"
                 )
 
-            # Perform the actual refresh
-            tokens = await rotate_refresh_token(user_id, request, response)
+            # Perform the actual refresh with optional explicit refresh token
+            tokens = await rotate_refresh_token(user_id, request, response, refresh_token)
 
             if tokens:
                 refresh_rotation_success("/v1/auth/refresh")
@@ -211,11 +325,27 @@ class AuthService:
                 duration = int((time.time() - start_time) * 1000)
                 record_refresh_latency("rotation", duration)
 
+                # Generate new CSRF token on successful refresh
+                csrf_token = None
+                try:
+                    csrf_token = issue_csrf_token(response, request)
+                except Exception as exc:  # pragma: no cover - best effort
+                    logger.debug(f"csrf.token_generation_failed: {exc}")
+
                 # Return standardized response
+                response.headers["Cache-Control"] = "no-store"
+                try:
+                    del response.headers["ETag"]
+                except KeyError:
+                    pass
+                response.status_code = 200
+
                 return {
                     "rotated": True,
                     "access_token": tokens.get("access_token"),
                     "user_id": tokens.get("user_id", user_id),
+                    "csrf_token": csrf_token,
+                    "csrf": csrf_token,
                 }
             else:
                 refresh_rotation_success("/v1/auth/refresh")
@@ -224,7 +354,27 @@ class AuthService:
                 duration = int((time.time() - start_time) * 1000)
                 record_refresh_latency("no_rotation", duration)
 
-                return {"rotated": False, "access_token": None, "user_id": user_id}
+                # Generate new CSRF token even when no rotation needed
+                csrf_token = None
+                try:
+                    csrf_token = issue_csrf_token(response, request)
+                except Exception as exc:  # pragma: no cover - best effort
+                    logger.debug(f"csrf.token_generation_failed: {exc}")
+
+                response.headers["Cache-Control"] = "no-store"
+                try:
+                    del response.headers["ETag"]
+                except KeyError:
+                    pass
+                response.status_code = 200
+
+                return {
+                    "rotated": False,
+                    "access_token": None,
+                    "user_id": user_id,
+                    "csrf_token": csrf_token,
+                    "csrf": csrf_token,
+                }
 
         except Exception as e:
             # Record error metrics
@@ -241,7 +391,7 @@ class AuthService:
     @staticmethod
     async def logout_user(request: Request, response: Response, user_id: str) -> None:
         """Orchestrate user logout with cookie and session cleanup."""
-        from app.auth import _delete_session_id
+        from app.session_store import get_session_store
         from app.auth.rate_limit_utils import _get_refresh_ttl_seconds
         from app.cookies import (
             clear_auth_cookies,
@@ -252,30 +402,39 @@ class AuthService:
         from app.metrics_auth import record_auth_operation
         from app.token_store import revoke_refresh_family
 
-        logger.info(f"logout.start user_id={user_id}")
+        logger.info(f"🚪 LOGOUT_SERVICE_STEP_1: Starting logout service for user_id={user_id}")
 
         # Revoke refresh token family
         try:
+            logger.info(f"🚪 LOGOUT_SERVICE_STEP_2: Resolving session ID from request")
             sid = resolve_session_id(request=request)
+            logger.info(f"🚪 LOGOUT_SERVICE_STEP_3: Resolved session ID: {sid}")
             await revoke_refresh_family(sid, ttl_seconds=_get_refresh_ttl_seconds())
-            logger.info(f"logout.refresh_revoked session_id={sid}")
+            logger.info(f"🚪 LOGOUT_SERVICE_STEP_4: Revoked refresh token family for session_id={sid}")
         except Exception as e:
-            logger.warning(f"logout.refresh_revoke_failed: {e}")
+            logger.warning(f"🚪 LOGOUT_SERVICE_ERROR: Refresh token revocation failed: {e}")
 
         # Delete session
         try:
+            logger.info(f"🚪 LOGOUT_SERVICE_STEP_5: Reading session cookie from request")
             session_id = read_session_cookie(request)
             if session_id:
-                _delete_session_id(session_id)
-                logger.info(f"logout.session_deleted session_id={session_id}")
+                logger.info(f"🚪 LOGOUT_SERVICE_STEP_6: Found session cookie: {session_id}")
+                store = get_session_store()
+                store.delete_session(session_id)
+                logger.info(f"🚪 LOGOUT_SERVICE_STEP_7: Deleted session: {session_id}")
+            else:
+                logger.info(f"🚪 LOGOUT_SERVICE_STEP_6: No session cookie found")
         except Exception as e:
-            logger.warning(f"logout.session_delete_failed: {e}")
+            logger.warning(f"🚪 LOGOUT_SERVICE_ERROR: Session deletion failed: {e}")
 
         # Clear cookies with consistent device cookie handling
         try:
+            logger.info(f"🚪 LOGOUT_SERVICE_STEP_8: Clearing authentication cookies")
             clear_auth_cookies(response, request)
 
             # Clear canonical device cookie
+            logger.info(f"🚪 LOGOUT_SERVICE_STEP_9: Clearing device cookie")
             clear_device_cookie(response, request, cookie_name="device_id")
 
             # Clear legacy device cookies if AUTH_LEGACY_COOKIE_NAMES=1
@@ -294,6 +453,9 @@ class AuthService:
                     pass
 
             logger.info("logout.cookies_cleared")
+
+            # Add Clear-Site-Data header for belt-and-suspenders cookie clearing
+            response.headers["Clear-Site-Data"] = '"cookies"'
 
             # Also clear legacy cookies if available
             try:
@@ -314,7 +476,7 @@ class AuthService:
         request: Request, response: Response, user_id: str
     ) -> None:
         """Orchestrate logout from all sessions for this user."""
-        from app.auth import _delete_session_id
+        from app.session_store import get_session_store
         from app.auth.rate_limit_utils import _get_refresh_ttl_seconds
         from app.cookies import (
             clear_auth_cookies,
@@ -340,7 +502,8 @@ class AuthService:
         try:
             session_id = read_session_cookie(request)
             if session_id:
-                _delete_session_id(session_id)
+                store = get_session_store()
+                store.delete_session(session_id)
                 logger.info(f"logout_all.session_deleted session_id={session_id}")
         except Exception as e:
             logger.warning(f"logout_all.session_delete_failed: {e}")

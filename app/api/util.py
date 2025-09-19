@@ -37,20 +37,16 @@ async def get_csrf(request: Request):
     via the centralized cookie helper. Also stores token server-side for
     enhanced cross-site validation.
     """
-    import os
+    from app.csrf import issue_csrf_token
 
-    from app.csrf import _csrf_token_store, get_csrf_token
-    from app.web.cookies import set_csrf_cookie
-
-    token = await get_csrf_token()
-    ttl = int(os.getenv("CSRF_TTL_SECONDS", "600"))
-    resp = JSONResponse({"csrf_token": token})
-
-    # Store token server-side for enhanced validation
-    _csrf_token_store.store_token(token, ttl)
-
-    # Set cookie using central helper
-    set_csrf_cookie(resp, token=token, ttl=ttl, request=request)
+    resp = JSONResponse({"csrf_token": None})
+    token = issue_csrf_token(resp, request)
+    resp.body = JSONResponse({"csrf_token": token, "csrf": token}).body
+    resp.headers["Cache-Control"] = "no-store"
+    try:
+        del resp.headers["ETag"]
+    except KeyError:
+        pass
     return resp
 
 

@@ -13,6 +13,7 @@ from app.auth.errors import (
     ERR_TOO_MANY,
 )
 from app.auth.models import RefreshOut
+from app.auth.service import AuthService
 from app.auth.rate_limit_utils import _is_rate_limit_enabled
 from app.cookies import read_access_cookie, read_refresh_cookie
 from app.deps.user import get_current_user_id, resolve_session_id
@@ -181,12 +182,26 @@ async def rotate_refresh_cookies(
 )
 async def refresh(request: Request, response: Response) -> RefreshOut:
     """Rotate access/refresh cookies."""
-    from app.auth.service import AuthService
 
     # Perform comprehensive CSRF and rate limiting validation
     await _validate_refresh_request(request)
 
+    # Get refresh token from cookie or body (support both for compatibility)
+    refresh_token = None
+
+    # First try to read from cookie
+    from app.cookies import read_refresh_cookie
+    refresh_token = read_refresh_cookie(request)
+
+    # If not in cookie, try to read from request body
+    if not refresh_token:
+        try:
+            body = await request.json()
+            refresh_token = body.get("refresh_token")
+        except Exception:
+            pass
+
     # Orchestrate token refresh through service layer
-    result = await AuthService.refresh_tokens(request, response)
+    result = await AuthService.refresh_tokens(request, response, refresh_token)
 
     return RefreshOut(**result)

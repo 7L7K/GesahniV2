@@ -56,6 +56,9 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
         try:
             if request.url.path in {"/v1/whoami", "/v1/me", "/whoami", "/me"}:
                 headers.setdefault("Deprecation", "true")
+                # Remove Content-Length to avoid mismatch when adding headers to existing responses
+                if "content-length" in headers:
+                    del headers["content-length"]
         except Exception:
             pass
 
@@ -94,6 +97,8 @@ async def handle_http_error(request: Request, exc: StarletteHTTPException):
     try:
         if request.url.path in {"/v1/whoami", "/v1/me", "/whoami", "/me"}:
             headers.setdefault("Deprecation", "true")
+            # Remove Content-Length to avoid mismatch when adding headers to existing responses
+            headers.pop("Content-Length", None)
     except Exception:
         pass
     headers["X-Error-Code"] = code

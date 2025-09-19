@@ -75,6 +75,10 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
             if matched:
                 response.headers.setdefault("Deprecation", "true")
                 response.headers.setdefault("X-Deprecated-Path", "1")
+                # Remove Content-Length header to avoid mismatch when headers are added
+                # to responses that already have Content-Length calculated
+                if "content-length" in response.headers:
+                    del response.headers["content-length"]
 
             # Ensure /v1/me returns 200 in test environments so smoke tests can
             # assert rate-limit headers presence without requiring auth.
@@ -127,6 +131,13 @@ class DeprecationHeaderMiddleware(BaseHTTPMiddleware):
                 ):
                     # Normalize to 202 Accepted for fire-and-forget endpoints
                     response.status_code = 202
+                # Never downgrade 401 for Spotify routes; pass through as-is for correctness
+                try:
+                    if request.url.path.startswith("/v1/spotify/") and getattr(response, "status_code", 200) == 401:
+                        # Explicit no-op to document behavior; do not mutate
+                        pass
+                except Exception:
+                    pass
             except Exception:
                 pass
         except Exception:

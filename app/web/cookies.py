@@ -1,9 +1,15 @@
 import logging
 import os
+import time
 from datetime import UTC
 from typing import NamedTuple
 
 from app.cookie_config import format_cookie_header, get_cookie_config
+
+try:  # Metrics are optional during tests/startup
+    from app.metrics import COOKIE_CONFLICT
+except Exception:  # pragma: no cover - metrics registry unavailable
+    COOKIE_CONFLICT = None
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +54,11 @@ else:
 
 SESSION_CANON = os.getenv("SESSION_COOKIE_NAME", "__session")
 
+# Cookie precedence order arrays - canonical first, then legacy
+AT_ORDER = ["__Host-GSNH_AT", "GSNH_AT", "access_token", "gsn_access"]
+RT_ORDER = ["__Host-GSNH_RT", "GSNH_RT", "refresh_token", "gsn_refresh"]
+SESS_ORDER = ["__Host-GSNH_SESS", "GSNH_SESS", "__session", "session"]
+
 ACCESS_ALIASES = {ACCESS_CANON, "access_token", "gsn_access"}
 REFRESH_ALIASES = {REFRESH_CANON, "refresh_token", "gsn_refresh"}
 
@@ -62,6 +73,158 @@ def get_any(req, names: set[str]) -> str | None:
     return None
 
 
+def _schedule_legacy_cleanup(request, cookie_type: str, names: list[str]) -> None:
+    """Record legacy cookie names to clear when we next write canonical cookies."""
+
+    if not names:
+        return
+    if request is None:
+        return
+    try:
+        state = request.state
+    except AttributeError:
+        return
+
+    try:
+        cleanup = getattr(state, "_legacy_cookie_cleanup", None)
+        if not isinstance(cleanup, dict):
+            cleanup = {}
+        bucket = cleanup.setdefault(cookie_type, set())
+        bucket.update(names)
+        setattr(state, "_legacy_cookie_cleanup", cleanup)
+    except Exception:
+        # Best-effort scheduling; never block auth pipeline on cleanup tracking.
+        pass
+
+
+def pick_cookie(request, order: list[str]) -> tuple[str | None, str | None]:
+    """Return first cookie from ``order`` and log/schedule cleanup for conflicts."""
+
+    jar = getattr(request, "cookies", {}) or {}
+
+    chosen_name: str | None = None
+    chosen_value: str | None = None
+    canonical = order[:2]
+
+    for name in order:
+        value = jar.get(name)
+        if value:
+            chosen_name = name
+            chosen_value = value
+            break
+
+    if not chosen_name or not chosen_value:
+        return None, None
+
+    cookie_type = _get_cookie_type(chosen_name)
+    conflicts: list[str] = []
+    legacy_candidates: list[str] = []
+
+    for name in order:
+        if name == chosen_name:
+            continue
+        value = jar.get(name)
+        if not value:
+            continue
+        if name not in canonical:
+            legacy_candidates.append(name)
+        if value != chosen_value:
+            conflicts.append(name)
+
+    if conflicts or (chosen_name not in canonical and legacy_candidates):
+        try:
+            logger.warning(
+                "cookie_conflict",
+                extra={
+                    "chosen": chosen_name,
+                    "chosen_is_canonical": chosen_name in canonical,
+                    "conflicts": conflicts or legacy_candidates,
+                    "cookie_type": cookie_type,
+                },
+            )
+        except Exception:
+            pass
+
+        if COOKIE_CONFLICT is not None:
+            try:
+                COOKIE_CONFLICT.labels(cookie_type=cookie_type).inc()
+            except Exception:
+                pass
+
+        # Schedule legacy deletions; prefer explicit conflicts, otherwise all legacy aliases.
+        preferred = conflicts if conflicts else legacy_candidates
+        cleanup_targets = [n for n in preferred if n not in canonical]
+        if chosen_name not in canonical:
+            cleanup_targets.append(chosen_name)
+        cleanup_targets = list({name for name in cleanup_targets if name})
+        _schedule_legacy_cleanup(request, cookie_type, cleanup_targets)
+
+    return chosen_name, chosen_value
+
+
+def _get_cookie_type(cookie_name: str) -> str:
+    """Helper to determine cookie type for logging."""
+    if any(cookie_name.endswith(suffix) for suffix in ['_AT', 'access']):
+        return "access_token"
+    elif any(cookie_name.endswith(suffix) for suffix in ['_RT', 'refresh']):
+        return "refresh_token"
+    elif any(cookie_name.endswith(suffix) for suffix in ['_SESS', 'session', '__session']):
+        return "session"
+    else:
+        return "unknown"
+
+
+def read_access_cookie(request) -> str | None:
+    """Read access token cookie using precedence order."""
+    name, value = pick_cookie(request, AT_ORDER)
+    
+    logger.info(f"🔍 COOKIE_READ_ACCESS: Reading access cookie", extra={
+        "meta": {
+            "cookie_name": name,
+            "cookie_present": bool(value),
+            "cookie_length": len(value) if value else 0,
+            "all_cookies": list(request.cookies.keys()),
+            "timestamp": time.time()
+        }
+    })
+    
+    return value
+
+
+def read_refresh_cookie(request) -> str | None:
+    """Read refresh token cookie using precedence order."""
+    name, value = pick_cookie(request, RT_ORDER)
+    
+    logger.info(f"🔍 COOKIE_READ_REFRESH: Reading refresh cookie", extra={
+        "meta": {
+            "cookie_name": name,
+            "cookie_present": bool(value),
+            "cookie_length": len(value) if value else 0,
+            "all_cookies": list(request.cookies.keys()),
+            "timestamp": time.time()
+        }
+    })
+    
+    return value
+
+
+def read_session_cookie(request) -> str | None:
+    """Read session cookie using precedence order."""
+    name, value = pick_cookie(request, SESS_ORDER)
+    
+    logger.info(f"🔍 COOKIE_READ_SESSION: Reading session cookie", extra={
+        "meta": {
+            "cookie_name": name,
+            "cookie_present": bool(value),
+            "cookie_length": len(value) if value else 0,
+            "all_cookies": list(request.cookies.keys()),
+            "timestamp": time.time()
+        }
+    })
+    
+    return value
+
+
 def _append_cookie(
     resp,
     *,
@@ -73,19 +236,86 @@ def _append_cookie(
     domain: str | None,
     path: str,
     secure: bool,
+    request=None,
 ) -> None:
+    # Check for Partitioned cookie support (CHIPS)
+    secure = True if secure is None else bool(secure)
+
+    same_site_value = same_site or "Lax"
+
+    # SameSite=None must force Secure=True
+    if str(same_site_value).lower() == "none":
+        secure = True
+
+    # __Host- cookies must always have Path=/ and no Domain per RFC 6265bis
+    if key.startswith("__Host-"):
+        assert domain in {None, ""} and path == "/", "__Host- requires Path=/ and no Domain"
+        domain = None
+        path = "/"
+
+    partitioned = False
+    try:
+        from app.settings import AUTH_ENABLE_PARTITIONED
+
+        partitioned = bool(AUTH_ENABLE_PARTITIONED)
+    except Exception:
+        partitioned = os.getenv("ENABLE_PARTITIONED_COOKIES", "0").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "on",
+        }
+
     header = format_cookie_header(
         key=key,
         value=value or "",
         max_age=max_age,
         secure=secure,
-        samesite=same_site,
+        samesite=same_site_value,
         path=path,
         httponly=http_only,
         domain=domain or None,
+        partitioned=partitioned,
     )
     # Starlette Response supports headers.append("set-cookie", ...)
     resp.headers.append("set-cookie", header)
+
+    # Emit cleanup headers for legacy aliases when scheduled
+    cleanup_names: list[str] = []
+    if request is not None:
+        try:
+            state = request.state
+            cleanup = getattr(state, "_legacy_cookie_cleanup", None)
+            if isinstance(cleanup, dict):
+                cookie_type = _get_cookie_type(key)
+                names = cleanup.get(cookie_type)
+                if names:
+                    cleanup_names = [n for n in names if n != key]
+                    names.difference_update(cleanup_names)
+                    if not names:
+                        cleanup.pop(cookie_type, None)
+                if cleanup_names:
+                    setattr(state, "_legacy_cookie_cleanup", cleanup)
+        except Exception:
+            cleanup_names = []
+
+    for alias in cleanup_names:
+        try:
+            removal = format_cookie_header(
+                key=alias,
+                value="",
+                max_age=0,
+                secure=secure,
+                samesite=same_site_value,
+                path=path,
+                httponly=http_only,
+                domain=domain or None,
+                partitioned=False,
+            )
+            resp.headers.append("set-cookie", removal)
+        except Exception:
+            # Ignore cleanup failures; main cookie already written.
+            continue
 
 
 def set_cookie(
@@ -127,6 +357,7 @@ def set_auth(
     domain: str | None = None,
     path: str = "/",
     secure: bool = True,
+    request=None,
 ):
     _append_cookie(
         resp,
@@ -138,6 +369,7 @@ def set_auth(
         domain=domain,
         path=path,
         secure=secure,
+        request=request,
     )
     _append_cookie(
         resp,
@@ -149,6 +381,7 @@ def set_auth(
         domain=domain,
         path=path,
         secure=secure,
+        request=request,
     )
     _append_cookie(
         resp,
@@ -160,6 +393,7 @@ def set_auth(
         domain=domain,
         path=path,
         secure=secure,
+        request=request,
     )
 
 
@@ -217,6 +451,7 @@ def set_auth_cookies(
             domain=domain,
             path=path,
             secure=secure,
+            request=request,
         )
     if refresh is not None and refresh != "":
         _append_cookie(
@@ -229,6 +464,7 @@ def set_auth_cookies(
             domain=domain,
             path=path,
             secure=secure,
+            request=request,
         )
     if session_id is not None and session_id != "":
         _append_cookie(
@@ -241,6 +477,7 @@ def set_auth_cookies(
             domain=domain,
             path=path,
             secure=secure,
+            request=request,
         )
 
     # Validation logging: cookie status summary
@@ -543,10 +780,12 @@ def set_auth_cookies_canon(
 
 
 def set_csrf_cookie(resp, token: str, ttl: int, request=None):
-    """Public facade used across the codebase to set CSRF cookies consistently.
+    """
+    DEPRECATED: Legacy CSRF cookie helper.
 
-    Derives cookie attributes from centralized cookie configuration when a
-    `request` is provided. Falls back to defaults when no request is available.
+    CSRF protection has been migrated to header-token service.
+    This function is kept for backward compatibility but should not be used for new code.
+    Use /v1/auth/csrf endpoint and X-CSRF-Token header instead.
     """
     same_site = "lax"
     domain = None
@@ -630,6 +869,23 @@ def clear_auth_cookies(resp, request=None):
             path=path,
             secure=secure,
         )
+
+    try:
+        csrf_same_site = same_site
+    except Exception:
+        csrf_same_site = "Lax"
+
+    _append_cookie(
+        resp,
+        key=NAMES.csrf,
+        value="",
+        max_age=0,
+        http_only=False,
+        same_site=csrf_same_site,
+        domain=domain,
+        path=path,
+        secure=secure if str(csrf_same_site).lower() == "none" else secure,
+    )
 
 
 def clear_all_auth(resp):
@@ -752,6 +1008,24 @@ def read_session_cookie(req):
     return None
 
 
+# Centralized cookie operations with logging
+log = logging.getLogger("cookie.ops")
+
+def set_cookie(resp, *, name, value, max_age=86400, **kw):
+    header = format_cookie_header(key=name, value=value, max_age=max_age, **kw)  # your existing formatter
+    resp.headers.append("set-cookie", header)
+    log.info("[COOKIE.OP] set %s path=%s samesite=%s secure=%s domain=%s httponly=%s",
+             name, kw.get("path"), kw.get("samesite"), kw.get("secure"), kw.get("domain"), kw.get("httponly"))
+
+def clear_cookie(resp, *, name, **kw):
+    # Ensure required parameters have defaults for clearing cookies
+    secure = kw.get("secure", True)
+    samesite = kw.get("samesite", "Lax")
+    header = format_cookie_header(key=name, value="", max_age=0, secure=secure, samesite=samesite, **kw)
+    resp.headers.append("set-cookie", header)
+    log.info("[COOKIE.OP] clear %s path=%s", name, kw.get("path"))
+
+
 __all__ = [
     "CookieNames",
     "NAMES",
@@ -761,7 +1035,9 @@ __all__ = [
     "ACCESS_ALIASES",
     "REFRESH_ALIASES",
     "get_any",
+    "pick_cookie",
     "set_cookie",
+    "clear_cookie",
     "set_auth",
     "set_auth_cookies_canon",
     "clear_all_auth",

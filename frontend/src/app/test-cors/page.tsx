@@ -54,6 +54,11 @@ export default function CorsTestPage() {
 
             // Test 2: Font Loading Test
             try {
+                // Ensure fetch is available
+                if (typeof fetch === 'undefined') {
+                    throw new Error('fetch not available');
+                }
+
                 const response = await fetch('http://localhost:3000/_next/static/media/569ce4b8f30dc480-s.p.woff2', {
                     method: 'GET'
                 });

@@ -52,9 +52,10 @@ except Exception:  # pragma: no cover - optional
 
 # Phase 6.1: Clean auth metrics
 try:
-    from .metrics import AUTH_FAIL
+    from .metrics import AUTH_FAIL, THIRD_PARTY_BLOCKED_HINT
 except Exception:  # pragma: no cover - optional
     AUTH_FAIL = None  # type: ignore
+    THIRD_PARTY_BLOCKED_HINT = None  # type: ignore
 
 
 def _safe_request_path(request: Request | None) -> str:
@@ -138,6 +139,19 @@ from . import metrics
 
 JWT_SECRET: str | None = None  # backwards compat; actual value read from env
 API_TOKEN = os.getenv("API_TOKEN")
+
+_ACCESS_COOKIE_NAMES = [
+    "__Host-GSNH_AT",
+    "GSNH_AT",
+    "access_token",
+    "gsn_access",
+]
+_SESSION_COOKIE_NAMES = [
+    "__Host-GSNH_SESS",
+    "GSNH_SESS",
+    "__session",
+    "session",
+]
 
 
 class _DynamicRateLimitConfig:
@@ -1021,6 +1035,17 @@ async def verify_token(request: Request, response: Response = None) -> None:  # 
     if auth and auth.startswith("Bearer "):
         token = auth.split(" ", 1)[1]
         token_source = "authorization_header"
+
+        if THIRD_PARTY_BLOCKED_HINT is not None:
+            try:
+                cookies = getattr(request, "cookies", {}) or {}
+                has_auth_cookie = any(cookies.get(name) for name in _ACCESS_COOKIE_NAMES)
+                has_session_cookie = any(cookies.get(name) for name in _SESSION_COOKIE_NAMES)
+                if not has_auth_cookie and not has_session_cookie:
+                    route = _safe_request_path(request)
+                    THIRD_PARTY_BLOCKED_HINT.labels(route=route).inc()
+            except Exception:
+                pass
 
     # Fallback to unified extraction when no Authorization header
     if not token:

@@ -27,7 +27,7 @@ beforeAll(() => {
     const originalMockFetch = mockFetch;
     global.fetch = function (...args) {
         const url = args[0];
-        if (typeof url === 'string' && url.includes('/v1/whoami')) {
+        if (typeof url === 'string' && (url.includes('/v1/whoami') || url.includes('/v1/auth/whoami'))) {
             // Check if this is a legitimate call from AuthOrchestrator
             const requestInit = args[1] || {};
             const callId = (requestInit as any)._legitimateWhoamiCallId;
@@ -165,7 +165,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
             // Verify global.fetch was called with whoami URL
             expect(global.fetch).toHaveBeenCalledWith(
-                expect.stringContaining('/v1/whoami'),
+                expect.stringContaining('/v1/auth/whoami'),
                 expect.objectContaining({
                     method: 'GET',
                     credentials: 'include'
@@ -201,7 +201,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
             // Verify global.fetch was called with whoami URL
             expect(global.fetch).toHaveBeenCalledWith(
-                expect.stringContaining('/v1/whoami'),
+                expect.stringContaining('/v1/auth/whoami'),
                 expect.objectContaining({
                     method: 'GET',
                     credentials: 'include'
@@ -237,7 +237,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
 
             // Verify global.fetch was called with whoami URL
             expect(global.fetch).toHaveBeenCalledWith(
-                expect.stringContaining('/v1/whoami'),
+                expect.stringContaining('/v1/auth/whoami'),
                 expect.objectContaining({
                     method: 'GET',
                     credentials: 'include'
@@ -252,45 +252,45 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
     });
 
     describe('Direct whoami calls', () => {
-        it('should warn when whoami is called directly via fetch', async () => {
+        it('should warn when whoami is called directly via fetch', () => {
             // Simulate a direct apiFetch call to whoami
-            const { apiFetch } = await import('@/lib/api');
+            const { apiFetch } = require('@/lib/api');
             // eslint-disable-next-line no-restricted-syntax
-            await apiFetch('/v1/whoami');
+            apiFetch('/v1/auth/whoami');
 
             expect(mockConsoleWarn).toHaveBeenCalledWith(
                 '🚨 DIRECT WHOAMI CALL DETECTED!',
                 expect.objectContaining({
-                    url: '/v1/whoami',
+                    url: '/v1/auth/whoami',
                     message: 'Use AuthOrchestrator instead of calling whoami directly',
                     suggestion: 'Call getAuthOrchestrator().checkAuth() or use the useAuth hook'
                 })
             );
         });
 
-        it('should warn when whoami is called with full URL', async () => {
+        it('should warn when whoami is called with full URL', () => {
             // Simulate a direct apiFetch call with full URL
-            const { apiFetch } = await import('@/lib/api');
-            await apiFetch('http://localhost:8000/v1/whoami');
+            const { apiFetch } = require('@/lib/api');
+            apiFetch('http://localhost:8000/v1/auth/whoami');
 
             expect(mockConsoleWarn).toHaveBeenCalledWith(
                 '🚨 DIRECT WHOAMI CALL DETECTED!',
                 expect.objectContaining({
-                    url: 'http://localhost:8000/v1/whoami',
+                    url: 'http://localhost:8000/v1/auth/whoami',
                     message: 'Use AuthOrchestrator instead of calling whoami directly'
                 })
             );
         });
 
-        it('should warn when whoami is called with query parameters', async () => {
+        it('should warn when whoami is called with query parameters', () => {
             // Simulate a direct apiFetch call with query params
-            const { apiFetch } = await import('@/lib/api');
-            await apiFetch('/v1/whoami?test=1');
+            const { apiFetch } = require('@/lib/api');
+            apiFetch('/v1/auth/whoami?test=1');
 
             expect(mockConsoleWarn).toHaveBeenCalledWith(
                 '🚨 DIRECT WHOAMI CALL DETECTED!',
                 expect.objectContaining({
-                    url: '/v1/whoami?test=1',
+                    url: '/v1/auth/whoami?test=1',
                     message: 'Use AuthOrchestrator instead of calling whoami directly'
                 })
             );
@@ -298,9 +298,9 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
     });
 
     describe('Stack trace analysis', () => {
-        it('should include stack trace information in warning', async () => {
+        it('should include stack trace information in warning', () => {
             // eslint-disable-next-line no-restricted-syntax
-            await fetch('/v1/whoami');
+            fetch('/v1/auth/whoami');
 
             const warningCall = mockConsoleWarn.mock.calls[0];
             const warningData = warningCall[1];
@@ -311,9 +311,9 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
             expect(warningData.stackLines.length).toBeGreaterThan(0);
         });
 
-        it('should include detection timestamp', async () => {
+        it('should include detection timestamp', () => {
             // eslint-disable-next-line no-restricted-syntax
-            await fetch('/v1/whoami');
+            fetch('/v1/auth/whoami');
 
             const warningCall = mockConsoleWarn.mock.calls[0];
             const warningData = warningCall[1];
@@ -324,17 +324,17 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
     });
 
     describe('Edge cases', () => {
-        it('should not warn for non-whoami fetch calls', async () => {
-            const { apiFetch } = await import('@/lib/api');
-            await apiFetch('/v1/other-endpoint');
+        it('should not warn for non-whoami fetch calls', () => {
+            const { apiFetch } = require('@/lib/api');
+            apiFetch('/v1/other-endpoint');
 
             expect(mockConsoleWarn).not.toHaveBeenCalled();
         });
 
-        it('should not warn for whoami calls in different contexts', async () => {
+        it('should not warn for whoami calls in different contexts', () => {
             // Simulate a call that includes 'whoami' but is not the actual endpoint
-            const { apiFetch } = await import('@/lib/api');
-            await apiFetch('/v1/something-whoami-related');
+            const { apiFetch } = require('@/lib/api');
+            apiFetch('/v1/something-whoami-related');
 
             expect(mockConsoleWarn).not.toHaveBeenCalled();
         });
@@ -348,11 +348,11 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
                 }
             } as any;
 
-            const request = new (global.Request as any)('/v1/whoami');
+            const request = new (global.Request as any)('/v1/auth/whoami');
 
             // Manually trigger the detection for Request objects
             const url = request.url;
-            if (url.includes('/v1/whoami')) {
+            if (url.includes('/v1/auth/whoami')) {
                 console.warn('🚨 DIRECT WHOAMI CALL DETECTED!', {
                     url,
                     message: 'Use AuthOrchestrator instead of calling whoami directly',
@@ -366,7 +366,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
             expect(mockConsoleWarn).toHaveBeenCalledWith(
                 '🚨 DIRECT WHOAMI CALL DETECTED!',
                 expect.objectContaining({
-                    url: '/v1/whoami'
+                    url: '/v1/auth/whoami'
                 })
             );
         });
@@ -393,7 +393,7 @@ describe('AuthOrchestrator Whoami Call Detection', () => {
             // The error should be thrown by the fetch interceptor
             expect(() => {
                 // eslint-disable-next-line no-restricted-syntax
-                fetch('/v1/whoami');
+                fetch('/v1/auth/whoami');
             }).toThrow('Direct whoami call detected! Use AuthOrchestrator instead.');
 
             // Reset the environment variable

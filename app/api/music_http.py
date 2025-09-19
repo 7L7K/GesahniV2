@@ -531,8 +531,7 @@ async def _build_state_payload(user_id: str) -> StateResponse:
     quiet = _in_quiet_hours()
     sp = None
     if is_provider_spotify():
-        _res = _provider_state(user_id)
-        sp = await _res if inspect.isawaitable(_res) else _res
+        sp = await _provider_state(user_id)
 
     track = None
     progress_ms = None

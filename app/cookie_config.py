@@ -42,6 +42,10 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     env_secure = os.getenv("COOKIE_SECURE", "").strip().lower()
     env_force_secure = env_secure in {"1", "true", "yes", "on"}
     env_force_insecure = env_secure in {"0", "false", "no", "off"}
+    try:
+        force_cookie_secure = bool(int(os.getenv("COOKIE_SECURE", "0")))
+    except ValueError:
+        force_cookie_secure = env_force_secure
 
     cookie_samesite = os.getenv("COOKIE_SAMESITE", "lax").lower()
     # Consider USE_DEV_PROXY an explicit signal that we're running local dev
@@ -84,7 +88,7 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
     explicitly_set = os.getenv("COOKIE_SAMESITE")
     if env_name == "dev" and cross_origin:
         # If not explicitly set to "strict", force None for better UX during development.
-        if not explicitly_set or explicitly_set.strip().lower() in {"", "lax", "auto"}:
+        if not explicitly_set or explicitly_set.strip().lower() in {"", "auto"}:
             cookie_samesite = "none"
 
     # Determine secure flag - dev-friendly defaults:
@@ -98,7 +102,7 @@ def get_cookie_config(request: Request) -> dict[str, Any]:
         cookie_secure = False
 
     # If in dev or on localhost over plain HTTP, ensure cookies are accepted by browsers
-    if dev_env_detected and not is_tls:
+    if dev_env_detected and not is_tls and not force_cookie_secure:
         # In dev mode over HTTP, always force Secure=False for localhost compatibility
         # This overrides any COOKIE_SECURE setting to ensure cookies work in development
         cookie_secure = False
@@ -207,6 +211,7 @@ def format_cookie_header(
     path: str = "/",
     httponly: bool = True,
     domain: str = None,
+    partitioned: bool = False,
 ) -> str:
     """
     Format a Set-Cookie header with consistent attributes.
@@ -231,9 +236,16 @@ def format_cookie_header(
     samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
     ss = samesite_map.get(samesite.lower(), "Lax")
 
+    # SameSite=None requires Secure=True (browser enforcement)
+    if ss == "None" and not secure:
+        secure = True  # Force Secure=True when SameSite=None
+
     # Enforce __Host- cookie rules per RFC 6265bis
     # __Host- cookies MUST have Secure=True, Path="/", and no Domain
     if key.startswith("__Host-"):
+        # Strong assertion to prevent misconfiguration
+        assert not (domain is not None or path != "/"), \
+            f"__Host- cookie '{key}' must have Path='/' and no Domain, got path='{path}', domain={domain}"
         if not secure:
             secure = True  # Force Secure=True for __Host- cookies
         if path != "/":
@@ -252,12 +264,16 @@ def format_cookie_header(
     except Exception:
         pass
 
+    int_max_age = int(max_age)
     parts = [
         f"{key}={display_value}",
-        f"Max-Age={int(max_age)}",
+        f"Max-Age={int_max_age}",
         f"Path={path}",
         f"SameSite={ss}",
     ]
+
+    if int_max_age <= 0:
+        parts.append("Expires=Thu, 01 Jan 1970 00:00:00 GMT")
 
     if httponly:
         parts.append("HttpOnly")
@@ -295,6 +311,9 @@ def format_cookie_header(
         }
     if key in priority_names:
         parts.append("Priority=High")
+
+    if partitioned:
+        parts.append("Partitioned")
 
     return "; ".join(parts)
 

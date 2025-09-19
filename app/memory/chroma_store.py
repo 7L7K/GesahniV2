@@ -235,7 +235,7 @@ class ChromaVectorStore(VectorStore):
                     )
             else:
                 # Length embedder emits dimension=1
-                exp_dim = int(os.getenv("EMBED_DIM", "1536"))
+                exp_dim = int(os.getenv("EMBED_DIM", "1"))
                 if exp_dim != 1:
                     logger.warning(
                         "EMBED_DIM=%s mismatch: length embedder uses dim=1", exp_dim

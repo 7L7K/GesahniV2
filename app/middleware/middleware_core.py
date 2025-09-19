@@ -1145,3 +1145,337 @@ async def reload_env_middleware(request: Request, call_next):
     except Exception:
         pass
     return await call_next(request)
+
+
+class APILoggingMiddleware(BaseHTTPMiddleware):
+    """Comprehensive API request/response logging middleware."""
+
+    def __init__(self, app, exclude_paths=None, exclude_methods=None):
+        super().__init__(app)
+        self.exclude_paths = exclude_paths or ["/health", "/metrics", "/favicon.ico"]
+        self.exclude_methods = exclude_methods or ["OPTIONS"]
+        self.logger = logging.getLogger(__name__)
+
+    async def dispatch(self, request: Request, call_next):
+        # Skip logging for excluded paths and methods
+        if request.url.path in self.exclude_paths or request.method in self.exclude_methods:
+            return await call_next(request)
+
+        # Start timing
+        start_time = time.time()
+        request_id = getattr(request.state, 'req_id', None) or str(uuid.uuid4())[:8]
+
+        # Extract comprehensive request details
+        method = request.method
+        path = request.url.path
+        query = str(request.url.query)
+        full_url = str(request.url)
+        user_agent = request.headers.get("User-Agent", "unknown")
+        content_type = request.headers.get("Content-Type", "unknown")
+        content_length = request.headers.get("Content-Length", "0")
+        origin = request.headers.get("Origin", "none")
+        referer = request.headers.get("Referer", "none")
+        authorization = "present" if request.headers.get("Authorization") else "absent"
+        csrf_token = "present" if request.headers.get("X-CSRF-Token") else "absent"
+        cookie_header = "present" if request.headers.get("Cookie") else "absent"
+        cookie_count = len(request.cookies) if hasattr(request, 'cookies') else 0
+
+        # Extract client info
+        client_ip = (
+            request.headers.get("X-Forwarded-For") or
+            request.headers.get("X-Real-IP") or
+            getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
+        )
+        client_port = getattr(request.client, 'port', 'unknown') if request.client else 'unknown'
+
+        # Determine request category
+        is_auth_endpoint = any(auth_path in path for auth_path in ['/auth/', '/login', '/logout', '/whoami', '/csrf'])
+        is_debug_endpoint = '/debug/' in path
+        is_health_endpoint = '/health' in path
+        is_api_endpoint = path.startswith('/v1/')
+
+        category = "auth" if is_auth_endpoint else "debug" if is_debug_endpoint else "health" if is_health_endpoint else "api" if is_api_endpoint else "other"
+        category_emoji = "🔐" if category == "auth" else "🔍" if category == "debug" else "💚" if category == "health" else "🔗" if category == "api" else "📄"
+
+        # Ultra-detailed request logging
+        self.logger.info(f"{category_emoji} API_REQUEST #{request_id}", extra={
+            "request_id": request_id,
+            "method": method,
+            "path": path,
+            "full_url": full_url,
+            "query": query if query else "none",
+            "category": category,
+            "user_agent": user_agent,
+            "content_type": content_type,
+            "content_length": content_length,
+            "origin": origin,
+            "referer": referer,
+            "authorization": authorization,
+            "csrf_token": csrf_token,
+            "cookie_header": cookie_header,
+            "cookie_count": cookie_count,
+            "client_ip": client_ip,
+            "client_port": client_port,
+            "headers_count": len(dict(request.headers)),
+            "is_cors_request": bool(origin),
+            "is_authenticated_request": authorization == "present",
+            "timestamp": time.time(),
+            "start_time": start_time
+        })
+
+        # Special detailed logging for auth requests
+        if is_auth_endpoint:
+            self.logger.info(f"🔐 AUTH_REQUEST_DETAILS #{request_id}", extra={
+                "request_id": request_id,
+                "method": method,
+                "path": path,
+                "has_authorization_header": authorization == "present",
+                "has_csrf_token": csrf_token == "present",
+                "has_cookies": cookie_header == "present",
+                "cookie_names": list(request.cookies.keys()) if hasattr(request, 'cookies') else [],
+                "origin": origin,
+                "referer": referer,
+                "user_agent": user_agent,
+                "client_ip": client_ip,
+                "timestamp": time.time()
+            })
+
+        try:
+            # Process the request
+            response = await call_next(request)
+
+            # Calculate response time
+            response_time = time.time() - start_time
+
+            # Extract comprehensive response details
+            status_code = response.status_code
+            response_content_type = response.headers.get("Content-Type", "unknown")
+            response_content_length = response.headers.get("Content-Length", "unknown")
+            response_x_request_id = response.headers.get("X-Request-ID", "none")
+            response_x_csrf_token = "present" if response.headers.get("X-CSRF-Token") else "absent"
+            response_set_cookie = "present" if response.headers.get("Set-Cookie") else "absent"
+            response_cache_control = response.headers.get("Cache-Control", "none")
+
+            # Determine log level and emoji based on status code
+            if status_code >= 500:
+                log_level = logging.ERROR
+                status_emoji = "🚨"
+                status_category = "server_error"
+            elif status_code >= 400:
+                log_level = logging.WARNING
+                status_emoji = "⚠️"
+                status_category = "client_error"
+            elif status_code >= 300:
+                log_level = logging.INFO
+                status_emoji = "🔄"
+                status_category = "redirect"
+            else:
+                log_level = logging.INFO
+                status_emoji = "✅"
+                status_category = "success"
+
+            # Performance categorization
+            if response_time > 5.0:
+                perf_category = "very_slow"
+                perf_emoji = "🐌🐌"
+            elif response_time > 2.0:
+                perf_category = "slow"
+                perf_emoji = "🐌"
+            elif response_time > 1.0:
+                perf_category = "medium"
+                perf_emoji = "🟡"
+            elif response_time > 0.5:
+                perf_category = "fast"
+                perf_emoji = "⚡"
+            else:
+                perf_category = "very_fast"
+                perf_emoji = "🚀"
+
+            # Ultra-detailed response logging
+            self.logger.log(log_level, f"{status_emoji}{perf_emoji} API_RESPONSE #{request_id}", extra={
+                "request_id": request_id,
+                "method": method,
+                "path": path,
+                "category": category,
+                "status_code": status_code,
+                "status_category": status_category,
+                "response_time_ms": round(response_time * 1000, 2),
+                "performance": perf_category,
+                "content_type": response_content_type,
+                "content_length": response_content_length,
+                "x_request_id": response_x_request_id,
+                "x_csrf_token": response_x_csrf_token,
+                "set_cookie": response_set_cookie,
+                "cache_control": response_cache_control,
+                "client_ip": client_ip,
+                "is_auth_response": is_auth_endpoint,
+                "is_debug_response": is_debug_endpoint,
+                "timestamp": time.time(),
+                "response_time": response_time,
+                "start_time": start_time
+            })
+
+            # Special detailed logging for auth responses
+            if is_auth_endpoint:
+                set_cookie_details = []
+                if response_set_cookie == "present":
+                    # Try to parse set-cookie headers (basic parsing)
+                    set_cookie_raw = response.headers.get("Set-Cookie", "")
+                    if isinstance(set_cookie_raw, str):
+                        cookie_parts = set_cookie_raw.split(';')
+                        if cookie_parts:
+                            cookie_name_value = cookie_parts[0].strip()
+                            cookie_flags = cookie_parts[1:] if len(cookie_parts) > 1 else []
+                            set_cookie_details.append({
+                                "name_value": cookie_name_value,
+                                "flags": cookie_flags,
+                                "is_http_only": any('httponly' in f.lower() for f in cookie_flags),
+                                "is_secure": any('secure' in f.lower() for f in cookie_flags),
+                                "max_age": next((f.split('=')[1] for f in cookie_flags if f.lower().startswith('max-age=')), 'session')
+                            })
+
+                self.logger.info(f"🔐 AUTH_RESPONSE_DETAILS #{request_id}", extra={
+                    "request_id": request_id,
+                    "method": method,
+                    "path": path,
+                    "status_code": status_code,
+                    "response_time_ms": round(response_time * 1000, 2),
+                    "x_csrf_token": response_x_csrf_token,
+                    "set_cookie": response_set_cookie,
+                    "set_cookie_details": set_cookie_details,
+                    "cache_control": response_cache_control,
+                    "client_ip": client_ip,
+                    "timestamp": time.time()
+                })
+
+            # Log performance warnings for slow requests
+            if response_time > 2.0:  # More than 2 seconds
+                self.logger.warning(f"🐌 SLOW_API_REQUEST #{request_id}", extra={
+                    "request_id": request_id,
+                    "method": method,
+                    "path": path,
+                    "status_code": status_code,
+                    "response_time_ms": round(response_time * 1000, 2),
+                    "performance": perf_category,
+                    "category": category,
+                    "content_type": response_content_type,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent[:50] + "..." if len(user_agent) > 50 else user_agent,
+                    "is_auth_endpoint": is_auth_endpoint,
+                    "timestamp": time.time(),
+                })
+
+            # Log detailed error information for 4xx/5xx responses
+            if status_code >= 400:
+                self.logger.log(log_level, f"❌ API_ERROR_RESPONSE #{request_id}", extra={
+                    "request_id": request_id,
+                    "method": method,
+                    "path": path,
+                    "status_code": status_code,
+                    "status_category": status_category,
+                    "response_time_ms": round(response_time * 1000, 2),
+                    "content_type": response_content_type,
+                    "content_length": response_content_length,
+                    "client_ip": client_ip,
+                    "user_agent": user_agent,
+                    "origin": origin,
+                    "referer": referer,
+                    "authorization": authorization,
+                    "csrf_token": csrf_token,
+                    "category": category,
+                    "is_cors_request": bool(origin),
+                    "timestamp": time.time()
+                })
+
+            return response
+
+        except Exception as e:
+            # Calculate error response time
+            error_time = time.time() - start_time
+
+            # Ultra-detailed error logging
+            import traceback
+
+            # Extract error details
+            error_message = str(e)
+            error_type = type(e).__name__
+            error_module = getattr(type(e), '__module__', 'unknown')
+            error_full_name = f"{error_module}.{error_type}" if error_module != 'builtins' else error_type
+
+            # Get stack trace
+            stack_trace = traceback.format_exc()
+
+            # Determine error severity
+            is_critical_error = any(critical in error_type.lower() for critical in ['internal', 'server', 'database', 'connection'])
+            error_severity = "critical" if is_critical_error else "standard"
+
+            # Log comprehensive error information
+            self.logger.error(f"🚨💥 API_EXCEPTION #{request_id} [{error_severity.upper()}]", extra={
+                "request_id": request_id,
+                "method": method,
+                "path": path,
+                "category": category,
+                "error_message": error_message,
+                "error_type": error_type,
+                "error_full_name": error_full_name,
+                "error_module": error_module,
+                "error_severity": error_severity,
+                "response_time_ms": round(error_time * 1000, 2),
+                "client_ip": client_ip,
+                "client_port": client_port,
+                "user_agent": user_agent,
+                "origin": origin,
+                "referer": referer,
+                "authorization": authorization,
+                "csrf_token": csrf_token,
+                "cookie_header": cookie_header,
+                "cookie_count": cookie_count,
+                "is_cors_request": bool(origin),
+                "is_authenticated_request": authorization == "present",
+                "stack_trace_lines": len(stack_trace.split('\n')) if stack_trace else 0,
+                "has_stack_trace": bool(stack_trace),
+                "timestamp": time.time(),
+                "start_time": start_time
+            })
+
+            # Log stack trace separately for better readability
+            if stack_trace:
+                self.logger.error(f"📋 EXCEPTION_STACK_TRACE #{request_id}", extra={
+                    "request_id": request_id,
+                    "method": method,
+                    "path": path,
+                    "error_type": error_type,
+                    "stack_trace": stack_trace[:2000] + "..." if len(stack_trace) > 2000 else stack_trace,
+                    "timestamp": time.time()
+                })
+
+            # Log additional context for auth-related errors
+            if is_auth_endpoint:
+                self.logger.error(f"🔐 AUTH_EXCEPTION_CONTEXT #{request_id}", extra={
+                    "request_id": request_id,
+                    "method": method,
+                    "path": path,
+                    "error_type": error_type,
+                    "error_message": error_message,
+                    "cookie_names": list(request.cookies.keys()) if hasattr(request, 'cookies') else [],
+                    "has_authorization_header": authorization == "present",
+                    "has_csrf_token": csrf_token == "present",
+                    "client_ip": client_ip,
+                    "timestamp": time.time()
+                })
+
+            # Log performance context for slow errors
+            if error_time > 1.0:
+                self.logger.warning(f"🐌 SLOW_EXCEPTION #{request_id}", extra={
+                    "request_id": request_id,
+                    "method": method,
+                    "path": path,
+                    "error_type": error_type,
+                    "error_time_ms": round(error_time * 1000, 2),
+                    "category": category,
+                    "client_ip": client_ip,
+                    "timestamp": time.time()
+                })
+
+            # Re-raise the exception to let error handling middleware handle it
+            raise

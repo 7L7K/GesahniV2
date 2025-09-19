@@ -3,12 +3,12 @@
  */
 
 import { getBootstrapManager } from '../bootstrapManager';
-import { apiFetch } from '@/lib/api';
 import { authHeaders } from '@/lib/api/auth';
 import type { AuthState, AuthOrchestrator } from './types';
 import { AuthOscillationDetector, AuthBackoffManager } from './utils';
 import { AuthEventDispatcher } from './events';
 import { fetchWhoamiWithResilience, type WhoamiResponse } from '@/lib/whoamiResilience';
+import { fetchHealth } from '@/lib/api';
 
 export class AuthOrchestratorImpl implements AuthOrchestrator {
     private state: AuthState = {
@@ -59,6 +59,51 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
     // Page-load level refresh guard: ensure exactly one refresh attempt per page load
     private pageLoadRefreshAttempted = false;
     private readonly PAGE_LOAD_REFRESH_KEY = 'auth:page_load_refresh_attempted';
+    private explicitLogoutInProgress = false;
+    private lastAuthOk = false;  // Track last successful auth state
+
+    private lastHealthRetryTs = 0;
+
+    private async ensureHealthGate(signal?: AbortSignal): Promise<boolean> {
+        let timeout: ReturnType<typeof setTimeout> | null = null;
+        try {
+            const controller = new AbortController();
+            timeout = setTimeout(() => controller.abort(), 1500);
+            const { apiFetch } = await import('@/lib/api/fetch');
+            const response = await apiFetch('/v1/health', { auth: false, dedupe: false, cache: 'no-store', signal: signal ?? controller.signal });
+            return response.status < 500;
+        } catch (error) {
+            console.warn('AUTH Orchestrator: Health gate transient error; backing off', error);
+            try {
+                this.eventDispatcher.dispatchAuthEpochBumped();
+            } catch {
+                /* noop */
+            }
+            console.info('AUTH Orchestrator: Health check failed but whoami succeeded, assuming healthy for session_ready');
+            const now = Date.now();
+            if (now - this.lastHealthRetryTs > 1500) {
+                this.lastHealthRetryTs = now;
+                if (typeof queueMicrotask === 'function') {
+                    queueMicrotask(() => {
+                        this.ensureHealthGate().catch(() => {
+                            /* swallow follow-up errors */
+                        });
+                    });
+                } else {
+                    setTimeout(() => {
+                        this.ensureHealthGate().catch(() => {
+                            /* swallow follow-up errors */
+                        });
+                    }, 0);
+                }
+            }
+            return true;
+        } finally {
+            if (timeout) {
+                clearTimeout(timeout);
+            }
+        }
+    }
 
     constructor() {
         // Initialize page-load refresh guard
@@ -179,6 +224,27 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         }, 100);
     }
 
+    setLogoutInProgress(state: boolean): void {
+        if (this.explicitLogoutInProgress === state) return;
+
+        console.info('🔍 AUTH_ORCHESTRATOR_LOGOUT_STATE_CHANGE:', {
+            previousLogoutInProgress: this.explicitLogoutInProgress,
+            newLogoutInProgress: state,
+            currentAuthState: this.state,
+            timestamp: new Date().toISOString(),
+        });
+
+        this.explicitLogoutInProgress = state;
+
+        if (state) {
+            // Treat upcoming state flips as explicit to avoid oscillation penalties
+            this.markExplicitStateChange();
+            console.info('🔍 AUTH_ORCHESTRATOR_LOGOUT_START: Logout started, marking explicit state change');
+        } else {
+            console.info('🔍 AUTH_ORCHESTRATOR_LOGOUT_END: Logout completed, allowing whoami calls');
+        }
+    }
+
     getState(): AuthState {
         return { ...this.state };
     }
@@ -197,6 +263,13 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
     private setState(updates: Partial<AuthState>) {
         const prevState = this.state;
         this.state = { ...this.state, ...updates };
+
+        console.log('🔍 AUTH_STATE_UPDATE:', {
+            prevState: prevState,
+            updates: updates,
+            newState: this.state,
+            timestamp: new Date().toISOString()
+        });
 
         // Dispatch auth state change events for WebSocket and other components
         this.eventDispatcher.dispatchAuthStateEvents(prevState, this.state);
@@ -239,6 +312,15 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             return;
         }
 
+        if (this.explicitLogoutInProgress) {
+            console.info('🔍 AUTH_ORCHESTRATOR_BLOCKED: Skipping whoami - logout in progress', {
+                explicitLogoutInProgress: this.explicitLogoutInProgress,
+                currentAuthState: this.state,
+                timestamp: new Date().toISOString()
+            });
+            return;
+        }
+
         const now = Date.now();
 
         // Rate limiting check (skip for auth gate retries)
@@ -262,19 +344,28 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         }, this.DEBOUNCE_DELAY);
     }
 
-    async refreshAuth(): Promise<void> {
+    async refreshAuth(opts?: { force?: boolean; noDedupe?: boolean; noCache?: boolean }): Promise<void> {
         console.info('AUTH Orchestrator: refreshAuth called', {
             timestamp: new Date().toISOString(),
             currentState: this.state,
         });
+
+        // If this refresh was triggered by an explicit state change (e.g. logout),
+        // we should bypass normal short-circuiting and guards to force a whoami check.
+        const forceRefresh = this.explicitStateChange === true || opts?.force === true;
 
         if (this.authFinishInProgress) {
             console.info('AUTH Orchestrator: Skipping refresh - auth finish in progress');
             return;
         }
 
+        if (this.explicitLogoutInProgress && !forceRefresh) {
+            console.info('AUTH Orchestrator: Skipping refresh - logout in progress');
+            return;
+        }
+
         // PAGE-LOAD GUARD: Ensure exactly one refresh attempt per page load
-        if (this.hasAttemptedPageLoadRefresh()) {
+        if (!forceRefresh && this.hasAttemptedPageLoadRefresh()) {
             console.info('AUTH Orchestrator: Skipping refresh - already attempted for this page load', {
                 timestamp: new Date().toISOString(),
             });
@@ -282,7 +373,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         }
 
         // Short-circuit refresh when already authenticated to prevent oscillation
-        if (this.state.is_authenticated && this.state.whoamiOk) {
+        if (!forceRefresh && this.state.is_authenticated && this.state.whoamiOk) {
             console.info('AUTH Orchestrator: Short-circuiting refresh - already authenticated', {
                 isAuthenticated: this.state.is_authenticated,
                 whoamiOk: this.state.whoamiOk,
@@ -296,7 +387,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
 
         if (!isCookieMode) {
             // Header mode: Check if we have localStorage tokens
-            const hasToken = Boolean(localStorage.getItem('auth:access'));
+            const hasToken = typeof localStorage !== 'undefined' ? Boolean(localStorage.getItem('auth:access')) : false;
             if (!hasToken) {
                 console.warn('AUTH Orchestrator: refreshAuth called but no token available (header mode)');
                 // Don't clear tokens or redirect - let the auth flow handle it
@@ -307,12 +398,13 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         // Always proceed to checkAuth() to verify current state via cookies
 
         // MARK: We've now attempted a refresh for this page load
+        // Always mark attempt to keep guard consistent; safe even during forced refresh
         this.markPageLoadRefreshAttempted();
 
-        // IMPORTANT: Reuse checkAuth so we honor throttling/backoff/cooldowns.
-        // This prevents multiple components from causing rapid whoami loops
-        // when the app is unauthenticated or during transient failures.
-        await this.checkAuth();
+        // IMPORTANT: Call _performWhoamiCheck directly to bypass debounce delay
+        // This ensures immediate auth state update after login, preventing race conditions
+        // where navigation happens before auth state is updated.
+        await this._performWhoamiCheck(opts);
     }
 
     async initialize(): Promise<void> {
@@ -342,7 +434,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             }
         } else {
             // Header mode: Only check if we have localStorage tokens
-            const hasTokens = Boolean(localStorage.getItem('auth:access'));
+            const hasTokens = typeof localStorage !== 'undefined' ? Boolean(localStorage.getItem('auth:access')) : false;
             if (hasTokens) {
                 try {
                     await this._performWhoamiCheck();
@@ -369,6 +461,23 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         }
     }
 
+    /**
+     * Call this after successful login to bypass the page load guard and force auth refresh
+     */
+    onLoginSuccess(): Promise<void> {
+        console.info('AUTH Orchestrator: Login success detected, forcing auth refresh');
+        this.pageLoadRefreshAttempted = false;
+        if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+            try {
+                sessionStorage.removeItem(this.PAGE_LOAD_REFRESH_KEY);
+            } catch {
+                // Ignore sessionStorage errors
+            }
+        }
+        // Force refresh to update auth state immediately
+        return this.refreshAuth({ force: true });
+    }
+
     cleanup(): void {
         console.info('AUTH Orchestrator: Cleaning up');
         this.subscribers.clear();
@@ -379,6 +488,11 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
 
         // Clear internal whoami cache
         this.lastGoodWhoamiIdentity = null;
+
+        // Clear external caches too
+        import('@/lib/whoamiCache').then(({ whoamiCache }) => {
+            whoamiCache.clear();
+        }).catch(() => { /* ignore */ });
 
         // Clear any pending operations
         if (this.debounceTimer) {
@@ -475,14 +589,16 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             }
 
             // Clear localStorage items related to user state
-            const keysToRemove = [];
-            for (let i = 0; i < localStorage.length; i++) {
-                const key = localStorage.key(i);
-                if (key && (key.startsWith('auth:') || key.startsWith('user:') || key.startsWith('spotify:'))) {
-                    keysToRemove.push(key);
+            if (typeof localStorage !== 'undefined') {
+                const keysToRemove = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key && (key.startsWith('auth:') || key.startsWith('user:') || key.startsWith('spotify:'))) {
+                        keysToRemove.push(key);
+                    }
                 }
+                keysToRemove.forEach(key => localStorage.removeItem(key));
             }
-            keysToRemove.forEach(key => localStorage.removeItem(key));
 
         } catch (error) {
             console.warn('AUTH Orchestrator: Error purging cached state:', error);
@@ -540,7 +656,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                 this.refreshRetryCount = 0;
 
                 // Re-fetch /v1/me to confirm auth state
-                await this.checkAuth();
+                await this._performWhoamiCheck({ force: true, noDedupe: true, noCache: true });
                 return;
             } else {
                 console.warn('AUTH Orchestrator: Refresh failed, attempting one more time');
@@ -554,7 +670,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                 if (retryResponse.ok) {
                     console.info('AUTH Orchestrator: Retry refresh successful');
                     this.refreshRetryCount = 0;
-                    await this.checkAuth();
+                    await this._performWhoamiCheck({ force: true, noDedupe: true, noCache: true });
                     return;
                 } else {
                     console.error('AUTH Orchestrator: Retry refresh also failed');
@@ -570,7 +686,8 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
     }
 
     private async _callRefreshEndpoint(): Promise<Response> {
-        const { apiFetch } = await import('@/lib/api');
+        console.debug('AUTH Orchestrator: Loading apiFetch dynamically for refresh');
+        const { apiFetch } = await import('@/lib/api/fetch');
         return apiFetch('/v1/auth/refresh', {
             method: 'POST',
             auth: true,
@@ -606,14 +723,14 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         }
     }
 
-    private async _performWhoamiCheck(): Promise<void> {
+    private async _performWhoamiCheck(opts?: { force?: boolean; noDedupe?: boolean; noCache?: boolean }): Promise<void> {
         if (this.pendingAuthCheck) {
             console.info('AUTH Orchestrator: Whoami check already in progress, waiting');
             await this.pendingAuthCheck;
             return;
         }
 
-        this.pendingAuthCheck = this._doWhoamiCheck();
+        this.pendingAuthCheck = this._doWhoamiCheck(opts);
         try {
             await this.pendingAuthCheck;
         } finally {
@@ -625,21 +742,13 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
     private lastGoodWhoamiIdentity: { data: any; timestamp: number } | null = null;
     private readonly WHOAMI_CACHE_TTL_MS = 3000; // 3 seconds
 
-    private async _performResilientWhoamiCheck(): Promise<WhoamiResponse> {
-        // Check internal cache first
-        const now = Date.now();
-        if (this.lastGoodWhoamiIdentity && (now - this.lastGoodWhoamiIdentity.timestamp) < this.WHOAMI_CACHE_TTL_MS) {
-            console.debug('AuthOrchestrator: Returning cached identity', {
-                age: now - this.lastGoodWhoamiIdentity.timestamp,
-                ttl: this.WHOAMI_CACHE_TTL_MS,
-            });
-            return this.lastGoodWhoamiIdentity.data;
-        }
-
+    private async _performResilientWhoamiCheck(opts?: { force?: boolean; noDedupe?: boolean; noCache?: boolean }): Promise<WhoamiResponse> {
         // Perform the actual whoami call with retry logic using the resilience utility
-        const data = await fetchWhoamiWithResilience();
+        // The resilience utility now handles caching internally
+        const data = await fetchWhoamiWithResilience(opts);
 
-        // Cache the successful result
+        // Update internal cache for backward compatibility
+        const now = Date.now();
         this.lastGoodWhoamiIdentity = {
             data,
             timestamp: now
@@ -649,15 +758,17 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
     }
 
 
-    private async _doWhoamiCheck(): Promise<void> {
+    private async _doWhoamiCheck(opts?: { force?: boolean; noDedupe?: boolean; noCache?: boolean }): Promise<void> {
         const now = Date.now();
         this.lastWhoamiCall = now;
         this.whoamiCallCount++;
 
-        console.info(`AUTH Orchestrator: Starting whoami check #${this.whoamiCallCount}`, {
+        console.info(`🔍 AUTH_ORCHESTRATOR_WHOAMI_START: Starting whoami check #${this.whoamiCallCount}`, {
             timestamp: new Date().toISOString(),
             consecutiveFailures: this.backoffManager.getConsecutiveFailures(),
             backoffUntil: this.backoffManager.getBackoffUntil(),
+            explicitLogoutInProgress: this.explicitLogoutInProgress,
+            currentAuthState: this.state,
         });
 
         // Update loading state
@@ -665,39 +776,17 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
 
         try {
             // Use orchestrator's internal whoami method with built-in resilience
-            const data = await this._performResilientWhoamiCheck();
+            const data = await this._performResilientWhoamiCheck(opts);
 
             // Since resilient client already handled success/error, we can proceed with data
             // Health gate: require backend to be healthy before marking session_ready
             // But be more lenient during initial authentication to avoid race conditions
-            let healthOk: boolean = true;
-            try {
-                const controller = new AbortController();
-                const to = setTimeout(() => controller.abort(), 1500);
-                // Use unauthenticated health check during auth process to avoid chicken-and-egg problem
-                const h = await apiFetch('/v1/health', { auth: false, dedupe: false, cache: 'no-store', signal: controller.signal });
-                clearTimeout(to);
-                // Treat any 2xx as online (degraded allowed); only network errors or 5xx as offline
-                healthOk = h.status < 500;
-            } catch {
-                // Be more lenient with health check failures during authentication
-                // If whoami succeeded, assume backend is healthy enough for session_ready
-                healthOk = true;
-                console.info('AUTH Orchestrator: Health check failed but whoami succeeded, assuming healthy for session_ready');
-
-                // Dispatch backend online event for other components
-                this.eventDispatcher.dispatchAuthEpochBumped();
+            // Use unauthenticated health check during auth process to avoid chicken-and-egg problem
+            console.debug('AUTH Orchestrator: Loading apiFetch dynamically for health gate');
+            const healthOk: boolean = await this.ensureHealthGate();
+            if (!healthOk) {
+                console.info('AUTH Orchestrator: Health check reported offline state, deferring session_ready flip');
             }
-
-            console.info(`AUTH Orchestrator: Whoami success #${this.whoamiCallCount}`, {
-                userId: data.user_id,
-                hasUser: !!data.user_id,
-                isAuthenticated: data.is_authenticated,
-                sessionReady: data.session_ready,
-                source: data.source,
-                data,
-                timestamp: new Date().toISOString(),
-            });
 
             // Auth Orchestrator gate: Treat isAuthenticated === true && !userId as not authenticated
             // This handles late cookie propagation scenarios
@@ -708,6 +797,19 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             const isAuthenticatedFromResponse = data.is_authenticated !== undefined ? data.is_authenticated : hasValidUserId;
             const shouldBeAuthenticated: boolean = Boolean(isAuthenticatedFromResponse && hasValidUserId);
             const shouldBeReady: boolean = shouldBeAuthenticated && healthOk;
+
+            console.info(`🔍 AUTH_ORCHESTRATOR_WHOAMI_SUCCESS: Whoami success #${this.whoamiCallCount}`, {
+                userId: data.user_id,
+                hasUser: !!data.user_id,
+                isAuthenticated: data.is_authenticated,
+                sessionReady: data.session_ready,
+                source: data.source,
+                explicitLogoutInProgress: this.explicitLogoutInProgress,
+                shouldBeAuthenticated,
+                shouldBeReady,
+                data,
+                timestamp: new Date().toISOString(),
+            });
 
             if (data.is_authenticated !== undefined && data.is_authenticated && !hasValidUserId) {
                 console.warn(`AUTH Orchestrator: Auth gate triggered - isAuthenticated=true but no userId`, {
@@ -781,6 +883,24 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
 
             // Update successful state for oscillation detection
             this.oscillationDetector.updateSuccessfulState(newState);
+
+            // Track auth success and reset page load guard if we succeeded
+            const authOk = Boolean(shouldBeAuthenticated);
+            if (authOk && !this.lastAuthOk) {
+                // Auth state improved (unauthenticated -> authenticated)
+                // Reset page load guard to allow future refreshes in this session
+                console.info('AUTH Orchestrator: Auth success detected, resetting page load guard');
+                this.pageLoadRefreshAttempted = false;
+                if (typeof sessionStorage !== 'undefined' && sessionStorage) {
+                    try {
+                        sessionStorage.removeItem(this.PAGE_LOAD_REFRESH_KEY);
+                    } catch {
+                        // Ignore sessionStorage errors
+                    }
+                }
+            }
+            this.lastAuthOk = authOk;
+
             this.setState(newState);
 
             // One-time cleanup after first successful whoami to prevent oscillation
@@ -813,6 +933,11 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                 consecutiveFailures: failures,
                 timestamp: new Date().toISOString(),
             });
+
+            // Also log the full error for debugging
+            if (error instanceof Error) {
+                console.error('AUTH Orchestrator: Full error details:', error);
+            }
 
             // Calculate backoff and apply it (still use existing backoff manager for consistency)
             const backoffMs = this.backoffManager.calculateBackoff();

@@ -10,7 +10,7 @@ export const API_ROUTES = {
         REGISTER: '/v1/auth/register',
         LOGOUT: '/v1/auth/logout',
         REFRESH: '/v1/auth/refresh',
-        WHOAMI: '/v1/whoami',  // Canonical backend path
+        WHOAMI: '/v1/auth/whoami',  // Canonical backend path
         CSRF: '/v1/csrf',
         FINISH: '/v1/auth/finish',
         GOOGLE_LOGIN_URL: '/v1/auth/google/login_url',

@@ -211,6 +211,16 @@ def clear_auth_cookies(resp: Response, request: Request) -> None:
             httponly=True,
             domain=domain,
         ),
+        format_cookie_header(
+            NAMES.csrf,
+            "",
+            0,
+            secure,
+            same_site,
+            path=path,
+            httponly=False,
+            domain=domain,
+        ),
     ]
     resp.headers["set-cookie"] = ", ".join(headers)
 

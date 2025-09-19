@@ -1,6 +1,7 @@
 import pytest
 from starlette.testclient import TestClient
 
+from app.api.oauth_store import put_tx
 from app.main import app
 
 
@@ -23,7 +24,7 @@ def test_callback_redirects_303_and_clears_cookies(monkeypatch, status_code):
 
     # Set required cookies (state and PKCE verifier) to simulate browser
     client.cookies.set("g_state", "stateval")
-    client.cookies.set("g_code_verifier", "v" * 43)
+    put_tx("stateval", {"code_verifier": "v" * 43, "session_id": ""})
     # Ensure id_token decoding yields issuer/sub/email so callback proceeds
     monkeypatch.setattr(
         "app.api.google_oauth.jwt_decode",

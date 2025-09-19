@@ -42,6 +42,12 @@ except ImportError:
         algorithms: list[str] | None = None,
         **kwargs: _Any,
     ) -> dict:
+        # Apply default leeway like the main jwt_decode function
+        if "leeway" not in kwargs:
+            try:
+                kwargs["leeway"] = int(os.getenv("JWT_CLOCK_SKEW_S", "60"))
+            except Exception:
+                kwargs["leeway"] = 60
         algs = algorithms or ["HS256"]
         return _pyjwt.decode(token, key, algorithms=algs, **kwargs)  # type: ignore[arg-type]
 

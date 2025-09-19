@@ -7,7 +7,10 @@ test.describe('Dev login flow (proxy same-origin)', () => {
     // API client pinned to front-end origin (Next dev server)
     const api = await request.newContext({
       baseURL: FRONTEND_ORIGIN,
-      extraHTTPHeaders: { 'Accept': 'application/json' },
+      extraHTTPHeaders: {
+        'Accept': 'application/json',
+        'Origin': FRONTEND_ORIGIN, // Required for CSRF protection
+      },
     });
 
     // 1) CSRF
@@ -38,7 +41,36 @@ test.describe('Dev login flow (proxy same-origin)', () => {
     expect(whoJson?.user?.id || whoJson?.user_id).toBe('playwright');
 
     // 4) Cookie attributes (dev: host-only, Path=/, Lax, HttpOnly, NOT Secure)
-    const context = await browser.newContext({ baseURL: FRONTEND_ORIGIN });
+    // Extract cookies from login response and create browser context with them
+    const loginCookies = loginRes.headersArray().filter(h => h.name.toLowerCase() === 'set-cookie');
+    const parsedCookies = loginCookies.map(header => {
+      const cookieString = header.value;
+      const [nameValue, ...attributes] = cookieString.split('; ');
+      const [name, value] = nameValue.split('=');
+      const attrs: Record<string, string> = {};
+      attributes.forEach(attr => {
+        const [key, val] = attr.split('=');
+        attrs[key.toLowerCase()] = val || 'true';
+      });
+      return {
+        name,
+        value,
+        domain: attrs['domain'] || 'localhost',
+        path: attrs['path'] || '/',
+        httpOnly: attrs['httponly'] === 'true',
+        secure: attrs['secure'] === 'true',
+        sameSite: (attrs['samesite'] || 'Lax') as 'Strict' | 'Lax' | 'None',
+      };
+    });
+
+    const context = await browser.newContext({
+      baseURL: FRONTEND_ORIGIN,
+      // Share cookies from login response to browser context
+      storageState: {
+        cookies: parsedCookies,
+        origins: []
+      }
+    });
     const page = await context.newPage();
     await page.goto(FRONTEND_ORIGIN + '/');
     const cookies = await context.cookies(FRONTEND_ORIGIN);

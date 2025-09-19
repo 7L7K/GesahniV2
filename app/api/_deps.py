@@ -74,7 +74,8 @@ def require_admin_scope():
 
                 from app.security import jwt_decode
 
-                payload = jwt_decode(token, key=os.getenv("JWT_SECRET"))
+                # Use central JWT decoder with issuer/audience/leeway support
+                payload = jwt_decode(token, key=os.getenv("JWT_SECRET"), algorithms=["HS256"])
                 scopes = payload.get("scopes", [])
                 if isinstance(scopes, str):
                     scopes = [s.strip() for s in scopes.split()]

@@ -14,6 +14,10 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Load environment variables before any imports that depend on them
+from app.env_utils import load_env
+load_env()
+
 
 def _perform_database_preflight_check():
     """Perform a synchronous database connectivity check before app creation."""

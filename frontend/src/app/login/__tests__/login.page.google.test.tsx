@@ -20,6 +20,18 @@ jest.mock('@/lib/api', () => ({
 // Mock the auth orchestrator
 jest.mock('@/services/authOrchestrator', () => ({
     getAuthOrchestrator: jest.fn(() => ({
+        getState: jest.fn(() => ({
+            is_authenticated: false,
+            session_ready: false,
+            user_id: null,
+            user: null,
+            source: 'missing',
+            version: 1,
+            lastChecked: Date.now(),
+            isLoading: false,
+            error: null,
+            whoamiOk: false,
+        })),
         refreshAuth: jest.fn(() => Promise.resolve()),
     })),
 }));

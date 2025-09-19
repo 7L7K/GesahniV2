@@ -37,6 +37,7 @@ from app.auth.endpoints.token import dev_token, token_examples
 from ..deps.scopes import require_scope
 from ..deps.user import get_current_user_id, require_user, resolve_session_id
 from ..security import jwt_decode
+from app.session_store import new_session_id
 
 require_user_clerk = None  # Clerk removed
 from fastapi.responses import JSONResponse
@@ -104,6 +105,9 @@ logger = logging.getLogger(__name__)
 class RefreshOut(BaseModel):
     rotated: bool
     access_token: str | None = None
+    user_id: str | None = None
+    csrf: str | None = None
+    csrf_token: str | None = None
 
 
 def _decode_any(token: str) -> dict | None:
@@ -111,9 +115,7 @@ def _decode_any(token: str) -> dict | None:
         return jwt_decode(token, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
     except Exception:
         try:
-            import jwt as _pyjwt
-
-            return _pyjwt.decode(token, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
+            return jwt_decode(token, _jwt_secret(), algorithms=["HS256"])  # type: ignore[arg-type]
         except Exception:
             return None
 
@@ -536,12 +538,14 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         clerk_token: str | None = None
 
         logger.info(
-            "whoami.start",
+            "🔍 WHOAMI_IMPL_START: Starting whoami implementation",
             extra={
                 "meta": {
                     "req_id": req_id_var.get(),
                     "ip": request.client.host if request.client else "unknown",
                     "user_agent": request.headers.get("User-Agent", "unknown"),
+                    "cookies_present": list(request.cookies.keys()),
+                    "auth_header_present": "authorization" in [h.lower() for h in request.headers.keys()],
                     "timestamp": time.time(),
                 }
             },
@@ -554,13 +558,14 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
 
         token_cookie = read_access_cookie(request)
         logger.info(
-            "whoami.cookie_check",
+            "🔍 WHOAMI_COOKIE_CHECK: Checking for access token cookie",
             extra={
                 "meta": {
                     "req_id": req_id_var.get(),
                     "has_access_token_cookie": bool(token_cookie),
                     "cookie_length": len(token_cookie) if token_cookie else 0,
                     "cookie_count": len(request.cookies),
+                    "cookie_names": list(request.cookies.keys()),
                     "timestamp": time.time(),
                 }
             },
@@ -640,12 +645,15 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             )
             jwt_status = "ok"
             logger.info(
-                "whoami.cookie_jwt_decode.success",
+                "🔍 WHOAMI_JWT_DECODE_SUCCESS: Cookie JWT decoded successfully",
                 extra={
                     "meta": {
                         "req_id": req_id_var.get(),
                         "user_id": effective_uid,
                         "claims_keys": list(claims.keys()),
+                        "claims_data": claims,
+                        "jwt_status": jwt_status,
+                        "source": "cookie",
                         "timestamp": time.time(),
                     }
                 },
@@ -655,12 +663,14 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
             effective_uid = None
             jwt_status = "invalid"
             logger.error(
-                "whoami.cookie_jwt_decode.failed",
+                "🔍 WHOAMI_JWT_DECODE_FAILED: Cookie JWT decode failed",
                 extra={
                     "meta": {
                         "req_id": req_id_var.get(),
                         "error": str(e),
                         "error_type": type(e).__name__,
+                        "token_length": len(token_cookie) if token_cookie else 0,
+                        "source": "cookie",
                         "timestamp": time.time(),
                     }
                 },
@@ -802,7 +812,7 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     is_authenticated = bool(session_ready and effective_uid)
 
     logger.info(
-        "whoami.result",
+        "🔍 WHOAMI_RESULT: Final whoami result",
         extra={
             "meta": {
                 "req_id": req_id_var.get(),
@@ -811,6 +821,9 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
                 "source": src,
                 "user_id": effective_uid,
                 "jwt_status": jwt_status,
+                "token_cookie_present": bool(token_cookie),
+                "token_header_present": bool(token_header),
+                "clerk_token_present": bool(clerk_token),
                 "timestamp": time.time(),
             }
         },
@@ -880,6 +893,9 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
         resp = _JSON(body, status_code=200)
         resp.headers.setdefault("Cache-Control", "no-store, max-age=0")
         resp.headers.setdefault("Pragma", "no-cache")
+        resp.headers.setdefault("Expires", "0")
+        # Add CORS headers for better frontend compatibility
+        resp.headers.setdefault("Access-Control-Allow-Credentials", "true")
         if _rid.get():
             resp.headers.setdefault("X-Request-ID", _rid.get())
         return resp
@@ -955,6 +971,9 @@ async def whoami_impl(request: Request) -> dict[str, Any]:
     resp = _JSON(body, status_code=200)
     resp.headers.setdefault("Cache-Control", "no-store, max-age=0")
     resp.headers.setdefault("Pragma", "no-cache")
+    resp.headers.setdefault("Expires", "0")
+    # Add CORS headers for better frontend compatibility
+    resp.headers.setdefault("Access-Control-Allow-Credentials", "true")
     if _rid.get():
         resp.headers.setdefault("X-Request-ID", _rid.get())
     return resp
@@ -986,6 +1005,16 @@ async def whoami(
     """
     start_time = time.time()
     req_id = req_id_var.get()
+    
+    logger.info(f"🔍 WHOAMI_START: Request received", extra={
+        "meta": {
+            "req_id": req_id,
+            "timestamp": start_time,
+            "cookies_count": len(request.cookies),
+            "has_auth_header": "authorization" in [h.lower() for h in request.headers.keys()],
+            "user_agent": request.headers.get("user-agent", "")[:100]
+        }
+    })
 
     # Optional debug: log incoming cookie presence
     try:
@@ -1064,8 +1093,10 @@ async def whoami(
         # Set caching headers on the provided response and return dict
         try:
             response.headers["Vary"] = "Origin"
-            response.headers["Cache-Control"] = "no-store, max-age=0"
+            # Prevent any intermediary/browser caching - always fresh
+            response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
             response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
         except Exception as e:
             logger.warning(
                 "whoami: headers_error=true, error=%s", str(e), exc_info=True
@@ -1103,13 +1134,17 @@ async def whoami(
     try:
         duration = int((time.time() - start_time) * 1000)
         logger.info(
-            "auth.whoami",
-            extra={
+            "🔍 WHOAMI_RESPONSE: Returning whoami response", extra={
                 "meta": {
                     "req_id": req_id_var.get(),
                     "req_id": req_id,
                     "is_authenticated": out.get("is_authenticated", False),
+                    "session_ready": out.get("session_ready", False),
+                    "user_id": out.get("user_id"),
+                    "source": out.get("source"),
+                    "response_data": out,
                     "duration_ms": duration,
+                    "timestamp": time.time()
                 }
             },
         )
@@ -1466,20 +1501,17 @@ async def register_v1(request: Request, response: Response):
             created_at=datetime.now(UTC),
         )
 
-        session_gen = get_async_db()
-        session = await anext(session_gen)
-        try:
-            session.add(user)
-            await session.commit()
-        except IntegrityError:
-            raise HTTPException(status_code=400, detail="username_taken")
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"registration_error: {e}")
-            raise HTTPException(status_code=500, detail="registration_error")
-        finally:
-            await session.close()
+        async with get_async_db() as session:
+            try:
+                session.add(user)
+                await session.commit()
+            except IntegrityError:
+                raise HTTPException(status_code=400, detail="username_taken")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"registration_error: {e}")
+                raise HTTPException(status_code=500, detail="registration_error")
     except Exception as e:
         logger.error(f"database_error: {e}")
         raise HTTPException(status_code=500, detail="database_error")
@@ -1519,11 +1551,7 @@ async def register_v1(request: Request, response: Response):
         )  # ensure HS256
         at_jti = payload.get("jti")
         exp = payload.get("exp", time.time() + access_ttl)
-        session_id = (
-            _create_session_id(at_jti, exp)
-            if at_jti
-            else f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        )
+        session_id = _create_session_id(at_jti, exp) if at_jti else new_session_id()
 
         set_auth_cookies(
             response,
@@ -1701,10 +1729,10 @@ async def login(
             if jti:
                 session_id = _create_session_id(jti, expires_at)
             else:
-                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+                session_id = new_session_id()
         except Exception as e:
             logger.warning(f"Failed to create session ID: {e}")
-            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            session_id = new_session_id()
 
         # Use centralized cookie functions
         from ..web.cookies import set_auth_cookies
@@ -1762,12 +1790,17 @@ async def login(
         logger.warning("login: debug_log_error=true, error=%s", str(e), exc_info=True)
     # Always return tokens in dev login to support header-auth mode and debugging.
     # In cookie mode the client may ignore these fields.
+    from datetime import UTC, datetime
     return {
         "status": "ok",
         "user_id": username,
         "access_token": jwt_token,
         "refresh_token": refresh_token,
         "session_id": session_id,
+        "is_authenticated": True,  # For frontend auth state synchronization
+        "login_timestamp": datetime.now(UTC).isoformat(),
+        "auth_source": "cookie",  # Indicates tokens set as cookies
+        "session_ready": True,
     }
 
 
@@ -1855,14 +1888,15 @@ async def logout(request: Request, response: Response):
 
     # Delete session from session store
     try:
-        from ..auth import _delete_session_id
+        from ..session_store import get_session_store
 
         # Get session ID from __session cookie
         from ..cookies import read_session_cookie
 
         session_id = read_session_cookie(request)
         if session_id:
-            _delete_session_id(session_id)
+            store = get_session_store()
+            store.delete_session(session_id)
             logger.info(
                 "auth.session_deleted",
                 extra={
@@ -1937,7 +1971,7 @@ async def logout_all(request: Request, response: Response):
         )
     # Delete session id
     try:
-        from ..auth import _delete_session_id
+        from ..session_store import get_session_store
         from ..cookies import read_session_cookie
 
         sid = read_session_cookie(request)
@@ -2382,10 +2416,10 @@ async def mock_set_access_cookie(request: Request, max_age: int = 1) -> Response
         if jti:
             session_id = _create_session_id(jti, expires_at)
         else:
-            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+            session_id = new_session_id()
     except Exception as e:
         logger.warning(f"Failed to create session ID: {e}")
-        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        session_id = new_session_id()
 
     # Use centralized cookie functions
     from ..web.cookies import set_auth_cookies

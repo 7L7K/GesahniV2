@@ -53,9 +53,13 @@ def build_plan() -> list[RouterSpec]:
             RouterSpec("app.api.ask:router", "/v1"),
             # Canonical auth router mounted at /v1 so its subpaths like /auth/* map to /v1/auth/*
             RouterSpec("app.auth.endpoints:router", "/v1/auth"),
+            # Auth debug endpoints for frontend diagnostics
+            RouterSpec("app.auth.endpoints.debug:router", "/v1"),
             RouterSpec("app.api.auth_router_pats:router", "/v1"),
             RouterSpec("app.api.auth_router_pats:legacy_router", "/v1"),
             RouterSpec("app.router.auth_legacy_aliases:router", "/v1"),
+            RouterSpec("app.router.auth_api:router", ""),  # root-level auth routes like /auth/finish
+            # RouterSpec("app.api.oauth_finisher:router", "/auth"),  # OAuth finisher at /auth/finish - using auth_api endpoint instead
             RouterSpec("app.router.google_api:router", "/v1/google"),
             # Alias compatibility router provides legacy endpoints like /v1/list
             RouterSpec("app.router.alias_api:router", "/v1"),
@@ -235,6 +239,9 @@ def register_routers(app: FastAPI) -> None:
         from app.router.alias_api import register_aliases
 
         register_aliases(app, prefix="/v1")
+        # Also expose select compatibility endpoints at root-level for legacy tests/tools
+        # This safely skips any route that already exists at the same method/path.
+        register_aliases(app, prefix="")
     except Exception:
         # Non-fatal: alias router is optional
         log.debug("alias router registration skipped or failed")

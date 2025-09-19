@@ -37,9 +37,9 @@ def test_middleware_stack_setup():
         final_middleware > initial_middleware
     ), "Middleware stack should add middleware"
 
-    # Check for critical middleware
+    # Check for critical middleware (CORS is conditional, so don't require it)
     middleware_names = [mw.cls.__name__ for mw in getattr(app, "user_middleware", [])]
-    critical_middleware = ["CORSMiddleware", "RequestIDMiddleware", "AuditMiddleware"]
+    critical_middleware = ["RequestIDMiddleware", "AuditMiddleware"]
 
     for mw_name in critical_middleware:
         assert (

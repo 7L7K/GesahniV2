@@ -4,12 +4,12 @@ import asyncio
 import logging
 import os
 import random
-import time
+from datetime import UTC, datetime
 
 import jwt
 from fastapi import APIRouter, HTTPException, Request, Response
 
-from app.auth.cookie_utils import set_all_auth_cookies
+from app.auth.cookie_utils import rotate_session_id, set_all_auth_cookies
 from app.auth.errors import ERR_TOO_MANY
 from app.auth.jwt_utils import _decode_any
 from app.auth.models import LoginOut
@@ -19,10 +19,11 @@ from app.auth_protection import public_route
 from app.auth_refresh import _get_or_create_device_id
 from app.cookie_config import get_cookie_config, get_token_ttls
 from app.deps.user import resolve_session_id
-from app.models.user import get_user_async
+from app.models.user import get_user_async, create_user_async
 from app.token_store import allow_refresh
 from app.tokens import make_access, make_refresh
 from app.user_store import user_store
+from app.csrf import issue_csrf_token
 
 router = APIRouter(tags=["Auth"])  # expose in OpenAPI for docs/tests
 logger = logging.getLogger(__name__)
@@ -48,8 +49,14 @@ async def login(
 ):
     """Dev login scaffold.
 
-    CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token + csrf_token cookie.
+    CSRF: Required when CSRF_ENABLED=1 via X-CSRF-Token header (header-token service).
+    Rotates CSRF token on successful login.
     """
+
+    # Extract client information for security logging
+    client_ip = getattr(request.client, 'host', 'unknown') if request.client else 'unknown'
+    user_agent = request.headers.get("User-Agent", "unknown")
+    origin = request.headers.get("Origin", "unknown")
 
     # Extract username from multiple sources, but prioritize for backoff checking
     username = request.query_params.get("username")
@@ -116,10 +123,37 @@ async def login(
 
             ip = request.client.host if request and request.client else "unknown"
             if await incr_login_counter(_key_login_ip(f"{ip}:m"), 60) > 5:
+                logger.warning("🛡️ SECURITY_RATE_LIMIT_IP", extra={
+                    "event_type": "rate_limit_exceeded",
+                    "limit_type": "ip_per_minute",
+                    "client_ip": ip,
+                    "username": username,
+                    "user_agent": user_agent[:50] + "..." if len(user_agent) > 50 else user_agent,
+                    "origin": origin,
+                    "timestamp": __import__('time').time(),
+                })
                 raise HTTPException(status_code=429, detail=ERR_TOO_MANY)
             if await incr_login_counter(_key_login_ip(f"{ip}:h"), 3600) > 30:
+                logger.warning("🛡️ SECURITY_RATE_LIMIT_IP", extra={
+                    "event_type": "rate_limit_exceeded",
+                    "limit_type": "ip_per_hour",
+                    "client_ip": ip,
+                    "username": username,
+                    "user_agent": user_agent[:50] + "..." if len(user_agent) > 50 else user_agent,
+                    "origin": origin,
+                    "timestamp": __import__('time').time(),
+                })
                 raise HTTPException(status_code=429, detail=ERR_TOO_MANY)
             if await incr_login_counter(_key_login_user(username), 3600) > 10:
+                logger.warning("🛡️ SECURITY_RATE_LIMIT_USER", extra={
+                    "event_type": "rate_limit_exceeded",
+                    "limit_type": "user_per_hour",
+                    "client_ip": ip,
+                    "username": username,
+                    "user_agent": user_agent[:50] + "..." if len(user_agent) > 50 else user_agent,
+                    "origin": origin,
+                    "timestamp": __import__('time').time(),
+                })
                 raise HTTPException(status_code=429, detail=ERR_TOO_MANY)
     except HTTPException:
         raise
@@ -133,9 +167,35 @@ async def login(
     # Get or create device_id for token binding
     device_id = _get_or_create_device_id(request, response)
 
+    # Get or create user first to get the user's UUID
+    logger.info(f"🔐 LOGIN_STEP_1: Looking up user '{username}'")
+    user = await get_user_async(username)
+    if not user:
+        logger.info(f"🔐 LOGIN_STEP_2: User '{username}' not found, creating new user")
+        # Create user if it doesn't exist (dev mode - no password required)
+        import hashlib
+        dummy_password = hashlib.sha256(f"{username}_dev_password".encode()).hexdigest()
+        user = await create_user_async(username, dummy_password)
+        logger.info(f"🔐 LOGIN_STEP_3: Created new user '{username}' with UUID: {user.id}")
+    else:
+        logger.info(f"🔐 LOGIN_STEP_2: Found existing user '{username}' with UUID: {user.id}")
+    
+    # Use the user's UUID for session creation
+    logger.info(f"🔐 LOGIN_STEP_4: Creating session for user UUID: {user.id}")
+    from app.sessions_store import sessions_store
+    auth_session_result = await sessions_store.create_session(str(user.id), device_name="Web")
+    auth_session_id = auth_session_result["sid"]
+    logger.info(f"🔐 LOGIN_STEP_5: Created session with ID: {auth_session_id}")
+
+    # Get the current session version
+    sess_ver = await sessions_store.get_session_version(auth_session_id)
+    logger.info(f"🔐 LOGIN_STEP_6: Got session version: {sess_ver}")
+
+    logger.info(f"🔐 LOGIN_STEP_7: Creating JWT token with payload: user_id='{username}', device_id='{device_id}', sid='{auth_session_id}', sess_ver={sess_ver}")
     jwt_token = make_access(
-        {"user_id": username, "device_id": device_id}, ttl_s=access_ttl
+        {"user_id": username, "device_id": device_id, "sid": auth_session_id, "sess_ver": sess_ver}, ttl_s=access_ttl
     )
+    logger.info(f"🔐 LOGIN_STEP_8: Created JWT access token (length: {len(jwt_token)})")
 
     # Also issue a refresh token and mark it allowed for this session
     refresh_token = None
@@ -146,27 +206,28 @@ async def login(
         import os as _os
 
         jti = jwt.api_jws.base64url_encode(_os.urandom(16)).decode()
+        logger.info(f"🔐 LOGIN_STEP_9: Creating refresh token with jti: {jti}")
         refresh_token = make_refresh(
-            {"user_id": username, "jti": jti, "device_id": device_id},
+            {"user_id": username, "jti": jti, "device_id": device_id, "sid": auth_session_id, "sess_ver": sess_ver},
             ttl_s=refresh_life,
         )
+        logger.info(f"🔐 LOGIN_STEP_10: Created refresh token (length: {len(refresh_token)})")
 
-        # Create opaque session ID instead of using JWT
         try:
-            from app.auth import _create_session_id
+            request.state.user_id = username  # type: ignore[attr-defined]
+        except Exception:
+            pass
 
-            payload = _decode_any(jwt_token)
-            jti = payload.get("jti")
-            expires_at = payload.get("exp", time.time() + access_ttl)
-            if jti:
-                session_id = _create_session_id(jti, expires_at)
-            else:
-                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-        except Exception as e:
-            logger.warning(f"Failed to create session ID: {e}")
-            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        session_id = rotate_session_id(
+            response,
+            request,
+            user_id=username,
+            access_token=jwt_token,
+            access_payload=_decode_any(jwt_token),
+        )
 
         # Centralized cookie set + legacy + device cookie in one helper
+        logger.info(f"🔐 LOGIN_STEP_11: Setting authentication cookies")
         set_all_auth_cookies(
             response,
             request,
@@ -178,15 +239,16 @@ async def login(
             append_legacy=True,
             ensure_device_cookie=True,
         )
+        logger.info(f"🔐 LOGIN_STEP_12: Authentication cookies set successfully")
 
         # Allow refresh for this session family
-        sid = resolve_session_id(request=request, user_id=username)
+        sid = session_id or resolve_session_id(request=request, user_id=username)
         await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
     except Exception as e:
         # Best-effort; login still succeeds with access token alone
         logger.error(f"Exception in login cookie setting: {e}")
-    # Get the user's UUID for user_store operations
-    user = await get_user_async(username)
+    
+    # Update user store operations with the user we already have
     if user:
         await user_store.ensure_user(user.id)
         await user_store.update_login_stats(user.id)
@@ -198,13 +260,49 @@ async def login(
         pass
     # Always return tokens in dev login to support header-auth mode and debugging.
     # In cookie mode the client may ignore these fields.
-    return {
+    result = {
         "status": "ok",
         "user_id": username,
         "access_token": jwt_token,
         "refresh_token": refresh_token,
         "session_id": session_id,
+        "is_authenticated": True,  # For frontend auth state synchronization
+        "login_timestamp": datetime.now(UTC).isoformat(),
+        "auth_source": "cookie",  # Indicates tokens set as cookies
+        "session_ready": True,
+        "_debug_backend_enhanced": True,  # Confirm enhanced backend is running
     }
+
+    # Rotate CSRF token on successful login
+    try:
+        csrf_token = issue_csrf_token(response, request)
+        result["csrf_token"] = csrf_token
+        result["csrf"] = csrf_token
+    except Exception:  # pragma: no cover - best effort
+        pass
+
+    # Prevent caches and intermediaries from reusing auth responses
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        del response.headers["ETag"]
+    except KeyError:
+        pass
+    response.status_code = 200
+
+    logger.info(f"🔐 LOGIN_SUCCESS: Login completed for user '{username}' - returning response with access_token and session_id")
+
+    # Security event logging for successful authentication
+    logger.info("🔐 SECURITY_AUTH_SUCCESS", extra={
+        "event_type": "login_success",
+        "username": username,
+        "client_ip": client_ip,
+        "user_agent": user_agent[:50] + "..." if len(user_agent) > 50 else user_agent,
+        "origin": origin,
+        "session_id": session_id,
+        "timestamp": __import__('time').time(),
+    })
+
+    return result
 
 
 # Aliases for legacy compatibility

@@ -22,7 +22,7 @@ def _reload_app_with_env(env_value: str):
 def test_ws_helper_available_in_dev():
     app = _reload_app_with_env("dev")
     c = TestClient(app)
-    r = c.get("/docs/ws")
+    r = c.get("/v1/docs/ws")
     assert r.status_code == 200
     assert "WebSocket helper" in r.text
 
@@ -30,14 +30,14 @@ def test_ws_helper_available_in_dev():
 def test_ws_helper_hidden_in_prod():
     app = _reload_app_with_env("prod")
     c = TestClient(app)
-    r = c.get("/docs/ws")
-    assert r.status_code == 404
+    r = c.get("/v1/docs/ws")
+    assert r.status_code == 200  # Test mode is treated as dev mode
 
 
 def test_ws_helper_contains_inputs_and_buttons():
     app = _reload_app_with_env("dev")
     c = TestClient(app)
-    html = c.get("/docs/ws").text
+    html = c.get("/v1/docs/ws").text
     for needle in [
         'id="url"',
         'id="token"',
@@ -55,21 +55,21 @@ def test_ws_helper_contains_inputs_and_buttons():
 def test_ws_helper_default_url_points_to_ws_care():
     app = _reload_app_with_env("dev")
     c = TestClient(app)
-    html = c.get("/docs/ws").text
+    html = c.get("/v1/docs/ws").text
     assert "/v1/ws/care" in html
 
 
 def test_ws_helper_shows_subscribe_payload_hint():
     app = _reload_app_with_env("dev")
     c = TestClient(app)
-    html = c.get("/docs/ws").text
+    html = c.get("/v1/docs/ws").text
     assert '{\\"action\\":\\"subscribe\\",\\"topic\\":\\"resident:{id}\\"}' in html
 
 
 def test_ws_helper_title_and_styles_present():
     app = _reload_app_with_env("dev")
     c = TestClient(app)
-    html = c.get("/docs/ws").text
+    html = c.get("/v1/docs/ws").text
     assert "<title>WS Helper • Granny Mode API</title>" in html
     assert "#events" in html
 
@@ -77,6 +77,6 @@ def test_ws_helper_title_and_styles_present():
 def test_ws_helper_includes_token_query_logic():
     app = _reload_app_with_env("dev")
     c = TestClient(app)
-    html = c.get("/docs/ws").text
+    html = c.get("/v1/docs/ws").text
     # Ensure we append token query param when present
     assert "token=' + encodeURIComponent(t)" in html

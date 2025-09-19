@@ -6,5 +6,12 @@ export function api(path: string, init: RequestInit = {}) {
     // Deprecated: prefer apiFetch in '@/lib/api/fetch'. Kept for legacy callers.
     const base = API_BASE || '';
     const url = /^https?:\/\//i.test(path) ? path : `${base}${path}`;
+
+    // Ensure fetch is available
+    if (typeof fetch === 'undefined') {
+        console.warn('API call skipped: fetch not available');
+        return Promise.reject(new Error('fetch not available'));
+    }
+
     return fetch(url, { credentials: 'include', ...init });
 }

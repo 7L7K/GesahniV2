@@ -27,8 +27,9 @@ class LoginOut(BaseModel):
     status: str
     user_id: str
     access_token: str
-    refresh_token: str
-    session_id: str
+    refresh_token: str | None = None
+    session_id: str | None = None
+    csrf_token: str | None = None
 
 
 class RegisterOut(BaseModel):
@@ -50,3 +51,6 @@ class TokenExamplesOut(BaseModel):
 class RefreshOut(BaseModel):
     rotated: bool
     access_token: str | None = None
+    user_id: str | None = None
+    csrf_token: str | None = None
+    csrf: str | None = None

@@ -377,6 +377,7 @@ async def whoami_impl(request: Request) -> JSONResponse:
         resp = JSONResponse(body, status_code=200)
         resp.headers.setdefault("Cache-Control", "no-store, max-age=0")
         resp.headers.setdefault("Pragma", "no-cache")
+        resp.headers.setdefault("Expires", "0")
         if req_id_var.get():
             resp.headers.setdefault("X-Request-ID", req_id_var.get())
         return resp
@@ -447,6 +448,7 @@ async def whoami_impl(request: Request) -> JSONResponse:
     resp = JSONResponse(body, status_code=200)
     resp.headers.setdefault("Cache-Control", "no-store, max-age=0")
     resp.headers.setdefault("Pragma", "no-cache")
+    resp.headers.setdefault("Expires", "0")
     if req_id_var.get():
         resp.headers.setdefault("X-Request-ID", req_id_var.get())
     return resp

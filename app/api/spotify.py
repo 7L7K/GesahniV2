@@ -183,9 +183,15 @@ def _callback_redirect(error: str) -> Response:
     from starlette.responses import RedirectResponse
 
     logger.info("spotify.callback:redirect")
-    return RedirectResponse(
+    resp = RedirectResponse(
         f"{_frontend_url()}/settings#spotify?spotify_error={error}", status_code=302
     )
+    resp.headers["Cache-Control"] = "no-store"
+    try:
+        del resp.headers["ETag"]
+    except KeyError:
+        pass
+    return resp
 
 
 def _token_scope_list(token: Any) -> list[str]:
@@ -1531,7 +1537,13 @@ async def spotify_callback(
     except Exception:
         pass
 
-    return RedirectResponse(redirect_url, status_code=302)
+    resp = RedirectResponse(redirect_url, status_code=302)
+    resp.headers["Cache-Control"] = "no-store"
+    try:
+        del resp.headers["ETag"]
+    except KeyError:
+        pass
+    return resp
 
 
 @router.delete("/disconnect")
@@ -1638,7 +1650,7 @@ async def spotify_status(request: Request, response: Response) -> dict:
                 "meta": {"user_id": current_user, "returning_not_authenticated": True}
             },
         )
-        # Return status for unauthenticated users - not connected
+        # Return 401 for unauthenticated users so frontend can stop polling
         body: dict = {
             "connected": False,
             "devices_ok": False,
@@ -1649,7 +1661,7 @@ async def spotify_status(request: Request, response: Response) -> dict:
             SPOTIFY_TOKENS_EXPIRES_IN_SECONDS.labels(user=user_label).set(0)
         except Exception:
             pass
-        return JSONResponse(body, status_code=200)
+        return JSONResponse(body, status_code=401)
 
     logger.info(
         "🎵 SPOTIFY STATUS: Creating Spotify client",

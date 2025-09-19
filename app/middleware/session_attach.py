@@ -1,5 +1,6 @@
 # app/middleware/session_attach.py
 import logging
+import time
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -7,6 +8,7 @@ from starlette.requests import Request
 from app.security import _get_request_payload
 
 log = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 
 class SessionAttachMiddleware(BaseHTTPMiddleware):
@@ -14,6 +16,16 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
         # Skip preflight
         if request.method == "OPTIONS":
             return await call_next(request)
+            
+        logger.info(f"🔍 SESSION_ATTACH_START: Processing request", extra={
+            "meta": {
+                "path": request.url.path,
+                "method": request.method,
+                "cookies_present": list(request.cookies.keys()),
+                "auth_header_present": "authorization" in [h.lower() for h in request.headers.keys()],
+                "timestamp": time.time()
+            }
+        })
 
         user_id: str | None = None
         scopes: list | None = (
@@ -22,19 +34,40 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
         payload: dict | None = None  # JWT payload for scope checking functions
 
         try:
-            # Try to get user_id using existing logic first
-            try:
-                # Use resolve_user_id to avoid exceptions propagating in middleware
-                from app.deps.user import resolve_user_id
+            # OPTIMIZATION: Only do expensive database operations if we have auth tokens
+            has_auth_token = False
 
-                user_id = resolve_user_id(request=request)
-            except Exception:
+            # Check for Authorization header
+            auth_header = request.headers.get("authorization", "")
+            if auth_header.lower().startswith("bearer "):
+                has_auth_token = True
+
+            # Check for auth cookies
+            if not has_auth_token and any(
+                cookie.startswith(("GSNH_AT=", "GSNH_SESS=", "GSNH_RT="))
+                for cookie in request.cookies.keys()
+            ):
+                has_auth_token = True
+
+            # Only do expensive database operations if we have auth tokens
+            if has_auth_token:
+                try:
+                    # Use resolve_user_id to avoid exceptions propagating in middleware
+                    from app.deps.user import resolve_user_id
+
+                    user_id = resolve_user_id(request=request)
+                except Exception:
+                    user_id = None
+            else:
+                # No auth tokens present - skip expensive database operations
                 user_id = None
 
             # If that doesn't work, try to extract from JWT directly
             if not user_id or user_id == "anon":
-                # Check for Authorization header
-                auth_header = request.headers.get("authorization", "")
+                # Get token from auth sources (reuse the has_auth_token logic)
+                token = None
+
+                # Check Authorization header first
                 if auth_header.lower().startswith("bearer "):
                     token = auth_header.split(None, 1)[1].strip()
                 else:
@@ -50,7 +83,8 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
 
                         from app.security import jwt_decode
 
-                        payload = jwt_decode(token, key=os.getenv("JWT_SECRET"))
+                        # Use central JWT decoder with issuer/audience/leeway support
+                        payload = jwt_decode(token, key=os.getenv("JWT_SECRET"), algorithms=["HS256"])
                         user_id = payload.get("sub") or payload.get("uid")
                         if user_id:
                             # Successfully authenticated - normalize scopes

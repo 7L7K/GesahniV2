@@ -30,9 +30,14 @@ async def verify_ws(ws: WebSocket):
     except Exception:
         pass  # Don't fail auth due to logging issues
 
-    # Origin check (browser WS only) - use single source of truth from app.state
+    # Origin check (browser WS only) - get allowed origins from settings
+    # This should happen regardless of JWT_SECRET configuration
     origin = ws.headers.get("origin")
-    allowed_origins = getattr(ws.app.state, "allowed_origins", None)
+    try:
+        from app.settings_cors import get_cors_origins
+        allowed_origins = get_cors_origins()
+    except Exception:
+        allowed_origins = None
     if allowed_origins and origin and origin not in allowed_origins:
         log.warning(
             "ws.auth.deny: origin_not_allowed origin=%s client=%s",
@@ -159,7 +164,8 @@ async def verify_ws(ws: WebSocket):
 
     try:
         log.info("ws.auth.attempting_jwt_decode: token=%s", token[:20] + "...")
-        payload = jwt_decode(token, key=os.getenv("JWT_SECRET"))  # 60s leeway inside
+        # Use central JWT decoder with issuer/audience/leeway support
+        payload = jwt_decode(token, key=os.getenv("JWT_SECRET"), algorithms=["HS256"])
         log.info("ws.auth.jwt_decoded: payload=%s", payload)
         ws.state.user_id = (
             payload.get("sub") or payload.get("uid") or payload.get("user_id")

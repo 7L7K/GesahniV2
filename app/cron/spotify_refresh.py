@@ -24,9 +24,7 @@ async def _get_candidates(now: int) -> list[tuple[str, str, int]]:
     """Return list of (user_id, provider, expires_at) for tokens expiring within window."""
     cutoff = datetime.fromtimestamp(now + REFRESH_AHEAD_SECONDS, tz=UTC)
 
-    session_gen = get_async_db()
-    session = await anext(session_gen)
-    try:
+    async with get_async_db() as session:
         # Query tokens that need refreshing
         stmt = (
             select(
@@ -57,11 +55,7 @@ async def _get_candidates(now: int) -> list[tuple[str, str, int]]:
             expires_ts = int(expires_at.timestamp()) if expires_at else 0
             out.append((user_id, provider, expires_ts))
 
-        result_out = out
-    finally:
-        await session.close()
-
-    return result_out
+        return out
 
 
 async def _refresh_for_user(user_id: str, provider: str) -> None:
@@ -106,9 +100,7 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
 
             # Update updated_at timestamp for the token (the refresh service handles the actual token upsert)
             now = datetime.now(UTC)
-            session_gen = get_async_db()
-            session = await anext(session_gen)
-            try:
+            async with get_async_db() as session:
                 # Find the most recent token for this user/provider combination
                 stmt = (
                     select(ThirdPartyToken)
@@ -140,8 +132,6 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
                         "spotify_refresh: no token found to update",
                         extra={"user_id": user_id, "provider": provider},
                     )
-            finally:
-                await session.close()
 
             logger.info(
                 "spotify_refresh: exchange ok",

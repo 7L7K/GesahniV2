@@ -26,7 +26,13 @@ export default function AuthDebug() {
             const diag = await apiFetch('/v1/_diag/auth', { auth: true })
                 .then(r => r.json()).catch(e => ({ error: String(e) }));
 
-            setR({ me, diag, method: 'orchestrator' });
+            // Also load backend echo endpoints for visibility
+            const [hdrs, cookies] = await Promise.all([
+                apiFetch('/v1/debug/headers', { auth: false }).then(r => r.json()).catch(() => null),
+                apiFetch('/v1/debug/cookies', { auth: false }).then(r => r.json()).catch(() => null),
+            ]);
+
+            setR({ me, diag, headers: hdrs, cookies, method: 'orchestrator' });
         })();
     }, []);
 

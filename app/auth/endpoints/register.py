@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import random
 import time
 from datetime import UTC, datetime
 
@@ -10,9 +9,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy.exc import IntegrityError
 
 from app.api.auth_password import _pwd
-from app.auth import _create_session_id
+from app.auth.cookie_utils import rotate_session_id
 from app.auth.jwt_utils import _jwt_secret as _secret_fn
 from app.auth.models import RegisterOut
+from app.security import jwt_decode
 from app.auth_protection import public_route
 from app.auth_refresh import _get_or_create_device_id
 from app.cookie_config import get_token_ttls
@@ -84,30 +84,27 @@ async def register_v1(request: Request, response: Response):
             created_at=datetime.now(UTC),
         )
 
-        session_gen = get_async_db()
-        session = await anext(session_gen)
-        try:
-            session.add(user)
-            await session.commit()
-        except IntegrityError:
+        async with get_async_db() as session:
             try:
-                await session.rollback()
-            except Exception:
-                pass
-            from app.errors import json_error
+                session.add(user)
+                await session.commit()
+            except IntegrityError:
+                try:
+                    await session.rollback()
+                except Exception:
+                    pass
+                from app.errors import json_error
 
-            return json_error(
-                code="username_taken",
-                message="username already exists",
-                http_status=409,
-            )
-        except HTTPException:
-            raise
-        except Exception as e:
-            logger.error(f"ERR_REGISTRATION_ERROR: {e}")
-            raise HTTPException(status_code=500, detail="ERR_REGISTRATION_ERROR") from e
-        finally:
-            await session.close()
+                return json_error(
+                    code="username_taken",
+                    message="username already exists",
+                    http_status=409,
+                )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.error(f"ERR_REGISTRATION_ERROR: {e}")
+                raise HTTPException(status_code=500, detail="ERR_REGISTRATION_ERROR") from e
     except Exception as e:
         logger.error(f"ERR_DATABASE_ERROR: {e}")
         raise HTTPException(status_code=500, detail="ERR_DATABASE_ERROR") from e
@@ -140,15 +137,21 @@ async def register_v1(request: Request, response: Response):
 
     # Map session id and set cookies
     try:
-        payload = jwt.decode(
+        payload = jwt_decode(
             access_token, _secret_fn(), algorithms=["HS256"]
         )  # ensure HS256
-        at_jti = payload.get("jti")
-        exp = payload.get("exp", time.time() + access_ttl)
-        session_id = (
-            _create_session_id(at_jti, exp)
-            if at_jti
-            else f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+
+        try:
+            request.state.user_id = username  # type: ignore[attr-defined]
+        except Exception:
+            pass
+
+        session_id = rotate_session_id(
+            response,
+            request,
+            user_id=username,
+            access_token=access_token,
+            access_payload=payload,
         )
 
         set_auth_cookies(
@@ -166,7 +169,7 @@ async def register_v1(request: Request, response: Response):
             from app.deps.user import resolve_session_id
             from app.token_store import allow_refresh
 
-            sid = resolve_session_id(request=request, user_id=username)
+            sid = session_id or resolve_session_id(request=request, user_id=username)
             if jti:
                 await allow_refresh(sid, jti, ttl_seconds=refresh_ttl)
         except Exception:

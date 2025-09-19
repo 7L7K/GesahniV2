@@ -17,6 +17,7 @@ Design goals:
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import os
 import time
@@ -98,7 +99,13 @@ async def lifespan(app: FastAPI):
     # 6) Auth cookie config dump (only when AUTH_DEBUG=1)
     await _auth_cookie_cfg_dump(app)
 
-    # 7) Fire-and-forget daemons that are optional
+    # 7) Cookie configuration flags logging (always)
+    await _log_cookie_config_flags()
+
+    # 8) Environment doctor dump (only when ENV_DOCTOR=1)
+    await _env_doctor_dump(app)
+
+    # 8) Fire-and-forget daemons that are optional
     _start_daemons()
 
     try:
@@ -193,6 +200,34 @@ async def _auth_cookie_cfg_dump(app: FastAPI):
             dump_cookie_config()
     except Exception:
         # Never fail startup due to debug logging
+        pass
+
+
+async def _env_doctor_dump(app: FastAPI):
+    """Environment doctor dump (only when ENV_DOCTOR=1)."""
+    try:
+        if os.getenv("ENV_DOCTOR") == "1":
+            from scripts.env_doctor import KEEP
+
+            snap = {k: ("<set>" if "KEY" in k or "SECRET" in k else os.getenv(k)) for k in KEEP}
+            logger.info("[ENV] resolved at startup %s :: %s", datetime.now(timezone.utc).isoformat(), json.dumps(snap))
+    except Exception:
+        # Never fail startup due to debug logging
+        pass
+
+
+async def _log_cookie_config_flags():
+    """Log cookie configuration flags for testing path visibility."""
+    try:
+        logger.info(
+            "COOKIE_CONFIG ENV=%s FEATURE_DEV_AUTH_BYPASS=%s COOKIE_SECURE=%s COOKIE_SAMESITE=%s",
+            os.getenv("ENV"),
+            os.getenv("FEATURE_DEV_AUTH_BYPASS"),
+            os.getenv("COOKIE_SECURE"),
+            os.getenv("COOKIE_SAMESITE"),
+        )
+    except Exception:
+        # Never fail startup due to logging
         pass
 
 

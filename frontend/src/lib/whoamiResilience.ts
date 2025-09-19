@@ -18,6 +18,10 @@ if (typeof window !== 'undefined' && process.env.NODE_ENV === 'development') {
     }
 }
 
+// Import cache and dedupe utilities
+import { whoamiCache } from './whoamiCache';
+import { whoamiDedupe } from './whoamiDedupe';
+
 export interface WhoamiResponse {
     is_authenticated: boolean;
     session_ready: boolean;
@@ -30,7 +34,34 @@ export interface WhoamiResponse {
  * Fetch whoami with resilience (retry/backoff)
  * INTERNAL USE ONLY - for AuthOrchestrator
  */
-export async function fetchWhoamiWithResilience(): Promise<WhoamiResponse> {
+export async function fetchWhoamiWithResilience(opts?: { force?: boolean; noDedupe?: boolean; noCache?: boolean }): Promise<WhoamiResponse> {
+    const force = opts?.force === true;
+    const skipCache = force || opts?.noCache === true;
+    const dedupeDisabledByOpts = force || opts?.noDedupe === true;
+
+    let dedupeEnabled = true;
+    let dedupeReason: string = 'default';
+
+    if (dedupeDisabledByOpts) {
+        dedupeEnabled = false;
+        dedupeReason = force ? 'force' : 'opts';
+    } else {
+        dedupeEnabled = whoamiDedupe.shouldDedupe();
+        dedupeReason = dedupeEnabled ? 'default' : 'disableOnce';
+    }
+
+    if (!skipCache) {
+        const cached = whoamiCache.get(3000); // 3 second TTL
+        if (cached) {
+            logWhoamiTrace('cache', cached, dedupeEnabled, dedupeReason);
+            return cached;
+        }
+    }
+
+    if (!dedupeEnabled) {
+        console.debug('WhoamiResilience: Dedupe disabled for this request', { dedupeReason });
+    }
+
     const MAX_RETRIES = 3;
     let lastError: Error | null = null;
 
@@ -42,7 +73,7 @@ export async function fetchWhoamiWithResilience(): Promise<WhoamiResponse> {
                 logAuth('WHOAMI_REQUEST');
             } catch { /* noop */ }
 
-            const response = await rawWhoamiFetch();
+            const response = await rawWhoamiFetch({ dedupe: dedupeEnabled });
 
             // Debug: log response status
             try {
@@ -57,6 +88,14 @@ export async function fetchWhoamiWithResilience(): Promise<WhoamiResponse> {
                     const userId = (data && data.user && data.user.id) ? true : false;
                     logAuth('WHOAMI_USER', { user: userId });
                 } catch { /* noop */ }
+
+                // Cache successful response unless cache explicitly disabled
+                if (!skipCache) {
+                    whoamiCache.set(data);
+                }
+
+                logWhoamiTrace('network', data, dedupeEnabled, dedupeReason);
+
                 return data;
             }
 
@@ -97,17 +136,36 @@ export async function fetchWhoamiWithResilience(): Promise<WhoamiResponse> {
  * Raw whoami fetch using apiFetch with proper credentials and CSRF
  * PRIVATE - internal to this module only
  */
-async function rawWhoamiFetch(): Promise<Response> {
-    // Import apiFetch dynamically to avoid circular dependencies
+async function rawWhoamiFetch(opts: { dedupe: boolean }): Promise<Response> {
+    // Import apiFetch and routes dynamically to avoid circular dependencies
     const { apiFetch } = await import('@/lib/api/fetch');
-    return apiFetch('/v1/whoami', {
+    const { API_ROUTES } = await import('@/lib/api/routes');
+    return apiFetch(API_ROUTES.AUTH.WHOAMI, {
         method: 'GET',
         credentials: 'include',
         headers: {
             'Accept': 'application/json',
             'X-Auth-Orchestrator': 'legitimate', // Mark as legitimate call
         },
+        dedupe: opts.dedupe,
+        cache: 'no-store',
     });
+}
+
+function logWhoamiTrace(source: 'cache' | 'network', payload: WhoamiResponse, deduped: boolean, dedupeReason: string) {
+    try {
+        const authenticated = payload?.is_authenticated === true || (payload as any)?.authenticated === true;
+        console.info('AUTH whoami.trace', {
+            source,
+            cacheHit: source === 'cache',
+            deduped,
+            dedupeReason,
+            authenticated,
+            timestamp: new Date().toISOString(),
+        });
+    } catch {
+        // Never let tracing break auth flow
+    }
 }
 
 /**

@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, fetchHealth } from '@/lib/api';
 
 type ReadyStatus = 'online' | 'offline';
 type DepsStatus = { status: 'ok' | 'degraded'; checks: Record<string, 'ok' | 'error' | 'skipped'> } | null;
@@ -28,10 +28,7 @@ export function useBackendStatus() {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-                const res = await apiFetch('/v1/health', {
-                    signal: controller.signal,
-                    cache: 'no-store'
-                });
+                const res = await fetchHealth('/v1/health');
 
                 clearTimeout(timeoutId);
 
@@ -116,10 +113,7 @@ export function useBackendStatus() {
                 const controller = new AbortController();
                 const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-                const res = await apiFetch('/healthz/deps', {
-                    signal: controller.signal,
-                    cache: 'no-store'
-                });
+                const res = await fetchHealth('/healthz/deps');
 
                 clearTimeout(timeoutId);
 

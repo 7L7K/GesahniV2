@@ -102,7 +102,7 @@ export * from './api/types';
 export * from './api/utils';
 
 // Explicitly export specific functions from fetch to avoid conflicts
-export { apiFetch, handleAuthError, getSessionState } from './api/fetch';
+export { apiFetch, handleAuthError, getSessionState, fetchHealth } from './api/fetch';
 
 // Explicitly export useSessionState from auth to resolve conflict
 export { useSessionState } from './api/auth';
@@ -881,6 +881,56 @@ function _dedupKey(path: string, contextKey?: string | string[]): string {
             .concat(device ? [`device:${device}`] : [])
     );
     return `dedup ${path} ${authNs}${ctx ? ` ${ctx}` : ''}`;
+}
+
+// Authentication helper functions
+export async function login(username: string, password: string): Promise<any> {
+    const response = await apiFetch(API_ROUTES.AUTH.LOGIN, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+        auth: false, // Don't require auth for login
+    });
+
+    if (!response.ok) {
+        throw new Error(`Login failed: ${response.status}`);
+    }
+
+    // Bump auth epoch on successful login
+    bumpAuthEpoch();
+    return response.json();
+}
+
+export async function register(username: string, password: string): Promise<any> {
+    const response = await apiFetch(API_ROUTES.AUTH.REGISTER, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+        auth: false, // Don't require auth for registration
+    });
+
+    if (!response.ok) {
+        throw new Error(`Registration failed: ${response.status}`);
+    }
+
+    // Bump auth epoch on successful registration
+    bumpAuthEpoch();
+    return response.json();
+}
+
+// Auth epoch management
+let _authEpoch = '0';
+export function getAuthEpoch(): string {
+    return _authEpoch;
+}
+
+export function bumpAuthEpoch(): string {
+    _authEpoch = (parseInt(_authEpoch) + 1).toString();
+    return _authEpoch;
 }
 
 async function _dedup(path: string, contextKey?: string | string[]): Promise<unknown> {

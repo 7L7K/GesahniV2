@@ -25,8 +25,9 @@ export interface AuthOrchestrator {
 
     // Actions (only these can trigger whoami calls)
     checkAuth(): Promise<void>;
-    refreshAuth(): Promise<void>;
+    refreshAuth(opts?: { force?: boolean; noDedupe?: boolean; noCache?: boolean }): Promise<void>;
     markExplicitStateChange(): void;
+    setLogoutInProgress(state: boolean): void;
 
     // 401 handling
     handle401Response(): Promise<void>;

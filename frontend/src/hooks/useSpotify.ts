@@ -11,6 +11,8 @@ export function useSpotifyStatus(pollMs: number = 30000) {
   const [reason, setReason] = useState<string | null>(null);
   const [hasChecked, setHasChecked] = useState<boolean>(false);
   const timerRef = useRef<number | null>(null);
+  const mountedRef = useRef<boolean>(true);
+  const aborterRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     // Check feature flag - if music devices polling is disabled, don't start Spotify status polling either
@@ -26,7 +28,7 @@ export function useSpotifyStatus(pollMs: number = 30000) {
       return;
     }
 
-    let mounted = true;
+    // Component is mounted (tracked by mountedRef)
     let pollCount = 0;
 
     const poll = async () => {
@@ -50,7 +52,7 @@ export function useSpotifyStatus(pollMs: number = 30000) {
         const isAuthed = Boolean(s.is_authenticated);
         const ready = Boolean(s.session_ready);
         if (!(isAuthed && ready)) {
-          console.warn(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Auth gate blocked, will retry in ${pollMs}ms`);
+          console.warn(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Auth gate blocked (session not ready), will retry in ${pollMs}ms`);
           setHasChecked(true);
           setConnected(false);
           setReason('auth_required');
@@ -75,10 +77,17 @@ export function useSpotifyStatus(pollMs: number = 30000) {
         console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Checking status...`);
 
         // Use the dedicated status endpoint instead of polling live endpoints
+        // Abort previous in-flight request to avoid overlaps on fast state changes
+        if (aborterRef.current) {
+          try { aborterRef.current.abort(); } catch { }
+        }
+        aborterRef.current = new AbortController();
+
         const statusResponse = await apiFetch('/v1/spotify/status', {
           auth: true,
           dedupe: false,
-          cache: 'no-store'
+          cache: 'no-store',
+          signal: aborterRef.current.signal as any,
         });
 
         console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Status endpoint response`, {
@@ -89,9 +98,19 @@ export function useSpotifyStatus(pollMs: number = 30000) {
         });
 
         setHasChecked(true);
-        if (!mounted) {
+        if (!mountedRef.current) {
           console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Component unmounted, skipping update`);
           return;
+        }
+
+        if (statusResponse.status === 401) {
+          // Auth evaporated — stop polling until auth resumes
+          console.info("music.poll:stop", {
+            reason: 'auth_expired', pollCount, timestamp: new Date().toISOString(), hook: 'useSpotifyStatus'
+          });
+          setConnected(false);
+          setReason('auth_expired');
+          return; // do not schedule next poll; gated effect will resume when auth returns
         }
 
         if (statusResponse.ok) {
@@ -123,19 +142,18 @@ export function useSpotifyStatus(pollMs: number = 30000) {
 
       } catch (error) {
         console.error(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Exception during polling`, error);
-        if (!mounted) return;
+        if (!mountedRef.current) return;
         setHasChecked(true);
         setConnected(false);
         setReason('network_error');
         isConnected = false;
         finalReason = 'network_error';
       } finally {
-        if (!mounted) return;
+        if (!mountedRef.current) return;
 
-        // Don't continue polling if we have a stable state that doesn't need monitoring
-        // Only stop polling for truly stable states (connected or needs OAuth setup)
-        const shouldStopPolling = finalReason === 'needs_spotify_connect' ||
-          (isConnected && !rateLimited);
+        // Stop polling when stable: connected or needs explicit reconnect flow
+        // Keep polling when simply not connected (but authenticated) to reflect changes
+        const shouldStopPolling = finalReason === 'needs_spotify_connect' || (isConnected && !rateLimited);
 
         if (shouldStopPolling) {
           console.log(`🎵 SPOTIFY STATUS HOOK: Poll #${pollCount} - Stopping polling, stable state: ${finalReason || 'connected'}`);
@@ -157,7 +175,10 @@ export function useSpotifyStatus(pollMs: number = 30000) {
     console.log('🎵 SPOTIFY STATUS HOOK: Starting initial poll', { pollMs });
     poll();
     return () => {
-      mounted = false;
+      mountedRef.current = false;
+      if (aborterRef.current) {
+        try { aborterRef.current.abort(); } catch { }
+      }
       if (timerRef.current) window.clearTimeout(timerRef.current);
       console.log('🎵 SPOTIFY STATUS HOOK: Cleanup completed');
     };
@@ -178,7 +199,7 @@ export function useSpotifyStatus(pollMs: number = 30000) {
         }
         // Small delay to ensure auth propagation
         setTimeout(() => {
-          if (timerRef.current === null) { // Only if not already triggered
+          if (timerRef.current === null && mountedRef.current) { // Only if not already triggered and component still mounted
             // This will trigger the poll function from the main useEffect
             window.dispatchEvent(new CustomEvent('spotify:force_poll'));
           }
@@ -218,6 +239,13 @@ export function useSpotifyStatus(pollMs: number = 30000) {
       window.removeEventListener('auth:state_changed', handleAuthStateChange);
       window.removeEventListener('auth:stop_polling', handleStopPolling);
       window.removeEventListener('auth:stop_all_polling', handleStopPolling);
+    };
+  }, []);
+
+  // Cleanup effect to ensure mountedRef is set to false on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false;
     };
   }, []);
 

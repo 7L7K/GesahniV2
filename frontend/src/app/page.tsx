@@ -127,6 +127,8 @@ export default function Page() {
 
   // Update session ready based on centralized auth state
   useEffect(() => {
+    const timestamp = new Date().toISOString();
+    console.log(`🔐 SESSION_READY: ${timestamp} | Session ready changed | Value: ${authState.session_ready} | Auth: ${authState.is_authenticated} | User: ${authState.user?.id || 'unknown'}`);
     setSessionReady(authState.session_ready);
   }, [authState.session_ready]);
 
@@ -134,32 +136,46 @@ export default function Page() {
   useEffect(() => {
     if (authBootOnce.current) return;
     authBootOnce.current = true;
+    const timestamp = new Date().toISOString();
+
+    console.log(`🏠 PAGE_INIT: ${timestamp} | Main page component mounting | Auth state: ${authState.is_authenticated ? 'authenticated' : 'unauthenticated'} | User: ${authState.user?.id || 'unknown'}`);
 
     // Initialize bootstrap manager first
     bootstrapManager.initialize().then((success) => {
       if (success) {
-        console.info('Page: Bootstrap manager initialized successfully');
+        console.info(`✅ BOOTSTRAP: ${new Date().toISOString()} | Bootstrap manager initialized successfully`);
       } else {
-        console.error('Page: Bootstrap manager initialization failed');
+        console.error(`❌ BOOTSTRAP: ${new Date().toISOString()} | Bootstrap manager initialization failed`);
       }
     });
 
     // Initialize Auth Orchestrator
     authOrchestrator.initialize().then(() => {
-      console.info('Page: Auth Orchestrator initialized successfully');
+      console.info(`✅ AUTH_ORCH: ${new Date().toISOString()} | Auth Orchestrator initialized successfully`);
     }).catch((error) => {
-      console.error('Page: Auth Orchestrator initialization failed:', error);
+      console.error(`❌ AUTH_ORCH: ${new Date().toISOString()} | Auth Orchestrator initialization failed:`, error);
     });
 
     // Check for header token
     const hasHeaderToken = Boolean(getToken());
     if (hasHeaderToken) {
       setSessionReady(true);
+      console.log(`🔑 TOKEN_CHECK: ${new Date().toISOString()} | Header token found, setting session ready`);
+    } else {
+      console.log(`🔑 TOKEN_CHECK: ${new Date().toISOString()} | No header token found`);
     }
 
     setIsOnline(navigator.onLine);
-    const onUp = () => setIsOnline(true);
-    const onDown = () => setIsOnline(false);
+    console.log(`🌐 NETWORK: ${new Date().toISOString()} | Initial online status: ${navigator.onLine}`);
+
+    const onUp = () => {
+      setIsOnline(true);
+      console.log(`🌐 NETWORK: ${new Date().toISOString()} | Network status changed to ONLINE`);
+    };
+    const onDown = () => {
+      setIsOnline(false);
+      console.log(`🌐 NETWORK: ${new Date().toISOString()} | Network status changed to OFFLINE`);
+    };
     window.addEventListener('online', onUp);
     window.addEventListener('offline', onDown);
     const stored = localStorage.getItem(historyKey);
@@ -180,13 +196,17 @@ export default function Page() {
               loading: Boolean(m.loading)
             }));
           setMessages(validMessages);
+          console.log(`💾 STORAGE: ${new Date().toISOString()} | Loaded ${validMessages.length} messages from localStorage`);
         }
       } catch (error) {
-        console.error('Failed to parse stored messages:', error);
+        console.error(`💾 STORAGE: ${new Date().toISOString()} | Failed to parse stored messages:`, error);
       }
+    } else {
+      console.log(`💾 STORAGE: ${new Date().toISOString()} | No stored chat history found`);
     }
 
     return () => {
+      console.log(`🏠 PAGE_CLEANUP: ${new Date().toISOString()} | Main page component unmounting`);
       window.removeEventListener('online', onUp);
       window.removeEventListener('offline', onDown);
       // Cleanup Auth Orchestrator
@@ -208,6 +228,7 @@ export default function Page() {
   useEffect(() => {
     const ready = Boolean(authed && whoamiOk);
     if (ready !== sessionReady) {
+      console.log(`🔐 AUTH_CHANGE: ${new Date().toISOString()} | Auth state changed | Authed: ${authed} | WhoamiOk: ${whoamiOk} | SessionReady: ${ready} | User: ${authState.user?.id || 'unknown'}`);
       setSessionReady(ready);
     }
   }, [authed, whoamiOk, sessionReady]);
@@ -325,33 +346,38 @@ export default function Page() {
 
   // WebSocket connection - only when authenticated
   useEffect(() => {
+    const timestamp = new Date().toISOString();
+
     if (!authed) {
+      console.log(`🔌 WS_STOP: ${timestamp} | Stopping WebSocket connections - not authenticated | User: ${authState.user?.id || 'unknown'}`);
       // Stop WebSocket connections when not authenticated
       try {
         wsHub.stop({ music: true, care: true });
       } catch (error) {
-        console.error('Failed to stop WebSocket connections:', error);
+        console.error(`🔌 WS_ERROR: ${timestamp} | Failed to stop WebSocket connections:`, error);
       }
       return;
     }
 
     // Only start WebSocket connections when authenticated and auth state is stable
     const authOrchestrator = getAuthOrchestrator();
-    const authState = authOrchestrator.getState();
+    const currentAuthState = authOrchestrator.getState();
 
-    if (authState.is_authenticated && authState.session_ready) {
+    if (currentAuthState.is_authenticated && currentAuthState.session_ready) {
+      console.log(`🔌 WS_START: ${timestamp} | Starting WebSocket connections | User: ${authState.user?.id || 'unknown'}`);
       try {
         wsHub.start({ music: true, care: true });
       } catch (error) {
-        console.error('Failed to start WebSocket connections:', error);
+        console.error(`🔌 WS_ERROR: ${timestamp} | Failed to start WebSocket connections:`, error);
       }
     }
 
     return () => {
+      console.log(`🔌 WS_CLEANUP: ${new Date().toISOString()} | Cleaning up WebSocket connections | User: ${authState.user?.id || 'unknown'}`);
       try {
         wsHub.stop({ music: true, care: true });
       } catch (error) {
-        console.error('Failed to stop WebSocket connections:', error);
+        console.error(`🔌 WS_ERROR: ${new Date().toISOString()} | Failed to stop WebSocket connections in cleanup:`, error);
       }
     };
   }, [authed]);
@@ -390,6 +416,9 @@ export default function Page() {
   const handleSend = async (content: string) => {
     if (!content.trim() || loading) return;
 
+    const timestamp = new Date().toISOString();
+    console.log(`💬 CHAT_SEND: ${timestamp} | User sent message | Length: ${content.trim().length} chars | Auth: ${authed} | User: ${authState.user?.id || 'unknown'}`);
+
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -407,7 +436,9 @@ export default function Page() {
     setLoading(true);
 
     try {
+      console.log(`🤖 AI_REQUEST: ${new Date().toISOString()} | Sending prompt to AI | Model: auto`);
       const response = await sendPrompt(content.trim(), 'auto');
+      console.log(`🤖 AI_RESPONSE: ${new Date().toISOString()} | Received AI response | Length: ${response.length} chars`);
 
       setMessages(prev => prev.map(msg =>
         msg.id === assistantMessage.id
@@ -418,8 +449,9 @@ export default function Page() {
       // Save to localStorage
       const updatedMessages = [...messages, userMessage, { ...assistantMessage, content: response, loading: false }];
       localStorage.setItem(historyKey, JSON.stringify(updatedMessages));
+      console.log(`💾 STORAGE: ${new Date().toISOString()} | Saved ${updatedMessages.length} messages to localStorage`);
     } catch (error) {
-      console.error('Failed to send message:', error);
+      console.error(`❌ CHAT_ERROR: ${new Date().toISOString()} | Failed to send message:`, error);
       setMessages(prev => prev.map(msg =>
         msg.id === assistantMessage.id
           ? { ...msg, content: 'Sorry, I encountered an error. Please try again.', loading: false }
@@ -431,6 +463,7 @@ export default function Page() {
   };
 
   const clearHistory = () => {
+    console.log(`🗑️ CHAT_CLEAR: ${new Date().toISOString()} | User cleared chat history | Previous count: ${messages.length} | User: ${authState.user?.id || 'unknown'}`);
     setMessages([createInitialMessage()]);
     localStorage.removeItem(historyKey);
   };
@@ -453,7 +486,7 @@ export default function Page() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <p className="text-destructive mb-4">Authentication error: {authState.error}</p>
-          <Button onClick={() => authOrchestrator.refreshAuth()}>
+          <Button onClick={() => authOrchestrator.refreshAuth({ force: true })}>
             Retry
           </Button>
         </div>
@@ -558,7 +591,7 @@ export default function Page() {
                   musicStateFetchAttempted.current = false;
                   // Only refresh auth if we have tokens
                   if (getToken()) {
-                    authOrchestrator.refreshAuth();
+                    authOrchestrator.refreshAuth({ force: true });
                   }
                 }}
                 className="w-full"

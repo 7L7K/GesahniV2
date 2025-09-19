@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import base64
 import email.utils
+import jwt
 import os
-import random
 import time
 
 from fastapi import APIRouter, Request
@@ -34,6 +34,7 @@ def _require_user_id(req: Request) -> str:
 
 def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "anon"):
     from uuid import uuid4
+    from app.auth.cookie_utils import rotate_session_id
 
     jti = uuid4().hex
     # Use tokens.py facade instead of direct JWT encoding
@@ -52,27 +53,26 @@ def _mint_cookie_redirect(request: Request, target_url: str, *, user_id: str = "
 
     resp = RedirectResponse(url=target_url, status_code=302)
 
-    # Create session ID for the access token
     try:
-        from app.auth import _create_session_id
+        request.state.user_id = user_id  # type: ignore[attr-defined]
+    except Exception:
+        pass
 
+    try:
+        # Use central JWT decoder with issuer/audience/leeway support
         payload = jwt_decode(
-            access_token, os.getenv("JWT_SECRET"), algorithms=["HS256"]
+            access_token, key=os.getenv("JWT_SECRET"), algorithms=["HS256"]
         )
-        jti = payload.get("jti")
-        expires_at = payload.get("exp", time.time() + access_ttl)
-        if jti:
-            session_id = _create_session_id(jti, expires_at)
-        else:
-            session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-    except Exception as e:
-        import logging
+    except Exception:
+        payload = {}
 
-        logger = logging.getLogger(__name__)
-        logger.warning(
-            f"Failed to create session ID: {e}", extra={"meta": {"error": str(e)}}
-        )
-        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+    session_id = rotate_session_id(
+        resp,
+        request,
+        user_id=user_id,
+        access_token=access_token,
+        access_payload=payload,
+    )
 
     # Use centralized cookie functions
     from app.web.cookies import set_auth_cookies

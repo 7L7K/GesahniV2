@@ -7,6 +7,13 @@ from .refresh import router as refresh_router
 from .register import router as register_router
 from .token import router as token_router
 
+# Import diagnostics router
+try:
+    from ..diagnostics import router as diagnostics_router
+    diagnostics_available = True
+except ImportError:
+    diagnostics_available = False
+
 router = APIRouter(tags=["Auth"])
 router.include_router(login_router)
 router.include_router(register_router)
@@ -14,3 +21,7 @@ router.include_router(refresh_router)
 router.include_router(logout_router)
 router.include_router(token_router)
 router.include_router(debug_router)
+
+# Include diagnostics router if available
+if diagnostics_available:
+    router.include_router(diagnostics_router)

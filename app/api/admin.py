@@ -328,9 +328,7 @@ async def admin_user_identities(user_id: str):
         from app.db.core import get_async_db
         from app.db.models import AuthIdentity
 
-        session_gen = get_async_db()
-        session = await anext(session_gen)
-        try:
+        async with get_async_db() as session:
             stmt = select(AuthIdentity).where(AuthIdentity.user_id == user_id)
             result = await session.execute(stmt)
             identities = result.scalars().all()
@@ -388,8 +386,6 @@ async def admin_user_identities(user_id: str):
                 )
 
             return {"user_id": user_id, "identities": out}
-        finally:
-            await session.close()
     except Exception as e:
         logger.exception("admin.user_identities failed: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
@@ -412,9 +408,7 @@ async def admin_unlink_identity(
         from app.db.core import get_async_db
         from app.db.models import AuthIdentity, AuthUser
 
-        session_gen = get_async_db()
-        session = await anext(session_gen)
-        try:
+        async with get_async_db() as session:
             # Verify identity belongs to user
             stmt = select(AuthIdentity).where(
                 AuthIdentity.id == identity_id, AuthIdentity.user_id == user_id
@@ -450,8 +444,6 @@ async def admin_unlink_identity(
             stmt = delete(AuthIdentity).where(AuthIdentity.id == identity_id)
             await session.execute(stmt)
             await session.commit()
-        finally:
-            await session.close()
 
         # Mark tokens invalid for this identity
         try:
@@ -461,23 +453,20 @@ async def admin_unlink_identity(
 
             from app.db.models import ThirdPartyToken
 
-            session_gen = get_async_db()
-            session = await anext(session_gen)
-            try:
-                stmt = (
-                    update(ThirdPartyToken)
-                    .where(ThirdPartyToken.identity_id == identity_id)
-                    .values(is_valid=False, updated_at=datetime.now(UTC))
-                )
-                await session.execute(stmt)
-                await session.commit()
-            except Exception:
-                # best-effort: log and continue
-                logger.exception(
-                    "Failed to mark tokens invalid for identity %s", identity_id
-                )
-            finally:
-                await session.close()
+            async with get_async_db() as session:
+                try:
+                    stmt = (
+                        update(ThirdPartyToken)
+                        .where(ThirdPartyToken.identity_id == identity_id)
+                        .values(is_valid=False, updated_at=datetime.now(UTC))
+                    )
+                    await session.execute(stmt)
+                    await session.commit()
+                except Exception:
+                    # best-effort: log and continue
+                    logger.exception(
+                        "Failed to mark tokens invalid for identity %s", identity_id
+                    )
         except Exception as e:
             logger.exception("token_invalidation_failed: %s", e)
 

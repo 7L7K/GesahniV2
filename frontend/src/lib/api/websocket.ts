@@ -7,7 +7,7 @@ import { getToken } from './auth';
 
 // WebSocket connections always go to the backend API server, never the frontend proxy
 const useDevProxy = (process.env.NEXT_PUBLIC_USE_DEV_PROXY || 'false') === 'true';
-const apiOrigin = (process.env.NEXT_PUBLIC_API_ORIGIN || "http://localhost:8000").replace(/\/$/, '');
+const apiOrigin = (process.env.NEXT_PUBLIC_API_ORIGIN || process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000").replace(/\/$/, '');
 const WS_API_URL = apiOrigin; // WebSockets always need absolute backend URLs
 
 export function wsUrl(path: string): string {

@@ -13,7 +13,6 @@ ALERTING THRESHOLDS:
 import inspect
 import logging
 import os
-import random
 import secrets
 import time
 from urllib.parse import urlencode
@@ -22,6 +21,7 @@ from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel
 
 from .. import cookie_config as cookie_cfg
+from ..auth.cookie_utils import rotate_session_id
 from ..error_envelope import raise_enveloped
 from ..integrations.google.state import (
     generate_pkce_challenge,
@@ -31,6 +31,8 @@ from ..integrations.google.state import (
 )
 from ..logging_config import req_id_var
 from ..security import jwt_decode  # Direct import from main security module
+from ..tokens import decode_jwt_token
+from .oauth_store import pop_tx, put_tx
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Auth"])
@@ -221,6 +223,11 @@ def _error_response(request: Request, msg: str, status: int = 400) -> Response:
         media_type="application/json",
         status_code=status,
     )
+    resp.headers["Cache-Control"] = "no-store"
+    try:
+        del resp.headers["ETag"]
+    except KeyError:
+        pass
     try:
         from ..cookies import clear_oauth_state_cookies
 
@@ -393,6 +400,28 @@ async def google_login_url(request: Request) -> Response:
 
         current_session = read_session_cookie(request)
 
+        try:
+            put_tx(
+                state,
+                {
+                    "code_verifier": code_verifier,
+                    "session_id": current_session or "",
+                    "created_at": int(time.time()),
+                },
+                ttl_seconds=300,
+            )
+        except Exception as exc:
+            logger.warning(
+                "oauth.state_store_failure",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "error": str(exc),
+                        "component": "google_oauth",
+                    }
+                },
+            )
+
         set_oauth_state_cookies(
             resp=http_response,
             state=state,
@@ -400,7 +429,7 @@ async def google_login_url(request: Request) -> Response:
             request=request,
             ttl=300,  # 5 minutes
             provider="g",  # Google-specific cookie prefix
-            code_verifier=code_verifier,  # Store PKCE verifier for callback
+            code_verifier=None,
             session_id=current_session,
         )
 
@@ -552,37 +581,10 @@ async def google_callback(request: Request) -> Response:
     # Get state cookie and validate
     state_cookie = request.cookies.get("g_state")
 
-    # Get PKCE code verifier from cookie
-    code_verifier_cookie = request.cookies.get("g_code_verifier")
-
-    # For local development, bypass validations if cookie is missing
+    # For local development, bypass certain validations when explicitly enabled
     dev_mode = os.getenv("DEV_MODE", "0").lower() in {"1", "true", "yes", "on"}
 
-    # Enforce presence of PKCE verifier for security (bypass in dev mode for testing)
-    if not code_verifier_cookie and not dev_mode:
-        duration = (time.time() - start_time) * 1000
-        _log_error(
-            "ValidationError",
-            "Missing PKCE code verifier",
-            "OAuth callback missing PKCE verifier",
-        )
-        _log_request_summary(request, 400, duration, error="missing_verifier")
-        return _error_response(request, "missing_verifier", status=400)
-    elif not code_verifier_cookie and dev_mode:
-        logger.warning(
-            "Development mode: Bypassing PKCE verifier validation",
-            extra={
-                "meta": {
-                    "req_id": req_id,
-                    "component": "google_oauth",
-                    "msg": "pkce_verifier_bypassed_dev",
-                }
-            },
-        )
-        # Use a dummy verifier for dev mode
-        code_verifier_cookie = (
-            "dev_mode_dummy_verifier" * 3
-        )  # 75 chars to meet length requirement
+    code_verifier_value: str | None = None
 
     logger.info(
         "State cookie validation",
@@ -728,6 +730,65 @@ async def google_callback(request: Request) -> Response:
             _log_request_summary(request, 400, duration, error="invalid_state")
             return _error_response(request, "invalid_state", status=400)
 
+    stored_session_id = ""
+    try:
+        tx_record = pop_tx(state)
+    except Exception as exc:
+        tx_record = None
+        logger.warning(
+            "oauth.state_store_read_failure",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "error": str(exc),
+                }
+            },
+        )
+
+    if tx_record:
+        code_verifier_value = tx_record.get("code_verifier") or None
+        stored_session_id = tx_record.get("session_id") or ""
+    else:
+        # Fallback to legacy cookie if present
+        legacy_code_verifier = request.cookies.get("g_code_verifier")
+        code_verifier_value = legacy_code_verifier if legacy_code_verifier else None
+
+    if stored_session_id and current_session and stored_session_id != current_session:
+        logger.info(
+            "oauth.state_session_mismatch",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "stored_session": stored_session_id[:32],
+                    "cookie_session": current_session[:32],
+                }
+            },
+        )
+
+    if not code_verifier_value and not dev_mode:
+        duration = (time.time() - start_time) * 1000
+        _log_error(
+            "ValidationError",
+            "Missing PKCE code verifier",
+            "OAuth callback missing PKCE verifier",
+        )
+        _log_request_summary(request, 400, duration, error="missing_verifier")
+        return _error_response(request, "missing_verifier", status=400)
+    elif not code_verifier_value and dev_mode:
+        logger.warning(
+            "Development mode: Bypassing PKCE verifier validation",
+            extra={
+                "meta": {
+                    "req_id": req_id,
+                    "component": "google_oauth",
+                    "msg": "pkce_verifier_bypassed_dev",
+                }
+            },
+        )
+        code_verifier_value = "dev_mode_dummy_verifier" * 3
+
     # Mark cookies for clearing (actual clearing will be applied to final response)
     logger.info(
         "Preparing to clear OAuth state cookies after validation",
@@ -746,7 +807,7 @@ async def google_callback(request: Request) -> Response:
         extra={
             "meta": {"req_id": req_id, "component": "google_oauth"},
             "state_ok": state_valid,
-            "has_verifier": bool(code_verifier_cookie),
+            "has_verifier": bool(code_verifier_value),
         },
     )
 
@@ -818,12 +879,13 @@ async def google_callback(request: Request) -> Response:
             )
             # Force session deletion for safety (rotation will occur on cookie write)
             try:
-                from ..auth import _delete_session_id
+                from ..session_store import get_session_store
                 from ..cookies import read_session_cookie
 
                 old_sess = read_session_cookie(request)
                 if old_sess:
-                    _delete_session_id(old_sess)
+                    store = get_session_store()
+                    store.delete_session(old_sess)
             except Exception:
                 pass
     except Exception:
@@ -848,10 +910,10 @@ async def google_callback(request: Request) -> Response:
                     "component": "google_oauth",
                     "msg": "token_exchange_started",
                     "has_code": bool(code),
-                    "has_code_verifier": bool(code_verifier_cookie),
+                    "has_code_verifier": bool(code_verifier_value),
                     "code_length": len(code) if code else 0,
                     "code_verifier_length": (
-                        len(code_verifier_cookie) if code_verifier_cookie else 0
+                        len(code_verifier_value) if code_verifier_value else 0
                     ),
                 }
             },
@@ -869,7 +931,7 @@ async def google_callback(request: Request) -> Response:
                 import inspect
 
                 maybe = go.exchange_code(
-                    code, state, verify_state=False, code_verifier=code_verifier_cookie
+                    code, state, verify_state=False, code_verifier=code_verifier_value
                 )
                 if inspect.isawaitable(maybe):
                     creds = await maybe
@@ -1477,158 +1539,29 @@ async def google_callback(request: Request) -> Response:
             # Defensive: if q is undefined or any error occurs, fall back silently
             pass
 
-        # Decide whether to perform a 302 redirect or return an HTML shim that
-        # sets cookies and immediately redirects via JS. The HTML shim can be
-        # more reliable for some browsers when Set-Cookie appears on redirect
-        # responses.
-        #
-        # Note: Default to HTML shim (1) to avoid proxy issues with Set-Cookie
-        # headers on redirect responses. Proxies may drop these headers.
-        use_html_shim = os.getenv("OAUTH_HTML_REDIRECT", "1").lower() in {
-            "1",
-            "true",
-            "yes",
-            "on",
-        }
+        # Redirect to OAuth finisher endpoint instead of setting cookies directly
+        # The finisher will handle cookie setting and final redirect to frontend
+        from starlette.responses import RedirectResponse
 
-        # Get TTLs from centralized configuration
-        access_ttl, refresh_ttl = cookie_cfg.get_token_ttls()
+        finisher_url = f"/auth/finish?user_id={uid}"
 
-        # Optional legacy __session cookie for integrations
-        if use_html_shim:
-            # Return an HTML page that immediately navigates to the frontend
-            # root via JS. Set cookies on this 200 response so browsers reliably
-            # persist them even when redirects might be finicky.
-            from starlette.responses import HTMLResponse
-
-            html = f"""<!doctype html>
-<html><head><meta charset=\"utf-8\"><meta http-equiv=\"x-ua-compatible\" content=\"ie=edge\">
-<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">
-<title>Signing in...</title></head>
-<body>
-<p>Signing you in… If you are not redirected, <a id=\"link\" href=\"{final_root}\">click here</a>.</p>
-<script>window.location.replace({final_root!r});</script>
-</body></html>"""
-
-            resp = HTMLResponse(content=html, status_code=200)
-        else:
-            from starlette.responses import RedirectResponse
-
-            # Use 302 (Found) to be compatible with tests and common browser behavior
-            resp = RedirectResponse(url=final_root, status_code=302)
-
-        session_id = None
-        if os.getenv("ENABLE_SESSION_COOKIE", "") in ("1", "true", "yes"):
-            # Create opaque session ID instead of using JWT
-            try:
-                from ..auth import _create_session_id
-
-                payload = jwt_decode(at, os.getenv("JWT_SECRET"), algorithms=["HS256"])
-                jti = payload.get("jti")
-                expires_at = payload.get("exp", time.time() + access_ttl)
-                if jti:
-                    session_id = _create_session_id(jti, expires_at)
-                else:
-                    session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-            except Exception as e:
-                logger.warning(
-                    "Failed to create session ID",
-                    extra={
-                        "meta": {
-                            "req_id": req_id,
-                            "component": "google_oauth",
-                            "msg": "session_id_creation_failed",
-                            "error": str(e),
-                        }
-                    },
-                )
-                session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
-
-        # Use centralized cookie functions
-        from ..web.cookies import set_auth_cookies
-
-        # Confirm resolved cookie attributes are localhost-safe for dev
+        # Use 302 (Found) to be compatible with tests and common browser behavior
+        resp = RedirectResponse(url=finisher_url, status_code=302)
+        resp.headers["Cache-Control"] = "no-store"
         try:
-            resolved_ccfg = cookie_cfg.get_cookie_config(request)
-            # Log resolved cookie attributes for debugging and verification
-            logger.info(
-                "Resolved cookie attributes",
-                extra={
-                    "meta": {
-                        "req_id": req_id,
-                        "path": resolved_ccfg.get("path"),
-                        "samesite": resolved_ccfg.get("samesite"),
-                        "secure": resolved_ccfg.get("secure"),
-                        "httponly": resolved_ccfg.get("httponly"),
-                        "domain": resolved_ccfg.get("domain"),
-                    }
-                },
-            )
-
-            # Emit a warning if attributes look unsafe for localhost development
-            if cookie_cfg._get_scheme(request) != "https":
-                if bool(resolved_ccfg.get("secure")):
-                    logger.warning(
-                        "Cookie Secure=True on non-HTTPS request; overriding for dev may be required",
-                        extra={"meta": {"req_id": req_id}},
-                    )
-                if str(resolved_ccfg.get("samesite", "")).lower() == "none":
-                    logger.warning(
-                        "Cookie SameSite=None on non-HTTPS request; this may prevent browsers from storing cookies on localhost",
-                        extra={"meta": {"req_id": req_id}},
-                    )
-        except Exception:
-            # Best-effort only; do not fail the flow if cookie config lookup/logging fails
+            del resp.headers["ETag"]
+        except KeyError:
             pass
 
-        # Rotate session and CSRF on login to prevent replay from old anon sessions
         try:
-            from ..auth import _delete_session_id
-            from ..web.cookies import read_session_cookie, set_csrf_cookie
-
-            session_before = read_session_cookie(request)
-        except Exception:
-            session_before = None
-
-        # If there is an existing session, delete it (rotate)
-        try:
-            if session_before:
-                try:
-                    _delete_session_id(session_before)
-                except Exception:
-                    # best-effort cleanup
-                    pass
+            request.state.user_id = uid  # type: ignore[attr-defined]
         except Exception:
             pass
 
-        # Write cookies using the canonical names
-        set_auth_cookies(
-            resp,
-            access=at,
-            refresh=rt,
-            session_id=session_id,
-            access_ttl=access_ttl,
-            refresh_ttl=refresh_ttl,
-            request=request,
-        )
-
-        # Rotate CSRF token: set only when using HTML shim (cookies on 200 responses)
-        try:
-            if use_html_shim:
-                import secrets as _secrets
-
-                csrf_token = _secrets.token_urlsafe(16)
-                # Short TTL for CSRF token (e.g., 1 hour)
-                from ..web.cookies import set_csrf_cookie
-
-                set_csrf_cookie(resp, token=csrf_token, ttl=3600, request=request)
-        except Exception:
-            pass
-
-        # Telemetry: log canonical handoff details and session rotation info
+        # Telemetry: log OAuth callback handoff to finisher
         try:
             logger.info(
-                "oauth.login_telemetry",
+                "oauth.callback_redirect_to_finisher",
                 extra={
                     "meta": {
                         "req_id": req_id,
@@ -1636,47 +1569,8 @@ async def google_callback(request: Request) -> Response:
                         "identity_id": identity_id_used,
                         "provider_sub": provider_sub,
                         "email": email,
-                        "session_before": session_before,
-                        "session_after": session_id,
-                    }
-                },
-            )
-        except Exception:
-            pass
-
-        # Emit compact cookie-write observability so ops can verify attributes/names at a glance
-        try:
-            # Report canonical names in logs
-            try:
-                from ..web.cookies import NAMES
-
-                cookie_names_written = [NAMES.access, NAMES.refresh]
-            except Exception:
-                cookie_names_written = ["access_token", "refresh_token"]
-            # Use previously resolved cookie config when available
-            ccfg = (
-                resolved_ccfg
-                if "resolved_ccfg" in locals()
-                else cookie_cfg.get_cookie_config(request)
-            )
-            samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
-            auth_cookie_attrs = {
-                "path": ccfg.get("path", "/"),
-                "samesite": samesite_map.get(
-                    str(ccfg.get("samesite", "lax")).lower(), "Lax"
-                ),
-                "secure": bool(ccfg.get("secure", False)),
-                "http_only": bool(ccfg.get("httponly", True)),
-            }
-            logger.info(
-                "oauth.callback.cookies_written",
-                extra={
-                    "meta": {
-                        "req_id": req_id,
-                        "set_auth_cookies": True,
-                        "cookie_names_written": cookie_names_written,
-                        "auth_cookie_attrs": auth_cookie_attrs,
-                        "redirect": final_root,
+                        "finisher_url": finisher_url,
+                        "redirect_to_finisher": True,
                     }
                 },
             )
@@ -1685,26 +1579,7 @@ async def google_callback(request: Request) -> Response:
 
         duration = (time.time() - start_time) * 1000
 
-        # Log successful completion with required fields and cookie attributes
-        try:
-            ccfg = cookie_cfg.get_cookie_config(request)
-            samesite_map = {"lax": "Lax", "strict": "Strict", "none": "None"}
-            auth_cookie_attrs = {
-                "path": ccfg.get("path", "/"),
-                "samesite": samesite_map.get(
-                    str(ccfg.get("samesite", "lax")).lower(), "Lax"
-                ),
-                "secure": bool(ccfg.get("secure", False)),
-                "http_only": bool(ccfg.get("httponly", True)),
-            }
-        except Exception:
-            auth_cookie_attrs = {
-                "path": "/",
-                "samesite": "Lax",
-                "secure": False,
-                "http_only": True,
-            }
-
+        # Log successful completion - cookies will be set by finisher
         logger.info(
             "oauth.callback.success",
             extra={
@@ -1714,10 +1589,8 @@ async def google_callback(request: Request) -> Response:
                     "msg": "oauth.callback.success",
                     "state_valid": state_valid,
                     "token_exchange": "ok",
-                    "set_auth_cookies": True,
-                    "auth_cookie_attrs": auth_cookie_attrs,
-                    "redirect_to": final_root,
-                    "redirect": final_root,
+                    "set_auth_cookies": False,  # Cookies set by finisher, not callback
+                    "redirect_to_finisher": finisher_url,
                     "google_token_latency_ms": int(token_exchange_duration),
                     "trace_id": trace_id,
                 }
@@ -1896,6 +1769,9 @@ async def google_callback(request: Request) -> Response:
         # Log callback failure with required fields
         # Emit error with structured reason code
         reason_code = "oauth_exchange_failed"
+
+        # Use the reason_code as the message for consistency with error response
+        msg = reason_code
         logger.error(
             "oauth.callback.fail",
             extra={

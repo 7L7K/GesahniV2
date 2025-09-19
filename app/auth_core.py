@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import logging
 import os
 import time
+from hashlib import sha256
 from typing import Any
 
 import jwt
@@ -56,6 +58,112 @@ class AuthConfig:
 
 
 CFG = AuthConfig()
+
+
+def _stable_hash(value: str | None) -> str:
+    if not value:
+        return ""
+    try:
+        return sha256(value.encode("utf-8")).hexdigest()
+    except Exception:
+        return ""
+
+
+def _truncate_ip(ip: str) -> str:
+    if not ip:
+        return ""
+    try:
+        addr = ipaddress.ip_address(ip)
+        ip_str = addr.exploded
+        if isinstance(addr, ipaddress.IPv4Address):
+            return ".".join(ip_str.split(".")[:3])
+        return ":".join(ip_str.split(":")[:4])
+    except Exception:
+        return ""
+
+
+def _extract_client_fingerprint(target: Request | WebSocket | None) -> dict[str, str]:
+    if target is None:
+        return {"ua_hash": "", "ip_hash": "", "device_id": "", "version": 2}
+
+    try:
+        ua = target.headers.get("user-agent", "")
+    except Exception:
+        ua = ""
+
+    try:
+        client_ip = target.client.host if target.client else ""
+    except Exception:
+        client_ip = ""
+
+    device_id = ""
+    try:
+        if isinstance(target, Request):
+            device_id = target.cookies.get("device_id", "")
+        elif isinstance(target, WebSocket):
+            raw_cookie = target.headers.get("cookie") or ""
+            for part in raw_cookie.split(";"):
+                name, _, value = part.strip().partition("=")
+                if name == "device_id":
+                    device_id = value
+                    break
+    except Exception:
+        device_id = ""
+
+    ip_scope = _truncate_ip(client_ip)
+
+    return {
+        "ua_hash": _stable_hash(ua)[:32],
+        "ip_hash": _stable_hash(ip_scope)[:32] if ip_scope else "",
+        "device_id": device_id or "",
+        "version": 2,
+    }
+
+
+def _fingerprint_matches(identity: dict[str, Any], target: Request | WebSocket) -> bool:
+    fingerprint = identity.get("fingerprint")
+    if not isinstance(fingerprint, dict):
+        return True
+
+    current = _extract_client_fingerprint(target)
+
+    stored_ua = str(fingerprint.get("ua_hash") or "").strip()
+    if stored_ua and stored_ua != current.get("ua_hash", ""):
+        logger.info(
+            "auth.session_user_agent_mismatch",
+            extra={
+                "meta": {
+                    "stored": stored_ua,
+                    "current": current.get("ua_hash", ""),
+                }
+            },
+        )
+        return False
+
+    stored_device = str(fingerprint.get("device_id") or "").strip()
+    current_device = current.get("device_id") or ""
+    if stored_device and current_device and stored_device != current_device:
+        logger.info(
+            "auth.session_device_id_mismatch",
+            extra={"meta": {"stored": stored_device[:8], "current": current_device[:8]}},
+        )
+        # Device ID mismatch is now a soft signal - log but allow session to continue
+        # This prevents user lockouts while still tracking device changes
+
+    stored_ip = str(fingerprint.get("ip_hash") or "").strip()
+    current_ip = current.get("ip_hash", "")
+    if stored_ip and stored_ip != current_ip:
+        logger.info(
+            "auth.session_ip_delta",
+            extra={
+                "meta": {
+                    "stored": stored_ip[:8],
+                    "current": current_ip[:8],
+                }
+            },
+        )
+
+    return True
 
 
 def _hs_decode(token: str, leeway: int) -> dict:
@@ -252,7 +360,7 @@ def extract_token_metadata(token: str) -> dict:
 
         # Try to get basic claims without verification
         try:
-            unverified = jwt.decode(token, options={"verify_signature": False})
+            unverified = jwt_decode(token, options={"verify_signature": False})
             user_id = unverified.get("sub") or unverified.get("user_id", "unknown")
             token_type_claim = unverified.get("type", "unknown")
             jti = unverified.get("jti", "unknown")
@@ -298,15 +406,19 @@ def extract_token_metadata(token: str) -> dict:
 
 
 def extract_token(target: Request | WebSocket) -> tuple[str, str | None]:
-    """Unified token extraction with precedence: access cookie > header > session cookie.
+    """Unified token extraction with precedence: Authorization header > access cookie > session cookie."""
 
-    Returns (source, token) where source in {"access_cookie", "authorization", "session"}.
-    token is None when nothing present.
-    """
-    # 1) Access token cookie (highest priority)
+    # 1) Authorization header (explicit client choice)
+    try:
+        auth = target.headers.get("Authorization")
+        if auth and auth.startswith("Bearer "):
+            return ("authorization", auth.split(" ", 1)[1])
+    except Exception:
+        pass
+
+    # 2) Access token cookie
     try:
         if isinstance(target, Request):
-            # Check canonical names first, then legacy names
             tok = (
                 target.cookies.get(f"__Host-{NAMES.access}")
                 or target.cookies.get(NAMES.access)
@@ -326,13 +438,7 @@ def extract_token(target: Request | WebSocket) -> tuple[str, str | None]:
                     return ("access_cookie", p.split("=", 1)[1])
     except Exception:
         pass
-    # 2) Authorization header (second priority)
-    try:
-        auth = target.headers.get("Authorization")
-        if auth and auth.startswith("Bearer "):
-            return ("authorization", auth.split(" ", 1)[1])
-    except Exception:
-        pass
+
     # 3) Session cookie (canonical first; legacy optional)
     try:
         if isinstance(target, Request):
@@ -388,8 +494,27 @@ def resolve_auth(target: Request | WebSocket) -> dict[str, Any]:
                 except Exception:
                     pass
             if ident:
-                payload = ident
-                user_id = str(ident.get("user_id") or ident.get("sub") or "") or None
+                if _fingerprint_matches(ident, target):
+                    payload = ident
+                    user_id = (
+                        str(ident.get("user_id") or ident.get("sub") or "") or None
+                    )
+                else:
+                    logger.warning(
+                        "auth.session_fingerprint_mismatch",
+                        extra={
+                            "meta": {
+                                "session_id": tok,
+                                "path": getattr(target, "url", None)
+                                and getattr(target.url, "path", None),
+                            }
+                        },
+                    )
+                    try:
+                        store = get_session_store()
+                        store.delete_session(tok)
+                    except Exception:
+                        pass
     except jwt.ExpiredSignatureError:
         # Let callers decide; for identity-first flows, this will fall back to session
         raise

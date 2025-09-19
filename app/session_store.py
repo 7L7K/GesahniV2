@@ -3,13 +3,13 @@ from __future__ import annotations
 import json
 import logging
 import os
-import random
 import time
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from time import time_ns
 from typing import Any
+
+from secrets import token_urlsafe
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,12 @@ class SessionStatus(str, Enum):
 # ---------------------------------------------------------------------------
 # Session Cookie Store (for __session cookie management)
 # ---------------------------------------------------------------------------
+
+
+def new_session_id() -> str:
+    """Return a cryptographically strong opaque session identifier."""
+
+    return f"sess_{token_urlsafe(32)}"
 
 
 class SessionStoreUnavailable(Exception):
@@ -95,8 +101,8 @@ class SessionCookieStore:
         Returns:
             str: New opaque session ID (never a JWT)
         """
-        # Generate opaque session ID: sess_timestamp_random
-        session_id = f"sess_{int(time.time())}_{random.getrandbits(32):08x}"
+        # Generate opaque session ID using cryptographically strong randomness
+        session_id = new_session_id()
 
         payload = {
             "jti": jti,
@@ -371,7 +377,21 @@ def save_meta(session_id: str, meta: dict[str, Any]) -> None:
     # Create the session directory if it doesn't exist
     mp.parent.mkdir(parents=True, exist_ok=True)
 
-    mp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        mp.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception as e:
+        logger.error(
+            f"session_store.save_meta_failed: session_id={session_id}, error={e}",
+            extra={
+                "meta": {
+                    "session_id": session_id,
+                    "error_type": type(e).__name__,
+                    "error_message": str(e),
+                    "meta_keys": list(meta.keys()) if meta else [],
+                }
+            },
+        )
+        raise
 
 
 # ---------------------------------------------------------------------------
@@ -382,7 +402,7 @@ def save_meta(session_id: str, meta: dict[str, Any]) -> None:
 def create_session() -> dict[str, Any]:
     """Create a new session entry and return its metadata."""
     ts = datetime.utcnow().isoformat(timespec="seconds")
-    session_id = f"{time_ns()}_{random.getrandbits(12):03x}"
+    session_id = new_session_id()
     meta = {
         "session_id": session_id,
         "created_at": ts + "Z",
@@ -434,6 +454,7 @@ def list_sessions(status: SessionStatus | None = None) -> list[dict[str, Any]]:
 __all__ = [
     "SESSIONS_DIR",
     "SessionStatus",
+    "new_session_id",
     "session_path",
     "meta_path",
     "load_meta",

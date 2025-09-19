@@ -52,6 +52,23 @@ async def enhanced_startup() -> None:
     startup_start = time.time()
     logger.info("Starting enhanced application startup")
 
+    # Log resolved configuration values (safe subset only)
+    safe_config = {
+        "ENV": os.getenv("ENV"),
+        "HOST": os.getenv("HOST"),
+        "PORT": os.getenv("PORT"),
+        "LOG_LEVEL": os.getenv("LOG_LEVEL"),
+        "COOKIE_SAMESITE": os.getenv("COOKIE_SAMESITE"),
+        "COOKIE_SECURE": os.getenv("COOKIE_SECURE"),
+        "CSRF_ENABLED": os.getenv("CSRF_ENABLED"),
+        "CORS_ALLOW_ORIGINS": os.getenv("CORS_ALLOW_ORIGINS"),
+        "VECTOR_STORE": os.getenv("VECTOR_STORE"),
+        "QDRANT_URL": os.getenv("QDRANT_URL"),
+        "OPENAI_MODEL": os.getenv("OPENAI_MODEL"),
+        "OLLAMA_MODEL": os.getenv("OLLAMA_MODEL"),
+    }
+    logger.info("Resolved config: %s", safe_config)
+
     try:
         from app.secret_verification import audit_prod_env, log_secret_summary
 

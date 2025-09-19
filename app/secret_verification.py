@@ -278,6 +278,16 @@ def log_secret_summary() -> None:
 
     if not missing_required and not insecure:
         logger.debug("All critical secrets are properly configured")
+
+    # Log cookie configuration flags for testing path visibility
+    logger.info(
+        "COOKIE_CONFIG ENV=%s FEATURE_DEV_AUTH_BYPASS=%s COOKIE_SECURE=%s COOKIE_SAMESITE=%s",
+        os.getenv("ENV"),
+        os.getenv("FEATURE_DEV_AUTH_BYPASS"),
+        os.getenv("COOKIE_SECURE"),
+        os.getenv("COOKIE_SAMESITE"),
+    )
+
     # Fail fast for missing or weak JWT secret in non-test environments
     try:
         jwt_res = results.get("JWT_SECRET")

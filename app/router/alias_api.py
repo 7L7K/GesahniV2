@@ -132,7 +132,9 @@ ALIASES: dict[str, tuple[str, AliasHandler | None]] = {}
 # Preload common aliases
 ALIASES.update(
     {
-        # whoami is served canonically from app.api.auth (/v1/whoami). Avoid duplicate alias.
+        # whoami is served canonically from app.auth.endpoints (/v1/auth/whoami)
+        "/whoami": ("GET", None),  # Use fallback handler for redirect
+        "/debug/cookies": ("GET", _safe_import("app.auth.endpoints.debug", "debug_cookies")),
         # '/me' now served by canonical app.api.me; do not alias to avoid conflicts
         # integrations/spotify/google → top-level expected paths
         # Prefer canonical integration endpoints when present
@@ -206,7 +208,7 @@ ALIASES.update(
         "/admin/ping": ("GET", _safe_import("app.router.admin_api", "admin_ping")),
         "/admin/rate-limits/{key}": (
             "GET",
-            _wrap_path_param_handler("get_rate_limit_stats", "app.auth", "key"),
+            _wrap_path_param_handler("_get_rate_limit_stats", "app.auth", "key"),
         ),
         "/admin/rbac/info": (
             "GET",
@@ -247,14 +249,22 @@ ALIASES.update(
 
 async def _fallback(request: Request, path: str, method: str):
     # normalized, non-404 fallback with lightweight behavior matching contract
-    # whoami -> 401 not authenticated
-    if path in ("/whoami", "/me"):
+    # whoami -> redirect to canonical auth endpoint
+    if path == "/whoami":
+        from starlette.responses import RedirectResponse
+        return RedirectResponse(url="/v1/auth/whoami", status_code=307)
+    # me -> 401 not authenticated
+    if path == "/me":
         return json_error(
             code="unauthorized",
             message="Not authenticated",
             http_status=401,
             meta={"user": None, "authenticated": False},
         )
+
+    # Debug endpoints -> return minimal debug info
+    if path == "/debug/cookies":
+        return JSONResponse({"cookies": {}}, status_code=200)
 
     # status endpoints -> 200 with connected false
     if path.endswith("/status") or path.endswith("/status"):

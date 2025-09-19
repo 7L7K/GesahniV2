@@ -57,7 +57,7 @@ function LoginPageInner() {
                 console.info('LOGIN auth.check.trigger_refresh', {
                     timestamp: new Date().toISOString(),
                 });
-                await authOrchestrator.refreshAuth();
+                await authOrchestrator.refreshAuth({ force: true });
 
                 // Check again after refresh
                 const refreshedState = authOrchestrator.getState();
@@ -171,7 +171,7 @@ function LoginPageInner() {
                 timestamp: new Date().toISOString(),
             });
 
-            authOrchestrator.refreshAuth().finally(() => {
+            authOrchestrator.refreshAuth({ force: true }).finally(() => {
                 console.info('LOGIN oauth.orchestrator.refresh.complete', {
                     timestamp: new Date().toISOString(),
                 });
@@ -216,6 +216,9 @@ function LoginPageInner() {
         setError('');
         setLoading(true);
 
+        console.log('🔐 LOGIN: Starting login process...');
+        console.log('🔐 LOGIN: Current cookies before login:', document.cookie);
+
         console.info('LOGIN submit.start', {
             mode,
             username: username ? `${username.substring(0, 3)}***` : 'empty',
@@ -237,13 +240,27 @@ function LoginPageInner() {
                 timestamp: new Date().toISOString(),
             });
 
+            console.log('🔐 FRONTEND_LOGIN_STEP_1: Making API call to:', endpoint);
+            console.log('🔐 FRONTEND_LOGIN_STEP_2: Current cookies before login:', document.cookie);
+            console.log('🔐 FRONTEND_LOGIN_STEP_3: Username being sent:', username);
+            console.log('🔐 FRONTEND_LOGIN_STEP_4: Mode:', mode);
+
             const response = await apiFetch(endpoint, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Auth-Orchestrator': 'legitimate'
+                },
                 // Include a body to ensure CSRF header injection for POST
                 // Login ignores body and reads username from query
                 body: mode === 'login' ? JSON.stringify({}) : JSON.stringify({ username, password }),
-                auth: false,
+                auth: true, // Changed to true to ensure Origin header is sent
+            });
+
+            console.log('🔐 FRONTEND_LOGIN_STEP_5: API response received:', {
+                status: response.status,
+                statusText: response.statusText,
+                ok: response.ok
             });
 
             console.info('LOGIN api.response', {
@@ -268,10 +285,14 @@ function LoginPageInner() {
                     timestamp: new Date().toISOString(),
                 });
 
+                console.log('🔐 FRONTEND_LOGIN_STEP_6: Processing successful response');
+                console.log('🔐 FRONTEND_LOGIN_STEP_7: Response data:', data);
+
                 if (isHeaderMode) {
+                    console.log('🔐 FRONTEND_LOGIN_STEP_8: Header mode - checking for tokens in response body');
                     // In header mode, backend should return tokens in the body
                     if (!data || !data.access_token) {
-                        console.error('LOGIN api.error: Missing tokens in header mode', {
+                        console.error('🔐 FRONTEND_LOGIN_ERROR: Missing tokens in header mode', {
                             data,
                             dataType: typeof data,
                             timestamp: new Date().toISOString(),
@@ -279,7 +300,9 @@ function LoginPageInner() {
                         setError('Login failed: Missing tokens (header mode)');
                         return;
                     }
+                    console.log('🔐 FRONTEND_LOGIN_STEP_9: Setting tokens from response body');
                     setTokens(data.access_token, data.refresh_token);
+                    console.log('🔐 FRONTEND_LOGIN_STEP_10: Bumping auth epoch');
                     bumpAuthEpoch();
                 }
 
@@ -287,6 +310,8 @@ function LoginPageInner() {
                     authEpochBumped: true,
                     timestamp: new Date().toISOString(),
                 });
+
+                console.log('🔐 LOGIN: Cookies after token setting:', document.cookie);
 
                 // Debug: record login OK and echo cookies from server
                 try {
@@ -302,7 +327,25 @@ function LoginPageInner() {
                     timestamp: new Date().toISOString(),
                 });
 
-                await authOrchestrator.refreshAuth();
+                // Get state before refresh
+                const stateBefore = authOrchestrator.getState();
+                console.log('LOGIN auth.state.before_refresh', {
+                    isAuthenticated: stateBefore.is_authenticated,
+                    sessionReady: stateBefore.session_ready,
+                    userId: stateBefore.user_id,
+                    timestamp: new Date().toISOString(),
+                });
+
+                await authOrchestrator.onLoginSuccess();
+
+                // Get state after refresh
+                const stateAfter = authOrchestrator.getState();
+                console.log('LOGIN auth.state.after_refresh', {
+                    isAuthenticated: stateAfter.is_authenticated,
+                    sessionReady: stateAfter.session_ready,
+                    userId: stateAfter.user_id,
+                    timestamp: new Date().toISOString(),
+                });
 
                 console.info('LOGIN orchestrator.refresh.complete', {
                     timestamp: new Date().toISOString(),
@@ -314,11 +357,15 @@ function LoginPageInner() {
                 });
 
                 // Use safeNext to prevent redirect loops
-                router.replace(safeNext(params?.get('next')) || '/');
+                const redirectTo = safeNext(params?.get('next')) || '/';
+                console.log('🔐 LOGIN: Navigating to:', redirectTo);
+                router.replace(redirectTo);
 
                 console.info('LOGIN complete.success', {
                     timestamp: new Date().toISOString(),
                 });
+
+                console.log('🔐 LOGIN: Login process completed successfully');
             } else {
                 const errorData = await response.json().catch(() => ({}));
                 console.error('LOGIN api.error', {
@@ -328,6 +375,7 @@ function LoginPageInner() {
                     errorData,
                     timestamp: new Date().toISOString(),
                 });
+                console.log('🔐 LOGIN: Login failed with status:', response.status);
                 setError(errorData.detail || `Failed to ${mode}`);
             }
         } catch (err) {
@@ -454,7 +502,7 @@ function LoginPageInner() {
                                             setTokens('mock_access_token_e2e', 'mock_refresh_token_e2e');
                                             bumpAuthEpoch();
                                             const authOrchestrator = getAuthOrchestrator();
-                                            await authOrchestrator.refreshAuth();
+                                            await authOrchestrator.refreshAuth({ force: true });
                                             router.replace(safeNext(params?.get('next')) || '/');
                                         } catch (err) {
                                             setError('Mock login failed');

@@ -26,6 +26,11 @@ export default function MusicMetrics() {
         setError(null);
 
         try {
+            // Ensure fetch is available
+            if (typeof fetch === 'undefined') {
+                throw new Error('fetch not available');
+            }
+
             const response = await fetch('/metrics', {
                 headers: {
                     'Authorization': `Bearer ${token}`,

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useRef, useState } from 'react';
-import { apiFetch } from '@/lib/api';
+import { apiFetch, fetchHealth } from '@/lib/api';
 import ServiceChip from '@/components/ServiceChip';
 import { useSpotifyStatus, useMusicDevices } from '@/hooks/useSpotify';
 import { FEATURES } from '@/config/features';
@@ -21,7 +21,7 @@ export default function IssueTray({ open, onClose }: { open: boolean; onClose: (
     (async () => {
       try {
         const [h, l] = await Promise.all([
-          apiFetch('/v1/health', { auth: true, dedupe: false, cache: 'no-store' }),
+          fetchHealth('/v1/health'),
           apiFetch('/v1/logs?limit=100', { auth: true, dedupe: false, cache: 'no-store' }),
         ]);
         if (h.ok) setHealth(await h.json().catch(() => null));

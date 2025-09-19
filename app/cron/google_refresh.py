@@ -30,9 +30,7 @@ async def _get_candidates(now: int) -> list[tuple[str, str, int]]:
     """Return list of (user_id, provider, expires_at) for Google tokens expiring within window."""
     cutoff = datetime.fromtimestamp(now + REFRESH_AHEAD_SECONDS, tz=UTC)
 
-    session_gen = get_async_db()
-    session = await anext(session_gen)
-    try:
+    async with get_async_db() as session:
         # Query Google tokens that need refreshing
         stmt = (
             select(
@@ -58,11 +56,7 @@ async def _get_candidates(now: int) -> list[tuple[str, str, int]]:
             expires_ts = int(expires_at.timestamp()) if expires_at else 0
             out.append((user_id, provider, expires_ts))
 
-        result_out = out
-    finally:
-        await session.close()
-
-    return result_out
+        return out
 
 
 async def _refresh_for_user(user_id: str, provider: str) -> None:
@@ -75,9 +69,7 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
         attempt += 1
         try:
             # Fetch latest token row by user_id
-            session_gen = get_async_db()
-            session = await anext(session_gen)
-            try:
+            async with get_async_db() as session:
                 stmt = (
                     select(ThirdPartyToken)
                     .where(
@@ -134,8 +126,6 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
                     updated_at=now,
                 )
                 await upsert_token(new_token)
-            finally:
-                await session.close()
 
             try:
                 SPOTIFY_REFRESH.inc()

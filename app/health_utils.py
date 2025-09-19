@@ -65,11 +65,10 @@ async def check_db() -> HealthResult:
 
         from .db.core import get_async_db
 
-        # get_async_db is an async generator, so we need to iterate it
-        async for session in get_async_db():
+        # Use context manager for proper session management
+        async with get_async_db() as session:
             # Simple test query to verify database connectivity
             await session.execute(text("SELECT 1"))
-            break  # Only need one session for the test
         return "ok"
     except Exception:
         return "error"
