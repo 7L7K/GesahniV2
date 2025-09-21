@@ -5,6 +5,7 @@ import time
 from fastapi import APIRouter, Request
 
 from app.integrations.spotify.client import SpotifyClient
+from app.env_helpers import env_flag
 
 from ..auth_store_tokens import get_token
 from ..deps.user import resolve_user_id
@@ -48,19 +49,25 @@ async def integrations_status(request: Request):
     spotify_result = {"connected": False}
 
     # Check Spotify enabled status
-    spotify_enabled_env = (os.getenv("SPOTIFY_ENABLED") or "").strip().lower()
+    spotify_flag = env_flag(
+        "GSNH_ENABLE_SPOTIFY",
+        default=False,
+        legacy=("SPOTIFY_ENABLED",),
+    )
+    music_flag = env_flag("GSNH_ENABLE_MUSIC", default=True)
+    spotify_enabled_env = os.getenv("GSNH_ENABLE_SPOTIFY") or os.getenv("SPOTIFY_ENABLED") or ""
     log_integrations_status(
         "spotify_enabled_check",
         None,
         {
             "message": "Checking Spotify enabled status",
             "spotify_enabled_env": spotify_enabled_env,
-            "is_enabled": spotify_enabled_env in {"1", "true", "yes", "on"},
+            "is_enabled": spotify_flag and music_flag,
         },
     )
 
     # Short-circuit if Spotify integration is disabled via env
-    if spotify_enabled_env not in {"1", "true", "yes", "on"}:
+    if not (spotify_flag and music_flag):
         spotify_result = {"connected": False, "reason": "disabled"}
         log_integrations_status(
             "spotify_disabled",
@@ -77,7 +84,7 @@ async def integrations_status(request: Request):
                 "user_resolution_start", None, {"message": "Starting user resolution"}
             )
 
-            current_user = resolve_user_id(request=request)
+            current_user = await resolve_user_id(request=request)
             log_integrations_status(
                 "user_resolution_result",
                 current_user,

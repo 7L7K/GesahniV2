@@ -10,9 +10,15 @@ def test_connect_sets_temp_cookie(monkeypatch):
     client = TestClient(app)
 
     import app.api.spotify as spotify_mod
+    import app.deps.user as user_mod
 
     # Force authenticated user for connect
-    monkeypatch.setattr(spotify_mod, "get_current_user_id", lambda req=None: "u_test")
+    async def mock_get_current_user_id(request=None):
+        return "u_test"
+    # Mock it in both locations
+    monkeypatch.setattr(user_mod, "get_current_user_id", mock_get_current_user_id)
+    # Also mock it directly in the spotify module
+    monkeypatch.setattr(spotify_mod, "get_current_user_id", mock_get_current_user_id)
 
     # Simulate Authorization header
     headers = {"Authorization": "Bearer dummy-jwt"}

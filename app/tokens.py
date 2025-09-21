@@ -177,10 +177,66 @@ def _get_refresh_ttl_seconds() -> int:
     return minutes * 60
 
 
+def _normalize_access_claims_canonical(claims: dict[str, Any]) -> dict[str, Any]:
+    """Normalize and complete access token claims with canonical ID strategy."""
+    from app.util.ids import to_uuid
+
+    normalized = claims.copy()
+
+    logger.info(f"🔍 TOKEN_NORMALIZE_ACCESS_CANONICAL: Normalizing access claims", extra={
+        "meta": {
+            "input_claims": claims,
+            "normalized_claims": normalized,
+            "has_sid": "sid" in claims,
+            "has_device_id": "device_id" in claims,
+            "has_sess_ver": "sess_ver" in claims,
+            "timestamp": time.time()
+        }
+    })
+
+    # Extract the raw user identifier
+    raw_uid = claims.get("user_id") or claims.get("sub") or claims.get("uid")
+    if not raw_uid:
+        raise ValueError("Claims must contain user_id, sub, or uid")
+
+    # sub is always the canonical UUID for storage
+    normalized["sub"] = str(to_uuid(raw_uid))
+
+    # uid is the original login identifier
+    normalized["uid"] = raw_uid
+
+    # Ensure user_id is also set for backward compatibility
+    normalized["user_id"] = raw_uid
+
+    # Add standard claims
+    normalized.setdefault("type", "access")
+    normalized.setdefault("scopes", ["care:resident", "music:control", "chat:write"])
+
+    # sess_ver should be provided directly in the claims, not fetched here
+    # This avoids async calls in synchronous token creation functions
+
+    # Add standard JWT claims that will be set by create_access_token
+    # (iat, exp, jti will be added by the underlying implementation)
+
+    logger.info(f"🔍 TOKEN_NORMALIZE_ACCESS_CANONICAL_RESULT: Final normalized claims", extra={
+        "meta": {
+            "final_claims": normalized,
+            "sub": normalized["sub"],
+            "uid": normalized["uid"],
+            "has_sid": "sid" in normalized,
+            "has_device_id": "device_id" in normalized,
+            "has_sess_ver": "sess_ver" in normalized,
+            "timestamp": time.time()
+        }
+    })
+
+    return normalized
+
+
 def _normalize_access_claims(claims: dict[str, Any]) -> dict[str, Any]:
     """Normalize and complete access token claims."""
     normalized = claims.copy()
-    
+
     logger.info(f"🔍 TOKEN_NORMALIZE_ACCESS: Normalizing access claims", extra={
         "meta": {
             "input_claims": claims,
@@ -207,7 +263,7 @@ def _normalize_access_claims(claims: dict[str, Any]) -> dict[str, Any]:
 
     # Add standard JWT claims that will be set by create_access_token
     # (iat, exp, jti will be added by the underlying implementation)
-    
+
     logger.info(f"🔍 TOKEN_NORMALIZE_ACCESS_RESULT: Final normalized claims", extra={
         "meta": {
             "final_claims": normalized,
@@ -249,6 +305,7 @@ def make_access(
     alg: str | None = None,
     key: str | None = None,
     kid: str | None = None,
+    use_uuid_only: bool = True,
 ) -> str:
     """
     Create an access token with normalized claims and centralized TTL handling.
@@ -257,8 +314,9 @@ def make_access(
         claims: Dictionary containing token claims (must include "sub" or "user_id")
         ttl_s: Optional TTL in seconds (defaults to centralized TTL configuration)
         alg: Optional algorithm override (currently ignored, uses HS256)
-        key: Optional key override (currently ignored, uses JWT_SECRET)
-        kid: Optional key ID (currently ignored)
+        key: Optional key override (currently ignored)
+        kid: Optional key ID override (currently ignored)
+        use_uuid_only: If True, use UUID-only sub claims (default: True)
 
     Returns:
         JWT access token string
@@ -267,8 +325,24 @@ def make_access(
     if ttl_s is None:
         ttl_s = _get_access_ttl_seconds()
 
-    # Normalize claims
-    normalized_claims = _normalize_access_claims(claims)
+    # Use new UUID-only claims building if enabled
+    if use_uuid_only:
+        from app.auth.jwt import build_claims
+        
+        # Extract user_id and alias from claims
+        user_id = claims.get("user_id") or claims.get("sub", "")
+        alias = claims.get("alias")
+        
+        # Build UUID-only claims
+        normalized_claims = build_claims(user_id, alias=alias)
+        
+        # Preserve other claims (device_id, sid, etc.)
+        for key, value in claims.items():
+            if key not in ["user_id", "sub", "alias"]:
+                normalized_claims[key] = value
+    else:
+        # Fall back to legacy normalization for backward compatibility
+        normalized_claims = _normalize_access_claims_canonical(claims)
 
     # Convert ttl_s to timedelta
     expires_delta = timedelta(seconds=ttl_s)
@@ -283,6 +357,7 @@ def make_refresh(
     alg: str | None = None,
     key: str | None = None,
     kid: str | None = None,
+    use_uuid_only: bool = True,
 ) -> str:
     """
     Create a refresh token with normalized claims and centralized TTL handling.
@@ -293,6 +368,7 @@ def make_refresh(
         alg: Optional algorithm override (currently ignored, uses HS256)
         key: Optional key override (currently ignored, uses JWT_SECRET)
         kid: Optional key ID (currently ignored)
+        use_uuid_only: If True, use UUID-only sub claims (default: True)
 
     Returns:
         JWT refresh token string
@@ -301,8 +377,24 @@ def make_refresh(
     if ttl_s is None:
         ttl_s = _get_refresh_ttl_seconds()
 
-    # Normalize claims
-    normalized_claims = _normalize_refresh_claims(claims)
+    # Use new UUID-only claims building if enabled
+    if use_uuid_only:
+        from app.auth.jwt import build_claims
+        
+        # Extract user_id and alias from claims
+        user_id = claims.get("user_id") or claims.get("sub", "")
+        alias = claims.get("alias")
+        
+        # Build UUID-only claims
+        normalized_claims = build_claims(user_id, alias=alias)
+        
+        # Preserve other claims (device_id, sid, etc.)
+        for key, value in claims.items():
+            if key not in ["user_id", "sub", "alias"]:
+                normalized_claims[key] = value
+    else:
+        # Fall back to legacy normalization for backward compatibility
+        normalized_claims = _normalize_refresh_claims(claims)
 
     # Convert ttl_s to timedelta
     expires_delta = timedelta(seconds=ttl_s)

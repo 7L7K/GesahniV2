@@ -4,13 +4,14 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from ..auth_core import require_scope
-from ..deps.user import get_current_user_id
+from ..deps.scopes import require_scope
+from ..auth.demo_guard import current_user_id_or_demo as get_current_user_id
 from ..integrations.spotify.client import (
     SpotifyAuthError,
     SpotifyClient,
     SpotifyRateLimitedError,
 )
+from ..integrations.spotify.demo import maybe_devices
 from ..metrics import (
     SPOTIFY_DEVICE_LIST_COUNT,
     SPOTIFY_DEVICES_REQUEST_COUNT,
@@ -29,125 +30,128 @@ logger = logging.getLogger(__name__)
 
 @router.get("/devices")
 async def devices(request: Request, user_id: str = Depends(get_current_user_id)):
-    logger.info(
-        "🎵 SPOTIFY DEVICES: Request started",
-        extra={
-            "user_id": user_id,
-            "route": "/v1/spotify/devices",
-            "auth_state": (
-                "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
-            ),
-        },
-    )
-
-    client = SpotifyClient(user_id)
-    try:
-        devices = await client.get_devices()
-        try:
-            SPOTIFY_DEVICE_LIST_COUNT.labels(status="ok").inc()
-            SPOTIFY_DEVICES_REQUEST_COUNT.labels(
-                status="200",
-                auth_state=(
-                    "spotify_linked=true"
-                    if user_id != "anon"
-                    else "spotify_linked=false"
-                ),
-            ).inc()
-        except Exception:
-            pass
-
+    async def real():
         logger.info(
-            "🎵 SPOTIFY DEVICES: Request successful",
+            "🎵 SPOTIFY DEVICES: Request started",
             extra={
                 "user_id": user_id,
                 "route": "/v1/spotify/devices",
                 "auth_state": (
-                    "spotify_linked=true"
-                    if user_id != "anon"
-                    else "spotify_linked=false"
+                    "spotify_linked=true" if user_id != "anon" else "spotify_linked=false"
                 ),
-                "meta": {"device_count": len(devices) if devices else 0},
             },
         )
-    except SpotifyRateLimitedError as e:
-        # Surface upstream rate limit with Retry-After when available
-        from fastapi.responses import Response
 
-        logger.warning(
-            "🎵 SPOTIFY DEVICES: Rate limited",
-            extra={
-                "user_id": user_id,
-                "route": "/v1/spotify/devices",
-                "auth_state": (
-                    "spotify_linked=true"
-                    if user_id != "anon"
-                    else "spotify_linked=false"
-                ),
-                "meta": {
-                    "retry_after": (
-                        str(e.retry_after) if getattr(e, "retry_after", None) else None
-                    )
+        client = SpotifyClient(user_id)
+        try:
+            devices = await client.get_devices()
+            try:
+                SPOTIFY_DEVICE_LIST_COUNT.labels(status="ok").inc()
+                SPOTIFY_DEVICES_REQUEST_COUNT.labels(
+                    status="200",
+                    auth_state=(
+                        "spotify_linked=true"
+                        if user_id != "anon"
+                        else "spotify_linked=false"
+                    ),
+                ).inc()
+            except Exception:
+                pass
+
+            logger.info(
+                "🎵 SPOTIFY DEVICES: Request successful",
+                extra={
+                    "user_id": user_id,
+                    "route": "/v1/spotify/devices",
+                    "auth_state": (
+                        "spotify_linked=true"
+                        if user_id != "anon"
+                        else "spotify_linked=false"
+                    ),
+                    "meta": {"device_count": len(devices) if devices else 0},
                 },
-            },
-        )
+            )
+        except SpotifyRateLimitedError as e:
+            # Surface upstream rate limit with Retry-After when available
+            from fastapi.responses import Response
 
-        retry_after = str(e.retry_after) if getattr(e, "retry_after", None) else None
-        headers = {"Retry-After": retry_after} if retry_after else {}
+            logger.warning(
+                "🎵 SPOTIFY DEVICES: Rate limited",
+                extra={
+                    "user_id": user_id,
+                    "route": "/v1/spotify/devices",
+                    "auth_state": (
+                        "spotify_linked=true"
+                        if user_id != "anon"
+                        else "spotify_linked=false"
+                    ),
+                    "meta": {
+                        "retry_after": (
+                            str(e.retry_after) if getattr(e, "retry_after", None) else None
+                        )
+                    },
+                },
+            )
 
-        try:
-            SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
-            SPOTIFY_DEVICES_REQUEST_COUNT.labels(
-                status="429",
-                auth_state=(
-                    "spotify_linked=true"
-                    if user_id != "anon"
-                    else "spotify_linked=false"
-                ),
-            ).inc()
+            retry_after = str(e.retry_after) if getattr(e, "retry_after", None) else None
+            headers = {"Retry-After": retry_after} if retry_after else {}
+
+            try:
+                SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
+                SPOTIFY_DEVICES_REQUEST_COUNT.labels(
+                    status="429",
+                    auth_state=(
+                        "spotify_linked=true"
+                        if user_id != "anon"
+                        else "spotify_linked=false"
+                    ),
+                ).inc()
+            except Exception:
+                pass
+
+            return Response(status_code=429, headers=headers)
+        except SpotifyAuthError:
+            logger.warning(
+                "🎵 SPOTIFY DEVICES: Auth error",
+                extra={
+                    "user_id": user_id,
+                    "route": "/v1/spotify/devices",
+                    "auth_state": "spotify_linked=false",
+                },
+            )
+
+            try:
+                SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
+                SPOTIFY_DEVICES_REQUEST_COUNT.labels(
+                    status="401", auth_state="spotify_linked=false"
+                ).inc()
+            except Exception:
+                pass
+            from ..http_errors import unauthorized
+
+            raise unauthorized(
+                code="spotify_not_authenticated",
+                message="Spotify not authenticated",
+                hint="connect Spotify account",
+            )
         except Exception:
-            pass
+            logger.exception("spotify.devices_error")
+            try:
+                SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
+                SPOTIFY_DEVICES_REQUEST_COUNT.labels(
+                    status="502",
+                    auth_state=(
+                        "spotify_linked=true"
+                        if user_id != "anon"
+                        else "spotify_linked=false"
+                    ),
+                ).inc()
+            except Exception:
+                pass
+            raise HTTPException(status_code=502, detail="spotify_error")
+        return {"ok": True, "devices": devices}
 
-        return Response(status_code=429, headers=headers)
-    except SpotifyAuthError:
-        logger.warning(
-            "🎵 SPOTIFY DEVICES: Auth error",
-            extra={
-                "user_id": user_id,
-                "route": "/v1/spotify/devices",
-                "auth_state": "spotify_linked=false",
-            },
-        )
-
-        try:
-            SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
-            SPOTIFY_DEVICES_REQUEST_COUNT.labels(
-                status="401", auth_state="spotify_linked=false"
-            ).inc()
-        except Exception:
-            pass
-        from ..http_errors import unauthorized
-
-        raise unauthorized(
-            code="spotify_not_authenticated",
-            message="Spotify not authenticated",
-            hint="connect Spotify account",
-        )
-    except Exception:
-        logger.exception("spotify.devices_error")
-        try:
-            SPOTIFY_DEVICE_LIST_COUNT.labels(status="fail").inc()
-            SPOTIFY_DEVICES_REQUEST_COUNT.labels(
-                status="502",
-                auth_state=(
-                    "spotify_linked=true"
-                    if user_id != "anon"
-                    else "spotify_linked=false"
-                ),
-            ).inc()
-        except Exception:
-            pass
-        raise HTTPException(status_code=502, detail="spotify_error")
-    return {"ok": True, "devices": devices}
+    return await maybe_devices(real)
 
 
 @router.post("/play")

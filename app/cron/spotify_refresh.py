@@ -99,13 +99,16 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
                 pass
 
             # Update updated_at timestamp for the token (the refresh service handles the actual token upsert)
+            from app.util.ids import to_uuid
+            
             now = datetime.now(UTC)
             async with get_async_db() as session:
                 # Find the most recent token for this user/provider combination
+                db_user_id = str(to_uuid(user_id))
                 stmt = (
                     select(ThirdPartyToken)
                     .where(
-                        ThirdPartyToken.user_id == user_id,
+                        ThirdPartyToken.user_id == db_user_id,
                         ThirdPartyToken.provider == provider,
                     )
                     .order_by(ThirdPartyToken.updated_at.desc())

@@ -16,10 +16,11 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.api.music import PROVIDER_SPOTIFY
+from app.api.music import MUSIC_FEATURE_ENABLED, PROVIDER_SPOTIFY
 from app.deps.scopes import require_scope
 from app.deps.user import get_current_user_id
 from app.integrations.spotify.client import SpotifyAuthError, SpotifyClient
+from app.env_helpers import env_flag
 from app.metrics import (
     MUSIC_COMMAND_COUNT,
     MUSIC_COMMAND_LATENCY,
@@ -135,30 +136,22 @@ def is_test_mode() -> bool:
 def is_provider_spotify() -> bool:
     """Return whether Spotify provider should be used for the current runtime.
 
-    This checks test mode dynamically and the PROVIDER_SPOTIFY env var.
+    This checks test mode dynamically and the GSNH feature flags.
     """
     if is_test_mode():
         return False
-    return os.getenv("PROVIDER_SPOTIFY", "true").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
+    return (
+        env_flag(
+            "GSNH_ENABLE_SPOTIFY",
+            default=True,
+            legacy=("PROVIDER_SPOTIFY", "SPOTIFY_ENABLED"),
+        )
+        and MUSIC_FEATURE_ENABLED
+    )
 
 
-MUSIC_FALLBACK_RADIO = os.getenv("MUSIC_FALLBACK_RADIO", "false").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-EXPLICIT_DEFAULT = os.getenv("EXPLICIT_DEFAULT", "true").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+MUSIC_FALLBACK_RADIO = env_flag("MUSIC_FALLBACK_RADIO", default=False)
+EXPLICIT_DEFAULT = env_flag("EXPLICIT_DEFAULT", default=True)
 
 QUIET_START = os.getenv("QUIET_HOURS_START", "22:00")
 QUIET_END = os.getenv("QUIET_HOURS_END", "07:00")

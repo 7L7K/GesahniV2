@@ -367,18 +367,7 @@ async def google_login_url(request: Request) -> Response:
             from ..redirect_utils import sanitize_redirect_path, set_gs_next_cookie
 
             sanitized_next = sanitize_redirect_path(next_url, "/", request)
-            set_gs_next_cookie(http_response, sanitized_next, request)
-            logger.info(
-                "Set gs_next cookie for OAuth flow",
-                extra={
-                    "meta": {
-                        "req_id": req_id,
-                        "component": "google_oauth",
-                        "msg": "gs_next_cookie_set",
-                        "sanitized_next": sanitized_next,
-                    }
-                },
-            )
+            # Note: set_gs_next_cookie will be called after http_response is created
 
         oauth_url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
 
@@ -432,6 +421,21 @@ async def google_login_url(request: Request) -> Response:
             code_verifier=None,
             session_id=current_session,
         )
+
+        # Set gs_next cookie for post-login redirect if next_url was provided
+        if next_url:
+            set_gs_next_cookie(http_response, sanitized_next, request)
+            logger.info(
+                "Set gs_next cookie for OAuth flow",
+                extra={
+                    "meta": {
+                        "req_id": req_id,
+                        "component": "google_oauth",
+                        "msg": "gs_next_cookie_set",
+                        "sanitized_next": sanitized_next,
+                    }
+                },
+            )
 
         duration = (time.time() - start_time) * 1000
 
@@ -558,7 +562,9 @@ async def google_callback(request: Request) -> Response:
     cookie_config = cookie_cfg.get_cookie_config(request)
 
     # Short-circuit in CI/testing: avoid network calls and complex flows
-    if is_testing():
+    # Allow tests to bypass this by setting GOOGLE_OAUTH_TEST_VALIDATION=1
+    test_validation_enabled = os.getenv("GOOGLE_OAUTH_TEST_VALIDATION", "0").strip() == "1"
+    if is_testing() and not test_validation_enabled:
         # Tests expect a simple JSON 200 response without performing network
         from fastapi import Response
 

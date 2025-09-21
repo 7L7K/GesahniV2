@@ -16,7 +16,12 @@ logger = logging.getLogger(__name__)
 
 # Load environment variables before any imports that depend on them
 from app.env_utils import load_env
+
 load_env()
+
+from app.env_doctor import run_env_doctor
+
+run_env_doctor()
 
 
 def _perform_database_preflight_check():

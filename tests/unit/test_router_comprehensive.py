@@ -26,17 +26,13 @@ def test_core_routers_always_present():
 
         # Core routers that should always be present
         core_routers = [
-            "app.router.ask_api:router",
-            "app.router.auth_api:router",
-            "app.router.google_api:router",
-            "app.router.admin_api:router",
+            "app.api.ask:router",
             "app.api.health:router",
             "app.api.root:router",
             "app.status:router",
             "app.api.schema:router",
             "app.api.google_oauth:router",
             "app.api.google:integrations_router",
-            "app.auth:router",
         ]
 
         for core_router in core_routers:
@@ -112,7 +108,8 @@ def test_environment_variable_isolation():
         baseline_count = len(plan1)
 
         # Set some env vars to enable integrations
-        os.environ["SPOTIFY_ENABLED"] = "1"
+        os.environ["GSNH_ENABLE_SPOTIFY"] = "1"
+        os.environ["GSNH_ENABLE_MUSIC"] = "1"
         os.environ["APPLE_OAUTH_ENABLED"] = "1"
         os.environ["DEVICE_AUTH_ENABLED"] = "1"
 
@@ -138,7 +135,12 @@ def test_environment_variable_isolation():
 
     finally:
         # Clean up test variables
-        for key in ["SPOTIFY_ENABLED", "APPLE_OAUTH_ENABLED", "DEVICE_AUTH_ENABLED"]:
+        for key in [
+            "GSNH_ENABLE_SPOTIFY",
+            "GSNH_ENABLE_MUSIC",
+            "APPLE_OAUTH_ENABLED",
+            "DEVICE_AUTH_ENABLED",
+        ]:
             if key in os.environ:
                 del os.environ[key]
 
@@ -174,7 +176,8 @@ def test_router_plan_consistency():
 
     # Set specific environment
     os.environ["ENV"] = "test"
-    os.environ["SPOTIFY_ENABLED"] = "1"
+    os.environ["GSNH_ENABLE_SPOTIFY"] = "1"
+    os.environ["GSNH_ENABLE_MUSIC"] = "1"
 
     try:
         plan1 = build_plan()
@@ -193,6 +196,6 @@ def test_router_plan_consistency():
 
     finally:
         # Clean up
-        for key in ["ENV", "SPOTIFY_ENABLED"]:
+        for key in ["ENV", "GSNH_ENABLE_SPOTIFY", "GSNH_ENABLE_MUSIC"]:
             if key in os.environ:
                 del os.environ[key]

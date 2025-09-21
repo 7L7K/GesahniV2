@@ -1,0 +1,288 @@
+{
+    "dashboard": {
+        "id": null,
+        "title": "Spotify Health Dashboard",
+        "tags": [
+            "spotify",
+            "oauth",
+            "tokens"
+        ],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Spotify Refresh Attempts vs Failures",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(spotify_refresh_attempts_total[5m])",
+                        "legendFormat": "Refresh Attempts/min"
+                    },
+                    {
+                        "expr": "rate(spotify_refresh_fail_total[5m])",
+                        "legendFormat": "Refresh Failures/min"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Operations per minute",
+                        "min": 0
+                    }
+                ],
+                "xAxes": [
+                    {
+                        "type": "time"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": 2,
+                "title": "Reauth Required Events",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(spotify_reauth_required_total[5m])",
+                        "legendFormat": "Reauth Required/min"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Events per minute",
+                        "min": 0
+                    }
+                ],
+                "xAxes": [
+                    {
+                        "type": "time"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 0
+                }
+            },
+            {
+                "id": 3,
+                "title": "Spotify API Latency P95",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "histogram_quantile(0.95, rate(spotify_api_duration_seconds_bucket[5m]))",
+                        "legendFormat": "P95 Latency"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Seconds",
+                        "min": 0
+                    }
+                ],
+                "xAxes": [
+                    {
+                        "type": "time"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 8
+                }
+            },
+            {
+                "id": 4,
+                "title": "Token Storage Health",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "spotify_tokens_stored_total",
+                        "legendFormat": "Tokens Stored"
+                    },
+                    {
+                        "expr": "spotify_tokens_valid_total",
+                        "legendFormat": "Valid Tokens"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Token Count",
+                        "min": 0
+                    }
+                ],
+                "xAxes": [
+                    {
+                        "type": "time"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 8
+                }
+            },
+            {
+                "id": 5,
+                "title": "Refresh Success Rate",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "rate(spotify_refresh_success_total[5m]) / rate(spotify_refresh_attempts_total[5m]) * 100",
+                        "legendFormat": "Success Rate %"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "red",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 80
+                                },
+                                {
+                                    "color": "green",
+                                    "value": 95
+                                }
+                            ]
+                        },
+                        "unit": "percent"
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 0,
+                    "y": 16
+                }
+            },
+            {
+                "id": 6,
+                "title": "Active Connections",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "spotify_active_connections_total",
+                        "legendFormat": "Active Connections"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "palette-classic"
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 6,
+                    "y": 16
+                }
+            },
+            {
+                "id": 7,
+                "title": "Error Rate",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "rate(spotify_errors_total[5m])",
+                        "legendFormat": "Errors/min"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 0.1
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 1
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 12,
+                    "y": 16
+                }
+            },
+            {
+                "id": 8,
+                "title": "Token Expiry Alerts",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "spotify_tokens_expiring_soon_total",
+                        "legendFormat": "Expiring Soon"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 1
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 5
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 18,
+                    "y": 16
+                }
+            }
+        ],
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "refresh": "30s",
+        "schemaVersion": 27,
+        "version": 1,
+        "links": []
+    }
+}

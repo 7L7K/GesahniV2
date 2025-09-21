@@ -76,9 +76,9 @@ def require_roles(required: Iterable[str], *, any_of: bool = True):
         try:
             from .user import resolve_user_id
 
-            user_id = resolve_user_id(request=request)
+            user_id = await resolve_user_id(request=request)
         except Exception:
-            user_id = get_current_user_id(request=request)
+            user_id = await get_current_user_id(request=request)
         if not user_id or user_id == "anon":
             from ..http_errors import unauthorized
 

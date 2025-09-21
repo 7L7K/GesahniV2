@@ -1,5 +1,10 @@
+import logging
 import os
 from collections.abc import Iterable
+
+from app.env_helpers import env_flag
+
+logger = logging.getLogger(__name__)
 
 try:
     # pydantic v2 moved BaseSettings to pydantic-settings package
@@ -121,6 +126,45 @@ def model_router_heavy_words() -> int:
         return int(os.getenv("MODEL_ROUTER_HEAVY_WORDS", "30"))
     except Exception:
         return 30
+
+
+def spotify_enabled() -> bool:
+    """Check if Spotify integration is enabled."""
+    return env_flag(
+        "GSNH_ENABLE_SPOTIFY",
+        default=False,
+        legacy=("SPOTIFY_ENABLED",),
+    ) and env_flag("GSNH_ENABLE_MUSIC", default=True)
+
+
+def spotify_client_id() -> str:
+    """Get Spotify OAuth client ID from environment."""
+    v = os.getenv("SPOTIFY_CLIENT_ID", "").strip()
+    if not v:
+        raise RuntimeError("SPOTIFY_CLIENT_ID missing")
+    if v == "REPLACE_WITH_YOUR_SPOTIFY_CLIENT_ID":
+        raise RuntimeError("SPOTIFY_CLIENT_ID is still set to placeholder value")
+    logger.info("SPOTIFY_CLIENT_ID loaded successfully (presence confirmed)")
+    return v
+
+
+def spotify_client_secret() -> str:
+    """Get Spotify OAuth client secret from environment."""
+    v = os.getenv("SPOTIFY_CLIENT_SECRET", "").strip()
+    if not v:
+        raise RuntimeError("SPOTIFY_CLIENT_SECRET missing")
+    if v == "REPLACE_WITH_YOUR_SPOTIFY_CLIENT_SECRET":
+        raise RuntimeError("SPOTIFY_CLIENT_SECRET is still set to placeholder value")
+    logger.info("SPOTIFY_CLIENT_SECRET loaded successfully (presence confirmed)")
+    return v
+
+
+def spotify_redirect_uri() -> str:
+    """Get Spotify OAuth redirect URI from environment."""
+    v = os.getenv("SPOTIFY_REDIRECT_URI")
+    if not v:
+        raise RuntimeError("SPOTIFY_REDIRECT_URI missing")
+    return v
 
 
 def model_router_heavy_tokens() -> int:

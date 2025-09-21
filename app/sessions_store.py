@@ -36,9 +36,13 @@ class SessionsStore:
         self, user_id: str, *, did: str | None = None, device_name: str | None = None
     ) -> dict[str, str]:
         """Create a new logical login session for a device."""
+        from app.util.ids import to_uuid
+        
         sid = str(uuid.uuid4())
         if not did:
             did = str(uuid.uuid4())
+        
+        db_user_id = str(to_uuid(user_id))
 
         async with get_async_db() as session:
             # Create or update device
@@ -49,7 +53,7 @@ class SessionsStore:
             if not device:
                 device = AuthDevice(
                     id=did,
-                    user_id=user_id,
+                    user_id=db_user_id,
                     device_name=device_name or "Web",
                     ua_hash="",
                     ip_hash="",
@@ -61,7 +65,7 @@ class SessionsStore:
             # Create session
             session_obj = SessionModel(
                 id=sid,
-                user_id=user_id,
+                user_id=db_user_id,
                 device_id=did,
                 created_at=datetime.now(UTC),
                 last_seen_at=datetime.now(UTC),
@@ -86,11 +90,14 @@ class SessionsStore:
 
     async def list_user_sessions(self, user_id: str) -> list[dict[str, Any]]:
         """List all sessions for a user."""
+        from app.util.ids import to_uuid
+        
         async with get_async_db() as session:
+            db_user_id = str(to_uuid(user_id))
             stmt = (
                 select(SessionModel, AuthDevice)
                 .join(AuthDevice, SessionModel.device_id == AuthDevice.id)
-                .where(SessionModel.user_id == user_id)
+                .where(SessionModel.user_id == db_user_id)
             )
 
             result = await session.execute(stmt)
@@ -298,10 +305,13 @@ class SessionsStore:
 
     async def rename_device(self, user_id: str, did: str, new_name: str) -> bool:
         """Rename a device."""
+        from app.util.ids import to_uuid
+        
         async with get_async_db() as session:
             # Verify device belongs to user
+            db_user_id = str(to_uuid(user_id))
             stmt = select(AuthDevice).where(
-                AuthDevice.id == did, AuthDevice.user_id == user_id
+                AuthDevice.id == did, AuthDevice.user_id == db_user_id
             )
             result = await session.execute(stmt)
             device = result.scalar_one_or_none()
@@ -316,10 +326,13 @@ class SessionsStore:
 
     async def revoke_device_sessions(self, user_id: str, did: str) -> None:
         """Revoke all sessions for a device."""
+        from app.util.ids import to_uuid
+        
         async with get_async_db() as session:
+            db_user_id = str(to_uuid(user_id))
             stmt = (
                 update(SessionModel)
-                .where(SessionModel.user_id == user_id, SessionModel.device_id == did)
+                .where(SessionModel.user_id == db_user_id, SessionModel.device_id == did)
                 .values(revoked_at=datetime.now(UTC))
             )
             await session.execute(stmt)
@@ -330,16 +343,19 @@ class SessionsStore:
 
         Returns the number of sessions revoked.
         """
+        from app.util.ids import to_uuid
+        
         async with get_async_db() as session:
+            db_user_id = str(to_uuid(user_id))
             # Get all session IDs for the user first (to update cache)
-            select_stmt = select(SessionModel.id).where(SessionModel.user_id == user_id)
+            select_stmt = select(SessionModel.id).where(SessionModel.user_id == db_user_id)
             result = await session.execute(select_stmt)
             session_ids = [row[0] for row in result.fetchall()]
 
             # Revoke all sessions and increment their versions
             stmt = (
                 update(SessionModel)
-                .where(SessionModel.user_id == user_id)
+                .where(SessionModel.user_id == db_user_id)
                 .values(
                     revoked_at=datetime.now(UTC),
                     sess_ver=SessionModel.sess_ver + 1

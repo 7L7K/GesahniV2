@@ -9,7 +9,8 @@ os.environ.setdefault("JWT_OPTIONAL_IN_TESTS", "1")
 os.environ.setdefault("JWT_SECRET", "")
 os.environ.setdefault("REQUIRE_JWT", "0")
 os.environ.setdefault("VECTOR_STORE", "memory")
-os.environ.setdefault("PROVIDER_SPOTIFY", "false")
+os.environ.setdefault("GSNH_ENABLE_SPOTIFY", "0")
+os.environ.setdefault("GSNH_ENABLE_MUSIC", "1")
 
 from fastapi.testclient import TestClient
 

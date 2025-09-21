@@ -127,7 +127,8 @@ class TestConfigGuard:
                 "COOKIES_SECURE": "1",
                 "COOKIES_SAMESITE": "strict",
                 "REQ_ID_ENABLED": "1",
-                "SPOTIFY_ENABLED": "1",  # Optional, but explicitly enabled
+                "GSNH_ENABLE_SPOTIFY": "1",  # Optional, but explicitly enabled
+                "GSNH_ENABLE_MUSIC": "1",
             },
             clear=True,
         ):

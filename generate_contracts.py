@@ -54,7 +54,8 @@ def generate_ci_contract():
     # Set CI environment
     os.environ["CI"] = "1"
     # Clear optional integrations
-    os.environ.pop("SPOTIFY_ENABLED", None)
+    os.environ.pop("GSNH_ENABLE_SPOTIFY", None)
+    os.environ.pop("GSNH_ENABLE_MUSIC", None)
     os.environ.pop("APPLE_OAUTH_ENABLED", None)
     os.environ.pop("DEVICE_AUTH_ENABLED", None)
 
@@ -77,7 +78,8 @@ def generate_dev_min_contract():
 
     # Clear CI and optional integrations
     os.environ.pop("CI", None)
-    os.environ.pop("SPOTIFY_ENABLED", None)
+    os.environ.pop("GSNH_ENABLE_SPOTIFY", None)
+    os.environ.pop("GSNH_ENABLE_MUSIC", None)
     os.environ.pop("APPLE_OAUTH_ENABLED", None)
     os.environ.pop("DEVICE_AUTH_ENABLED", None)
 
@@ -95,7 +97,8 @@ def generate_dev_spotify_contract():
 
     # Clear CI, enable Spotify
     os.environ.pop("CI", None)
-    os.environ["SPOTIFY_ENABLED"] = "1"
+    os.environ["GSNH_ENABLE_SPOTIFY"] = "1"
+    os.environ["GSNH_ENABLE_MUSIC"] = "1"
     os.environ.pop("APPLE_OAUTH_ENABLED", None)
     os.environ.pop("DEVICE_AUTH_ENABLED", None)
 
@@ -109,7 +112,8 @@ def generate_dev_spotify_contract():
     )
 
     # Clean up env
-    os.environ.pop("SPOTIFY_ENABLED", None)
+    os.environ.pop("GSNH_ENABLE_SPOTIFY", None)
+    os.environ.pop("GSNH_ENABLE_MUSIC", None)
 
 
 def generate_prod_contract():
@@ -118,7 +122,8 @@ def generate_prod_contract():
 
     # Clear CI and optional integrations, set prod
     os.environ.pop("CI", None)
-    os.environ.pop("SPOTIFY_ENABLED", None)
+    os.environ.pop("GSNH_ENABLE_SPOTIFY", None)
+    os.environ.pop("GSNH_ENABLE_MUSIC", None)
     os.environ.pop("APPLE_OAUTH_ENABLED", None)
     os.environ.pop("DEVICE_AUTH_ENABLED", None)
     os.environ["ENV"] = "prod"

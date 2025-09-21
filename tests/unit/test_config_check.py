@@ -14,11 +14,12 @@ class TestConfigCheck:
         """Test config check returns correct values for dev environment."""
         with patch.dict(
             "os.environ",
-            {
-                "ENV": "dev",
-                "SPOTIFY_ENABLED": "1",
-                "APPLE_OAUTH_ENABLED": "0",
-                "DEVICE_AUTH_ENABLED": "1",
+                {
+                    "ENV": "dev",
+                    "GSNH_ENABLE_SPOTIFY": "1",
+                    "GSNH_ENABLE_MUSIC": "1",
+                    "APPLE_OAUTH_ENABLED": "0",
+                    "DEVICE_AUTH_ENABLED": "1",
                 "JWT_SECRET": "test_secret_123",
                 "COOKIES_SECURE": "0",  # Dev might not need HTTPS
                 "COOKIES_SAMESITE": "lax",
@@ -55,13 +56,14 @@ class TestConfigCheck:
         """Test config check returns correct values for prod environment."""
         with patch.dict(
             "os.environ",
-            {
-                "ENV": "prod",
-                "CI": "0",
-                "DEV_MODE": "0",
-                "SPOTIFY_ENABLED": "1",
-                "APPLE_OAUTH_ENABLED": "1",
-                "DEVICE_AUTH_ENABLED": "0",
+                {
+                    "ENV": "prod",
+                    "CI": "0",
+                    "DEV_MODE": "0",
+                    "GSNH_ENABLE_SPOTIFY": "1",
+                    "GSNH_ENABLE_MUSIC": "1",
+                    "APPLE_OAUTH_ENABLED": "1",
+                    "DEVICE_AUTH_ENABLED": "0",
                 "JWT_SECRET": "a" * 64,  # Long secure secret
                 "COOKIES_SECURE": "1",
                 "COOKIES_SAMESITE": "strict",
@@ -98,11 +100,12 @@ class TestConfigCheck:
         """Test config check returns correct values for CI environment."""
         with patch.dict(
             "os.environ",
-            {
-                "ENV": "ci",
-                "CI": "1",
-                "SPOTIFY_ENABLED": "1",  # Configured but router will disable in CI
-                "APPLE_OAUTH_ENABLED": "0",
+                {
+                    "ENV": "ci",
+                    "CI": "1",
+                    "GSNH_ENABLE_SPOTIFY": "1",  # Configured but router will disable in CI
+                    "GSNH_ENABLE_MUSIC": "1",
+                    "APPLE_OAUTH_ENABLED": "0",
                 "JWT_SECRET": "ci_secret",
                 "COOKIES_SECURE": "1",
                 "COOKIES_SAMESITE": "strict",

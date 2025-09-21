@@ -328,8 +328,11 @@ async def admin_user_identities(user_id: str):
         from app.db.core import get_async_db
         from app.db.models import AuthIdentity
 
+        from app.util.ids import to_uuid
+        
         async with get_async_db() as session:
-            stmt = select(AuthIdentity).where(AuthIdentity.user_id == user_id)
+            db_user_id = str(to_uuid(user_id))
+            stmt = select(AuthIdentity).where(AuthIdentity.user_id == db_user_id)
             result = await session.execute(stmt)
             identities = result.scalars().all()
 
@@ -407,11 +410,13 @@ async def admin_unlink_identity(
 
         from app.db.core import get_async_db
         from app.db.models import AuthIdentity, AuthUser
+        from app.util.ids import to_uuid
 
         async with get_async_db() as session:
+            db_user_id = str(to_uuid(user_id))
             # Verify identity belongs to user
             stmt = select(AuthIdentity).where(
-                AuthIdentity.id == identity_id, AuthIdentity.user_id == user_id
+                AuthIdentity.id == identity_id, AuthIdentity.user_id == db_user_id
             )
             result = await session.execute(stmt)
             identity = result.scalar_one_or_none()
@@ -423,13 +428,13 @@ async def admin_unlink_identity(
             stmt = (
                 select(func.count())
                 .select_from(AuthIdentity)
-                .where(AuthIdentity.user_id == user_id)
+                .where(AuthIdentity.user_id == db_user_id)
             )
             result = await session.execute(stmt)
             remaining = result.scalar() or 0
 
             # Check if user has local password set
-            stmt = select(AuthUser.password_hash).where(AuthUser.id == user_id)
+            stmt = select(AuthUser.password_hash).where(AuthUser.id == db_user_id)
             result = await session.execute(stmt)
             password_hash = result.scalar_one_or_none()
             has_password = bool(password_hash)

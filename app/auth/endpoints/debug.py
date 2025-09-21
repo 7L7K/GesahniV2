@@ -8,7 +8,8 @@ from typing import Any
 from fastapi import APIRouter, Request
 
 from ...cookie_config import get_cookie_config, get_token_ttls
-from ...deps.user import get_current_user_id
+from ...auth.demo_guard import current_user_id_or_demo as get_current_user_id
+from ...auth.demo_guard import whoami_or_demo
 from ...auth_refresh import _jwt_secret
 
 router = APIRouter(tags=["Auth"])
@@ -236,8 +237,7 @@ async def debug_cookies(request: Request) -> dict[str, Any]:
 async def auth_whoami_endpoint(request: Request) -> dict[str, Any]:
     """Main whoami endpoint for authentication checking."""
     try:
-        from ...api.auth import whoami_impl
-        return await whoami_impl(request)
+        return whoami_or_demo(request)
     except Exception as e:
         return {"error": str(e), "whoami": "unavailable"}
 
@@ -245,7 +245,6 @@ async def auth_whoami_endpoint(request: Request) -> dict[str, Any]:
 async def whoami(request: Request) -> dict[str, Any]:
     """Debug whoami function for compatibility - non-routed version."""
     try:
-        from ...api.auth import whoami_impl
-        return await whoami_impl(request)
+        return whoami_or_demo(request)
     except Exception as e:
         return {"error": str(e), "whoami": "unavailable"}

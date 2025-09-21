@@ -1,5 +1,6 @@
 # app/middleware/session_attach.py
 import logging
+import os
 import time
 
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -16,7 +17,21 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
         # Skip preflight
         if request.method == "OPTIONS":
             return await call_next(request)
-            
+
+        # Demo mode: bypass authentication and set demo user
+        if os.getenv("DEMO_MODE") == "1":
+            demo_user_id = os.getenv("DEMO_USER_ID", "00000000-0000-0000-0000-000000000001")
+            demo_scopes = ["user:read", "music:control", "music:demo"]
+            logger.info(f"🎭 DEMO MODE: Bypassing authentication for path '{request.url.path}', setting user_id={demo_user_id}, scopes={demo_scopes}")
+            request.state.user_id = demo_user_id
+            request.state.scopes = demo_scopes
+            request.state.jwt_payload = {
+                "user_id": demo_user_id,
+                "scopes": demo_scopes,
+                "type": "access"
+            }
+            return await call_next(request)
+
         logger.info(f"🔍 SESSION_ATTACH_START: Processing request", extra={
             "meta": {
                 "path": request.url.path,
@@ -55,7 +70,7 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
                     # Use resolve_user_id to avoid exceptions propagating in middleware
                     from app.deps.user import resolve_user_id
 
-                    user_id = resolve_user_id(request=request)
+                    user_id = await resolve_user_id(request=request)
                 except Exception:
                     user_id = None
             else:
@@ -79,7 +94,6 @@ class SessionAttachMiddleware(BaseHTTPMiddleware):
 
                 if token:
                     try:
-                        import os
 
                         from app.security import jwt_decode
 

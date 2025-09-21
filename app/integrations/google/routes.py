@@ -21,9 +21,9 @@ from .db import GoogleToken, init_db
 router = APIRouter(tags=["Auth"])
 
 
-def _require_user_id(req: Request) -> str:
+async def _require_user_id(req: Request) -> str:
     """Resolve the current user id and raise 401 when unauthenticated."""
-    user_id = resolve_user_id(request=req)
+    user_id = await resolve_user_id(request=req)
     if not user_id or user_id == "anon":
         raise unauthorized(
             message="authentication required",

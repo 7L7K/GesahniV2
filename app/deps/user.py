@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import time
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi import HTTPException, Request, Response, WebSocket
 
@@ -720,6 +720,51 @@ async def get_current_user_id(
     return user_id
 
 
+async def get_current_user_uuid(
+    request: Request = None,
+    websocket: WebSocket = None,
+) -> UUID:
+    """Return the current user's canonical UUID.
+
+    This function extracts the JWT token, decodes it, and returns the canonical UUID
+    from the 'sub' claim. For backward compatibility, it falls back to converting
+    'user_id' or 'uid' claims to UUID using to_uuid().
+    """
+    # Get the raw user ID first
+    user_id = await get_current_user_id(request=request, websocket=websocket)
+
+    # If it's anon, return a special UUID for anonymous users
+    if user_id == "anon":
+        # Use a fixed UUID for anonymous users
+        from app.util.ids import to_uuid
+        return to_uuid("anon")
+
+    # For authenticated users, extract the UUID from JWT claims
+    target = request or websocket
+    payload = getattr(target.state, "jwt_payload", None) if target else None
+
+    if payload:
+        # sub is the canonical UUID
+        sub = payload.get("sub")
+        if sub:
+            try:
+                return UUID(str(sub))
+            except (ValueError, TypeError):
+                # If sub isn't a valid UUID, convert it
+                from app.util.ids import to_uuid
+                return to_uuid(sub)
+
+        # Backward compatible: check user_id or uid
+        fallback_id = payload.get("user_id") or payload.get("uid")
+        if fallback_id:
+            from app.util.ids import to_uuid
+            return to_uuid(fallback_id)
+
+    # Fallback: convert the raw user_id
+    from app.util.ids import to_uuid
+    return to_uuid(user_id)
+
+
 async def resolve_user_id(
     request: Request | None = None, websocket: WebSocket | None = None
 ) -> str:
@@ -1035,6 +1080,7 @@ def resolve_auth_source_conflict(request: Request) -> tuple[str, bool]:
 
 __all__ = [
     "get_current_user_id",
+    "get_current_user_uuid",
     "get_current_session_device",
     "resolve_session_id",
     "require_user",

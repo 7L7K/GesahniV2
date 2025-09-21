@@ -16,6 +16,7 @@ export interface AuthState {
     isLoading: boolean;
     error: string | null;
     whoamiOk: boolean; // Stable whoamiOk state to prevent oscillation
+    demo: boolean; // Whether this is a demo mode session
 }
 
 export interface AuthOrchestrator {

@@ -37,7 +37,7 @@ def _lock_test_env():
     os.environ.setdefault("ENFORCE_JWT_SCOPES", "1")
 
     # Keep optionals OFF unless a test opts-in explicitly or they're enabled via pytest.ini
-    # Note: pytest.ini handles SPOTIFY_ENABLED=1, so we don't remove it here
+    # Note: pytest.ini handles GSNH_ENABLE_SPOTIFY=1, so we don't remove it here
 
     # Make sure DEBUG model routing doesn't switch output text
     os.environ.pop("DEBUG_MODEL_ROUTING", None)
@@ -295,7 +295,7 @@ async def create_test_user(db_session):
 async def seed_spotify_token(create_test_user):
     """Seed a valid Spotify token for the test user."""
     # The token is already created in create_test_user fixture
-    return await create_test_user
+    return create_test_user
 
 
 @pytest.fixture

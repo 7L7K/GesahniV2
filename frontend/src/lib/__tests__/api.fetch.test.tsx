@@ -36,4 +36,20 @@ describe('apiFetch', () => {
     expect(res.status).toBe(404)
     expect((global.fetch as any).mock.calls.length).toBe(1)
   })
+
+  it('does not add /api prefix to /v1/* paths', async () => {
+    // @ts-ignore
+    global.fetch = jest.fn(async (url, init) => {
+      // Check that the URL doesn't contain /api/v1/ (which would be wrong)
+      expect(String(url)).not.toContain('/api/v1/')
+      // Should contain the API_URL + path directly
+      expect(String(url)).toMatch(/^http:\/\/localhost:8000\/v1\//)
+      return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } })
+    })
+
+    // Use a public endpoint to avoid auth guard blocking
+    const res = await apiFetch('/v1/health')
+    expect(res.status).toBe(200)
+    expect((global.fetch as any).mock.calls.length).toBe(1)
+  })
 })

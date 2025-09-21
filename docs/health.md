@@ -20,7 +20,7 @@ Endpoints
     - `check_llama()` (env: `OLLAMA_URL` or `LLAMA_URL`, GET probe)
     - `check_home_assistant()` (env: `HOME_ASSISTANT_URL`)
     - `check_qdrant()` (env: `QDRANT_URL`)
-    - `check_spotify()` (enabled if `PROVIDER_SPOTIFY` true)
+    - `check_spotify()` (enabled when `GSNH_ENABLE_SPOTIFY=1`)
   - Missing env → `"skipped"`. Failure → `"error"`.
   - Response:
     {
@@ -47,7 +47,7 @@ Environment knobs
 - OLLAMA_URL, LLAMA_URL – enable LLaMA probe
 - HOME_ASSISTANT_URL – enable HA probe
 - QDRANT_URL – enable Qdrant probe
-- PROVIDER_SPOTIFY=true – enable Spotify probe
+- GSNH_ENABLE_SPOTIFY=1 – enable Spotify probe
 
 Examples
 

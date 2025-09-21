@@ -1,0 +1,280 @@
+{
+    "dashboard": {
+        "id": null,
+        "title": "Identity Health Dashboard",
+        "tags": [
+            "auth",
+            "identity",
+            "legacy"
+        ],
+        "style": "dark",
+        "timezone": "browser",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Legacy Sub Resolutions",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(auth_legacy_sub_resolutions_total[5m])",
+                        "legendFormat": "Legacy Resolutions/min"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Resolutions per minute",
+                        "min": 0
+                    }
+                ],
+                "xAxes": [
+                    {
+                        "type": "time"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 0
+                }
+            },
+            {
+                "id": 2,
+                "title": "Database UUID Coercion Failures",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "db_uuid_coercion_fail_total",
+                        "legendFormat": "Coercion Failures"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Total Failures",
+                        "min": 0
+                    }
+                ],
+                "xAxes": [
+                    {
+                        "type": "time"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 0
+                }
+            },
+            {
+                "id": 3,
+                "title": "Spotify Refresh Failures",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(spotify_refresh_fail_total[5m])",
+                        "legendFormat": "Refresh Failures/min"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Failures per minute",
+                        "min": 0
+                    }
+                ],
+                "xAxes": [
+                    {
+                        "type": "time"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 0,
+                    "y": 8
+                }
+            },
+            {
+                "id": 4,
+                "title": "Token Encryption/Decryption Bytes",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(token_encrypt_bytes_total[5m])",
+                        "legendFormat": "Encrypt Bytes/sec"
+                    },
+                    {
+                        "expr": "rate(token_decrypt_bytes_total[5m])",
+                        "legendFormat": "Decrypt Bytes/sec"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "label": "Bytes per second",
+                        "min": 0
+                    }
+                ],
+                "xAxes": [
+                    {
+                        "type": "time"
+                    }
+                ],
+                "gridPos": {
+                    "h": 8,
+                    "w": 12,
+                    "x": 12,
+                    "y": 8
+                }
+            },
+            {
+                "id": 5,
+                "title": "Identity Health Status",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "auth_legacy_sub_resolutions_total",
+                        "legendFormat": "Legacy Resolutions"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 1
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 10
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 0,
+                    "y": 16
+                }
+            },
+            {
+                "id": 6,
+                "title": "DB Coercion Failures",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "db_uuid_coercion_fail_total",
+                        "legendFormat": "Coercion Failures"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 1
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 6,
+                    "y": 16
+                }
+            },
+            {
+                "id": 7,
+                "title": "Spotify Health",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "spotify_refresh_fail_total",
+                        "legendFormat": "Refresh Failures"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": 0
+                                },
+                                {
+                                    "color": "yellow",
+                                    "value": 1
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 5
+                                }
+                            ]
+                        }
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 12,
+                    "y": 16
+                }
+            },
+            {
+                "id": 8,
+                "title": "Token Operations",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "token_encrypt_bytes_total + token_decrypt_bytes_total",
+                        "legendFormat": "Total Bytes"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "palette-classic"
+                        },
+                        "unit": "bytes"
+                    }
+                },
+                "gridPos": {
+                    "h": 4,
+                    "w": 6,
+                    "x": 18,
+                    "y": 16
+                }
+            }
+        ],
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "refresh": "30s",
+        "schemaVersion": 27,
+        "version": 1,
+        "links": []
+    }
+}

@@ -5,7 +5,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")
 
 # Stable test env
 os.environ.setdefault("VECTOR_STORE", "memory")
-os.environ.setdefault("PROVIDER_SPOTIFY", "false")
+os.environ.setdefault("GSNH_ENABLE_SPOTIFY", "0")
+os.environ.setdefault("GSNH_ENABLE_MUSIC", "1")
 os.environ.setdefault("MUSIC_FALLBACK_RADIO", "false")
 os.environ.setdefault("JWT_SECRET", "secret")
 os.environ.setdefault("REQUIRE_JWT", "0")

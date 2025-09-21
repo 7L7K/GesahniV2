@@ -3,6 +3,8 @@ import os
 from collections.abc import Awaitable, Callable
 from typing import Literal
 
+from app.env_helpers import env_flag
+
 try:
     import httpx
 except Exception:  # pragma: no cover - optional dependency in tests
@@ -153,8 +155,14 @@ async def check_chroma() -> HealthResult:
 
 async def check_spotify() -> HealthResult:
     # Only check when explicitly enabled in env
-    raw = (os.getenv("PROVIDER_SPOTIFY") or "").strip().lower()
-    if raw not in {"1", "true", "yes", "on"}:
+    if not (
+        env_flag(
+            "GSNH_ENABLE_SPOTIFY",
+            default=False,
+            legacy=("PROVIDER_SPOTIFY", "SPOTIFY_ENABLED"),
+        )
+        and env_flag("GSNH_ENABLE_MUSIC", default=True)
+    ):
         return "skipped"
     # HEAD to the public API root; availability-only
     return await _http_probe("https://api.spotify.com", method="HEAD")

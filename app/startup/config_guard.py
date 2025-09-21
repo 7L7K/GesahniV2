@@ -50,9 +50,23 @@ def assert_strict_prod():
         raise ConfigError("COOKIES_SAMESITE must be 'strict' in prod")
 
     # 3) Optional routers must be explicitly enabled (no surprises)
-    optional_flags = ["SPOTIFY_ENABLED", "APPLE_OAUTH_ENABLED", "DEVICE_AUTH_ENABLED"]
-    for flag in optional_flags:
-        v = os.getenv(flag, "0")
+    optional_flags = {
+        "GSNH_ENABLE_SPOTIFY": ["SPOTIFY_ENABLED"],
+        "APPLE_OAUTH_ENABLED": [],
+        "DEVICE_AUTH_ENABLED": [],
+    }
+    for flag, legacy_flags in optional_flags.items():
+        value = os.getenv(flag)
+        if value is None:
+            for legacy in legacy_flags:
+                legacy_value = os.getenv(legacy)
+                if legacy_value is not None:
+                    log.warning(
+                        "Legacy env var in prod: %s (prefer %s)", legacy, flag
+                    )
+                    value = legacy_value
+                    break
+        v = value or "0"
         # We don't raise errors here, just log for awareness
         # The requirement is explicit intention, not necessarily enabled
         if _is_truthy(v):
@@ -76,3 +90,20 @@ def assert_strict_prod():
             )
 
     log.info("✅ All production configuration guardrails passed")
+
+
+def assert_demo_not_in_prod() -> None:
+    """Refuse to start if DEMO_MODE=1 in production."""
+    env = os.getenv("ENV", "dev").lower()
+    demo = os.getenv("DEMO_MODE", "0")
+    log.info(f"🔍 DEMO GUARD: Checking demo mode - env={env}, demo_mode={demo}")
+
+    if env in {"prod", "production"} and demo == "1":
+        msg = "Refusing to start: DEMO_MODE=1 in production"
+        log.critical(f"🚫 {msg}")
+        sys.exit(msg)
+
+    if demo == "1":
+        log.info("🎭 DEMO MODE: Demo mode is ENABLED")
+    else:
+        log.debug("🔓 DEMO MODE: Demo mode is DISABLED")

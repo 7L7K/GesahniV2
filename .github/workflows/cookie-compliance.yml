@@ -1,0 +1,92 @@
+name: Cookie Compliance Check
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+  schedule:
+    - cron: '0 2 * * 1'  # Weekly on Monday at 2 AM
+
+jobs:
+  cookie-compliance:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run cookie compliance checks
+      run: |
+        python -m pytest tests/test_cookie_compliance.py -v
+        
+    - name: Check cookie configuration
+      run: |
+        python -c "
+        import sys
+        sys.path.append('.')
+        from app.cookie_config import get_cookie_config
+        config = get_cookie_config()
+        print(f'Cookie SameSite: {config.samesite}')
+        print(f'Cookie Secure: {config.secure}')
+        print(f'Cookie Domain: {config.domain}')
+        print(f'CSRF TTL: {config.csrf_ttl_seconds}')
+        "
+        
+    - name: Validate cookie helper usage
+      run: |
+        python -c "
+        import os
+        import re
+        
+        # Check for direct set_cookie calls outside the helper
+        for root, dirs, files in os.walk('app'):
+            for file in files:
+                if file.endswith('.py'):
+                    filepath = os.path.join(root, file)
+                    with open(filepath, 'r') as f:
+                        content = f.read()
+                        # Look for direct set_cookie calls
+                        if 'set_cookie(' in content and 'app.cookies' not in content:
+                            print(f'Warning: Direct set_cookie call found in {filepath}')
+        "
+        
+    - name: Security scan for cookie vulnerabilities
+      run: |
+        python -c "
+        import os
+        import re
+        
+        vulnerabilities = []
+        
+        for root, dirs, files in os.walk('app'):
+            for file in files:
+                if file.endswith('.py'):
+                    filepath = os.path.join(root, file)
+                    with open(filepath, 'r') as f:
+                        content = f.read()
+                        
+                        # Check for insecure cookie settings
+                        if 'secure=False' in content:
+                            vulnerabilities.append(f'Insecure cookie setting in {filepath}')
+                        if 'samesite=None' in content and 'secure=True' not in content:
+                            vulnerabilities.append(f'Insecure SameSite=None without Secure in {filepath}')
+                            
+        if vulnerabilities:
+            print('Security vulnerabilities found:')
+            for vuln in vulnerabilities:
+                print(f'  - {vuln}')
+            exit(1)
+        else:
+            print('No cookie security vulnerabilities found')
+        "

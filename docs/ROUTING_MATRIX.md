@@ -240,7 +240,7 @@ All endpoints follow consistent error response patterns:
 The API uses a centralized router registry system defined in `app/routers/config.py` with the following key specifications:
 
 - **Core Routers**: Always included (`app.api.auth`, `app.api.health`, etc.)
-- **Optional Routers**: Enabled via environment variables (`SPOTIFY_ENABLED`, `APPLE_OAUTH_ENABLED`, etc.)
+- **Optional Routers**: Enabled via environment variables (`GSNH_ENABLE_SPOTIFY`, `APPLE_OAUTH_ENABLED`, etc.)
 - **Conditional Routers**: Only included in specific environments (dev-only routers)
 - **Router Prefixes**: Versioned paths (`/v1/`) for stable endpoints, legacy paths for compatibility
 

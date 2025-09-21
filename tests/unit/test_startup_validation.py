@@ -211,7 +211,8 @@ def test_environment_isolation():
         test_vars = {
             "TEST_VAR_1": "value1",
             "TEST_VAR_2": "value2",
-            "SPOTIFY_ENABLED": "1",
+            "GSNH_ENABLE_SPOTIFY": "1",
+            "GSNH_ENABLE_MUSIC": "1",
         }
 
         original_env = dict(os.environ)
@@ -233,10 +234,10 @@ def test_environment_isolation():
             plan = build_plan()
             plan_names = [spec.import_path for spec in plan]
 
-            # Should include Spotify routers since SPOTIFY_ENABLED=1
+            # Should include Spotify routers since GSNH_ENABLE_SPOTIFY=1
             assert any(
                 "spotify" in name for name in plan_names
-            ), "Should include Spotify routers with SPOTIFY_ENABLED=1"
+            ), "Should include Spotify routers with GSNH_ENABLE_SPOTIFY=1"
 
         finally:
             # Restore original environment

@@ -56,7 +56,7 @@ The contract tests verify:
 
 ### Dev Mode (Default)
 - Core routes + optional integrations when enabled
-- `SPOTIFY_ENABLED=1` adds Spotify routes
+- `GSNH_ENABLE_SPOTIFY=1` adds Spotify routes
 - `APPLE_OAUTH_ENABLED=1` adds Apple routes
 - `DEVICE_AUTH_ENABLED=1` adds device routes
 
@@ -95,5 +95,5 @@ python generate_contracts.py
 ### Environment Issues
 
 If tests fail due to environment variables:
-- Clear conflicting env vars: `unset CI SPOTIFY_ENABLED APPLE_OAUTH_ENABLED DEVICE_AUTH_ENABLED`
+- Clear conflicting env vars: `unset CI GSNH_ENABLE_SPOTIFY GSNH_ENABLE_MUSIC APPLE_OAUTH_ENABLED DEVICE_AUTH_ENABLED`
 - Run tests in isolation: `python -m pytest tests/contract/ -v`

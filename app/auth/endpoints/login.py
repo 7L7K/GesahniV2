@@ -191,9 +191,9 @@ async def login(
     sess_ver = await sessions_store.get_session_version(auth_session_id)
     logger.info(f"🔐 LOGIN_STEP_6: Got session version: {sess_ver}")
 
-    logger.info(f"🔐 LOGIN_STEP_7: Creating JWT token with payload: user_id='{username}', device_id='{device_id}', sid='{auth_session_id}', sess_ver={sess_ver}")
+    logger.info(f"🔐 LOGIN_STEP_7: Creating JWT token with payload: user_id='{username}', alias='{username}', device_id='{device_id}', sid='{auth_session_id}', sess_ver={sess_ver}")
     jwt_token = make_access(
-        {"user_id": username, "device_id": device_id, "sid": auth_session_id, "sess_ver": sess_ver}, ttl_s=access_ttl
+        {"user_id": username, "alias": username, "device_id": device_id, "sid": auth_session_id, "sess_ver": sess_ver}, ttl_s=access_ttl
     )
     logger.info(f"🔐 LOGIN_STEP_8: Created JWT access token (length: {len(jwt_token)})")
 

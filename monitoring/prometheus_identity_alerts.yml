@@ -1,0 +1,126 @@
+groups:
+  - name: identity_health
+    rules:
+      # Alert if legacy sub resolutions are still happening after sunset window
+      - alert: LegacySubResolutionsActive
+        expr: rate(auth_legacy_sub_resolutions_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: auth
+        annotations:
+          summary: "Legacy sub resolutions still active"
+          description: "Legacy sub resolutions are happening at {{ $value }} per minute. This should trend to zero after token rotation."
+          runbook_url: "https://docs.example.com/runbooks/legacy-sub-resolutions"
+
+      # Alert if database UUID coercion failures occur
+      - alert: DatabaseUUIDCoercionFailures
+        expr: increase(db_uuid_coercion_fail_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database UUID coercion failures detected"
+          description: "{{ $value }} database UUID coercion failures in the last 5 minutes. This indicates data integrity issues."
+          runbook_url: "https://docs.example.com/runbooks/database-uuid-coercion"
+
+      # Alert if Spotify refresh failures are high
+      - alert: SpotifyRefreshFailuresHigh
+        expr: rate(spotify_refresh_fail_total[5m]) > 1
+        for: 2m
+        labels:
+          severity: warning
+          service: spotify
+        annotations:
+          summary: "High Spotify refresh failure rate"
+          description: "Spotify refresh failures are at {{ $value }} per minute. Check Spotify API status and token validity."
+          runbook_url: "https://docs.example.com/runbooks/spotify-refresh-failures"
+
+      # Alert if token encryption/decryption operations fail
+      - alert: TokenCryptoOperationsFailing
+        expr: rate(token_crypto_errors_total[5m]) > 0.1
+        for: 1m
+        labels:
+          severity: critical
+          service: auth
+        annotations:
+          summary: "Token crypto operations failing"
+          description: "Token encryption/decryption operations are failing at {{ $value }} per minute. Check crypto configuration."
+          runbook_url: "https://docs.example.com/runbooks/token-crypto-failures"
+
+  - name: spotify_health
+    rules:
+      # Alert if Spotify API latency is high
+      - alert: SpotifyAPILatencyHigh
+        expr: histogram_quantile(0.95, rate(spotify_api_duration_seconds_bucket[5m])) > 5
+        for: 3m
+        labels:
+          severity: warning
+          service: spotify
+        annotations:
+          summary: "Spotify API latency is high"
+          description: "Spotify API P95 latency is {{ $value }} seconds. Check network connectivity and Spotify API status."
+          runbook_url: "https://docs.example.com/runbooks/spotify-api-latency"
+
+      # Alert if Spotify refresh success rate is low
+      - alert: SpotifyRefreshSuccessRateLow
+        expr: rate(spotify_refresh_success_total[5m]) / rate(spotify_refresh_attempts_total[5m]) < 0.8
+        for: 5m
+        labels:
+          severity: warning
+          service: spotify
+        annotations:
+          summary: "Spotify refresh success rate is low"
+          description: "Spotify refresh success rate is {{ $value | humanizePercentage }}. Check token validity and Spotify API status."
+          runbook_url: "https://docs.example.com/runbooks/spotify-refresh-success-rate"
+
+      # Alert if many tokens are expiring soon
+      - alert: SpotifyTokensExpiringSoon
+        expr: spotify_tokens_expiring_soon_total > 10
+        for: 0m
+        labels:
+          severity: warning
+          service: spotify
+        annotations:
+          summary: "Many Spotify tokens expiring soon"
+          description: "{{ $value }} Spotify tokens are expiring within the next hour. Consider proactive refresh."
+          runbook_url: "https://docs.example.com/runbooks/spotify-token-expiry"
+
+      # Alert if Spotify connection errors are high
+      - alert: SpotifyConnectionErrorsHigh
+        expr: rate(spotify_connection_errors_total[5m]) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          service: spotify
+        annotations:
+          summary: "High Spotify connection error rate"
+          description: "Spotify connection errors are at {{ $value }} per minute. Check network connectivity and Spotify API status."
+          runbook_url: "https://docs.example.com/runbooks/spotify-connection-errors"
+
+  - name: identity_sunset
+    rules:
+      # Alert when legacy sub resolutions should be zero (sunset window)
+      - alert: LegacySubResolutionsAfterSunset
+        expr: auth_legacy_sub_resolutions_total > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: auth
+        annotations:
+          summary: "Legacy sub resolutions detected after sunset window"
+          description: "Legacy sub resolutions are still happening ({{ $value }} total). Legacy support should be disabled."
+          runbook_url: "https://docs.example.com/runbooks/legacy-sunset"
+
+      # Alert if legacy sub resolutions increase after sunset
+      - alert: LegacySubResolutionsIncreasing
+        expr: increase(auth_legacy_sub_resolutions_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          service: auth
+        annotations:
+          summary: "Legacy sub resolutions increasing after sunset"
+          description: "Legacy sub resolutions increased by {{ $value }} in the last hour. This should not happen after sunset."
+          runbook_url: "https://docs.example.com/runbooks/legacy-sunset"

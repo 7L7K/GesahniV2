@@ -37,7 +37,7 @@ async def google_disconnect(request: Request):
     try:
         from ..deps.user import resolve_user_id
 
-        user_id = resolve_user_id(request=request)
+        user_id = await resolve_user_id(request=request)
         if user_id == "anon":
             raise Exception("unauthenticated")
     except Exception:
@@ -66,7 +66,7 @@ async def integrations_google_disconnect(request: Request):
 
 async def google_status(request: Request):
     try:
-        current_user = get_current_user_id(request=request)
+        current_user = await get_current_user_id(request=request)
     except Exception:
         return json_error(
             code="unauthorized",

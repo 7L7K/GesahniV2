@@ -401,10 +401,13 @@ async def get_pat_by_hash(token_hash: str) -> dict[str, Any] | None:
 
 async def list_pats_for_user(user_id: str) -> list[dict[str, Any]]:
     """List all PATs for a user, returning safe fields only (no token hash)."""
+    from app.util.ids import to_uuid
+    
     async with get_async_db() as session:
+        db_user_id = str(to_uuid(user_id))
         stmt = (
             select(PATToken)
-            .where(PATToken.user_id == user_id)
+            .where(PATToken.user_id == db_user_id)
             .order_by(PATToken.created_at.desc())
         )
         result = await session.execute(stmt)

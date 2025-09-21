@@ -17,8 +17,8 @@ def get_docs_visibility_config() -> dict[str, Any]:
     """
     env = os.getenv("ENV", "dev").strip().lower()
 
-    # In development environment, show all documentation
-    if env == "dev":
+    # In development, test, and CI environments, show all documentation
+    if env in {"dev", "test", "ci"}:
         return {
             "docs_url": "/docs",
             "redoc_url": "/redoc",

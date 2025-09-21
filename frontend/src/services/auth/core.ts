@@ -9,9 +9,37 @@ import { AuthOscillationDetector, AuthBackoffManager } from './utils';
 import { AuthEventDispatcher } from './events';
 import { fetchWhoamiWithResilience, type WhoamiResponse } from '@/lib/whoamiResilience';
 import { fetchHealth } from '@/lib/api';
+import { DEMO } from '@/lib/env';
+
+// Demo mode mock user data
+const DEMO_USER_DATA = {
+    id: '00000000-0000-0000-0000-000000000001',
+    email: 'king+demo@gesahni.local',
+    name: 'King (Demo)',
+    scopes: ['user:read', 'music:control', 'music:demo'],
+    demo: true,
+    is_authenticated: true,
+    session_ready: true,
+    source: 'demo'
+};
 
 export class AuthOrchestratorImpl implements AuthOrchestrator {
-    private state: AuthState = {
+    private state: AuthState = DEMO ? {
+        is_authenticated: true,
+        session_ready: true,
+        user_id: DEMO_USER_DATA.id,
+        user: {
+            id: DEMO_USER_DATA.id,
+            email: DEMO_USER_DATA.email,
+        },
+        source: 'demo',
+        version: 1,
+        lastChecked: Date.now(),
+        isLoading: false,
+        error: null,
+        whoamiOk: true,
+        demo: true,
+    } : {
         is_authenticated: false,
         session_ready: false,
         user_id: null,
@@ -22,6 +50,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         isLoading: false,
         error: null,
         whoamiOk: false,
+        demo: false,
     };
 
     private subscribers: Set<(state: AuthState) => void> = new Set();
@@ -416,6 +445,28 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
         console.info('AUTH Orchestrator: Initializing...');
         this.initialized = true;
 
+        // In demo mode, immediately set authenticated state without API call
+        if (DEMO) {
+            console.info('🎭 DEMO MODE: Setting demo authentication state immediately');
+            this.setState({
+                is_authenticated: true,
+                session_ready: true,
+                user_id: DEMO_USER_DATA.id,
+                user: {
+                    id: DEMO_USER_DATA.id,
+                    email: DEMO_USER_DATA.email,
+                },
+                source: 'demo',
+                version: this.state.version + 1,
+                lastChecked: Date.now(),
+                isLoading: false,
+                error: null,
+                whoamiOk: true,
+                demo: true,
+            });
+            return;
+        }
+
         // In cookie mode, tokens are HttpOnly so we can't check localStorage
         // Always attempt whoami check to determine current auth state
         const isCookieMode = process.env.NEXT_PUBLIC_HEADER_AUTH_MODE !== '1';
@@ -456,6 +507,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                     user: null,
                     source: 'missing',
                     whoamiOk: false,
+                    demo: DEMO,
                 });
             }
         }
@@ -535,6 +587,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
             isLoading: false,
             error: 'Authentication expired',
             whoamiOk: false,
+            demo: DEMO,
         });
 
         // Dispatch event to notify components of auth failure
@@ -854,6 +907,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                         isLoading: false,
                         error: 'Auth gate: isAuthenticated=true but no userId after retry',
                         whoamiOk: false,
+                        demo: DEMO,
                     };
 
                     this.setState(unauthenticatedState);
@@ -879,6 +933,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                 isLoading: false,
                 error: null,
                 whoamiOk: true,
+                demo: data.demo === true || DEMO, // Check response first, fallback to env flag
             };
 
             // Update successful state for oscillation detection
@@ -956,6 +1011,7 @@ export class AuthOrchestratorImpl implements AuthOrchestrator {
                 isLoading: false,
                 error: errorMessage,
                 whoamiOk: false,
+                demo: DEMO,
             });
         }
     }

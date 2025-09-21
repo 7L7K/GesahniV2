@@ -78,7 +78,7 @@ async def music_status(request: Request) -> dict[str, Any]:
     try:
         from app.deps.user import resolve_user_id
 
-        user_id = resolve_user_id(request=request)
+        user_id = await resolve_user_id(request=request)
         log_music_router(
             "user_resolved",
             user_id,
@@ -240,7 +240,7 @@ async def music_devices(request: Request) -> dict[str, Any]:
     try:
         from app.deps.user import resolve_user_id
 
-        user_id = resolve_user_id(request=request)
+        user_id = await resolve_user_id(request=request)
     except Exception:
         user_id = "anon"
 

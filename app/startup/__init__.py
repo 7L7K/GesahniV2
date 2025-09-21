@@ -32,7 +32,7 @@ from app.routers import normalize_backend_name
 from app.security.module_loader import secure_import_attr, secure_load_router
 from app.startup import components as C
 from app.startup.config import detect_profile
-from app.startup.config_guard import assert_strict_prod
+from app.startup.config_guard import assert_strict_prod, assert_demo_not_in_prod
 
 # --- begin addition: background task registry ---
 _background_tasks: set[asyncio.Task] = set()
@@ -75,6 +75,14 @@ async def lifespan(app: FastAPI):
     """
     # 1) DB schema once, before component inits
     await _init_db_once()
+
+    # 1.5) Spotify env sanity check (guarded by DEBUG)
+    if os.getenv("DEBUG") == "1":
+        logger.info("SPOTIFY env seen by server: %s", {
+            "id": bool(os.getenv("SPOTIFY_CLIENT_ID")),
+            "secret": bool(os.getenv("SPOTIFY_CLIENT_SECRET")),
+            "redirect": os.getenv("SPOTIFY_REDIRECT_URI"),
+        })
 
     # 2) Environment-aware component startup with timeouts + error capture
     await _run_components()
@@ -256,6 +264,7 @@ async def _run_components():
     # 1) Strict production configuration guardrails (fails fast)
     try:
         assert_strict_prod()
+        assert_demo_not_in_prod()
     except Exception as e:
         logger.error("❌ Production configuration validation failed: %s", e)
         raise

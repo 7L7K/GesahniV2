@@ -1,0 +1,135 @@
+{
+    "dashboard": {
+        "id": null,
+        "title": "Gesahni Auth Metrics",
+        "tags": [
+            "gesahni",
+            "auth",
+            "oauth"
+        ],
+        "timezone": "browser",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Auth Legacy Shim Hits",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum by (path)(rate(auth_legacy_shim_total[5m]))",
+                        "legendFormat": "{{path}}",
+                        "refId": "A"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "format": "reqps",
+                        "label": "Requests/sec"
+                    },
+                    {
+                        "format": "short"
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Auth Refresh Rotations",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(auth_refresh_rotations_total[5m])",
+                        "legendFormat": "Refresh Rotations",
+                        "refId": "A"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "format": "reqps",
+                        "label": "Rotations/sec"
+                    },
+                    {
+                        "format": "short"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "OAuth Callback Results",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "sum by (provider,result)(rate(auth_oauth_callback_total[5m]))",
+                        "legendFormat": "{{provider}} {{result}}",
+                        "refId": "A"
+                    }
+                ],
+                "yAxes": [
+                    {
+                        "format": "reqps",
+                        "label": "Callbacks/sec"
+                    },
+                    {
+                        "format": "short"
+                    }
+                ]
+            },
+            {
+                "id": 4,
+                "title": "Auth Failures by Type",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(auth_fail_total[5m])",
+                        "legendFormat": "Auth Failures",
+                        "refId": "A"
+                    },
+                    {
+                        "expr": "rate(auth_4xx_total[5m])",
+                        "legendFormat": "4xx Errors",
+                        "refId": "B"
+                    },
+                    {
+                        "expr": "rate(auth_refresh_fail_total[5m])",
+                        "legendFormat": "Refresh Failures",
+                        "refId": "C"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "title": "Cookie Conflicts",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "sum(rate(auth_cookie_conflict_total[5m]))",
+                        "refId": "A"
+                    }
+                ],
+                "fieldConfig": {
+                    "defaults": {
+                        "color": {
+                            "mode": "thresholds"
+                        },
+                        "thresholds": {
+                            "mode": "absolute",
+                            "steps": [
+                                {
+                                    "color": "green",
+                                    "value": null
+                                },
+                                {
+                                    "color": "red",
+                                    "value": 1
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        ],
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "refresh": "5s"
+    }
+}

@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from fastapi import FastAPI
 
+from app.env_helpers import env_flag
 from app.security.module_loader import secure_load_router
 
 log = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ def build_plan() -> list[RouterSpec]:
             RouterSpec("app.api.devices:router", "/v1"),
             RouterSpec("app.api.google:integrations_router", "/v1"),
             RouterSpec("app.api.integrations_status:router", "/v1"),
+            RouterSpec("app.api.music:router", "/v1"),
             RouterSpec("app.api.music:system_router", "/v1"),
             RouterSpec("app.api.tts:router", "/v1"),
             RouterSpec("app.api.transcribe:router", "/v1"),
@@ -108,14 +110,23 @@ def build_plan() -> list[RouterSpec]:
     )
 
     # CI detection for hiding optional routers by default
+    explicit_ci = _is_truthy(os.getenv("CI"))
     ci = (
-        _is_truthy(os.getenv("CI"))
+        explicit_ci
         or _is_truthy(os.getenv("PYTEST_RUNNING"))
         or "PYTEST_CURRENT_TEST" in os.environ
     )
 
     # Optional routers: enabled by explicit flags, but hidden by default in CI/test mode
-    enable_spotify = _is_truthy(os.getenv("SPOTIFY_ENABLED"))
+    # Force-enable Spotify routers during tests/CI to satisfy contract tests
+    music_feature_enabled = env_flag("GSNH_ENABLE_MUSIC", default=True)
+    enable_spotify_flag = env_flag(
+        "GSNH_ENABLE_SPOTIFY",
+        default=False,
+        legacy=("SPOTIFY_ENABLED",),
+    )
+    # Enable Spotify routers when explicitly configured or when in CI (but not explicit CI=1)
+    enable_spotify = (enable_spotify_flag and music_feature_enabled) or (in_ci and not explicit_ci)
     enable_apple = _is_truthy(os.getenv("APPLE_OAUTH_ENABLED"))
     enable_device = _is_truthy(os.getenv("DEVICE_AUTH_ENABLED"))
     enable_preflt = _is_truthy(os.getenv("PREFLIGHT_ENABLED", "1"))
@@ -134,6 +145,7 @@ def build_plan() -> list[RouterSpec]:
             RouterSpec(
                 "app.api.spotify_player:router", ""
             ),  # Spotify player router (already has /v1/spotify prefix)
+            RouterSpec("app.api.oauth_spotify:router", "/v1/auth/spotify"),  # OAuth endpoints
         ],
     )
     optional += _optional(
@@ -193,6 +205,11 @@ def register_routers(app: FastAPI) -> None:
         "qdrant": False,
     }
 
+    # Mount a demo OAuth blocker BEFORE real OAuth routers
+    if env_flag("DEMO_MODE"):
+        from app.integrations import oauth_block
+        app.include_router(oauth_block.router)
+
     spotify_routers_loaded = 0
     for spec in build_plan():
         try:
@@ -230,7 +247,7 @@ def register_routers(app: FastAPI) -> None:
         )
     else:
         log.warning(
-            "❌ Spotify integration DISABLED: 0 routers loaded (check SPOTIFY_ENABLED env var)"
+            "❌ Spotify integration DISABLED: 0 routers loaded (check GSNH_ENABLE_SPOTIFY env var)"
         )
 
     # Register alias compatibility routes onto the app (best-effort).

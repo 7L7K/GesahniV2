@@ -44,6 +44,16 @@ class ThirdPartyToken:
         """Check if token is expired (with optional buffer time)."""
         return (self.expires_at - buffer_seconds) <= time.time()
 
+    # Back-compat: some callers/tests still expect a single 'scope' string
+    # while the canonical field is 'scopes'. Expose a read/write alias.
+    @property
+    def scope(self) -> str | None:
+        return self.scopes
+
+    @scope.setter
+    def scope(self, value: str | None) -> None:
+        self.scopes = value
+
     def time_until_expiry(self) -> int:
         """Get seconds until token expires (negative if already expired)."""
         return int(self.expires_at - time.time())
@@ -84,7 +94,7 @@ class ThirdPartyToken:
             envelope_key_version = int(row[8]) if row[8] is not None else 1
             last_refresh_at = int(row[9]) if row[9] is not None else 0
             refresh_error_count = int(row[10]) if row[10] is not None else 0
-            scope = row[11]  # This is the scope field
+            scopes = row[11]  # This is the scopes field
             service_state = row[12]
             expires_at = int(row[13]) if row[13] is not None else 0
             created_at = int(row[14]) if row[14] is not None else 0
@@ -138,7 +148,7 @@ class ThirdPartyToken:
             envelope_key_version=envelope_key_version,
             last_refresh_at=last_refresh_at,
             refresh_error_count=refresh_error_count,
-            scopes=scope,
+            scopes=scopes,
             service_state=service_state,
             provider_iss=provider_iss,
             scope_union_since=scope_union_since,

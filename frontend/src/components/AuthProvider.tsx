@@ -6,6 +6,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { getAuthOrchestrator } from '@/services/authOrchestrator';
+import { DEMO } from '@/lib/env';
 // Import clearAuthState dynamically to avoid SSR initialization issues
 // import { clearAuthState } from '@/lib/api/auth';
 
@@ -21,6 +22,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
                 (window as any).__authOrchestrator = orchestrator;
                 // Initialize orchestrator asynchronously (idempotent)
                 void orchestrator.initialize();
+
+                // Demo mode authentication is handled in orchestrator.initialize()
+                // No additional auth check needed here
 
                 // Set up BroadcastChannel listener for instant logout fan-out
                 console.log('🔄 AUTH: Setting up BroadcastChannel listener for logout fan-out');

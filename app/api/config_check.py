@@ -7,6 +7,8 @@ import os
 
 from fastapi import APIRouter
 
+from app.env_helpers import env_flag
+
 router = APIRouter(prefix="/v1/admin", tags=["Admin"])
 
 
@@ -25,12 +27,19 @@ def config_check():
     """
     env = (os.getenv("ENV") or "dev").strip().lower()
 
+    spotify_enabled = env_flag(
+        "GSNH_ENABLE_SPOTIFY",
+        default=False,
+        legacy=("SPOTIFY_ENABLED",),
+    )
+    music_enabled = env_flag("GSNH_ENABLE_MUSIC", default=True)
+
     return {
         "env": env,
         "ci": _truthy(os.getenv("CI")),
         "dev_mode": _truthy(os.getenv("DEV_MODE")),
         "features": {
-            "spotify": _truthy(os.getenv("SPOTIFY_ENABLED")),
+            "spotify": spotify_enabled and music_enabled,
             "apple_oauth": _truthy(os.getenv("APPLE_OAUTH_ENABLED")),
             "device_auth": _truthy(os.getenv("DEVICE_AUTH_ENABLED")),
             "preflight": _truthy(os.getenv("PREFLIGHT_ENABLED", "1")),

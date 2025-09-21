@@ -15,7 +15,11 @@ except Exception:  # pragma: no cover - executed when dependency missing
 
 
 # Defaults and config helpers
-WHISPER_MODEL = os.getenv("WHISPER_MODEL", "whisper-1")
+TRANSCRIBE_MODEL = (
+    os.getenv("OPENAI_TRANSCRIBE_MODEL")
+    or os.getenv("WHISPER_MODEL")
+    or "whisper-1"
+)
 _VAD_DEFAULT = 500
 
 
@@ -97,7 +101,9 @@ def transcribe_file(path: str, model: str | None = None) -> str:
         if env_model:
             return env_model
         legacy = os.getenv("WHISPER_MODEL")
-        return legacy or "whisper-1"
+        if legacy:
+            return legacy
+        return TRANSCRIBE_MODEL
 
     model = model or _get_transcribe_model()
     client = get_sync_whisper_client()

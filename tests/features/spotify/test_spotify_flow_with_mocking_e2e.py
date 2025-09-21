@@ -15,9 +15,12 @@ def test_spotify_flow_with_mocking():
     import app.api.spotify as spotify_mod
     import app.deps.user as user_mod
 
-    # Mock get_current_user_id
+    # Mock get_current_user_id (ASYNC!)
     original_get_current_user_id = user_mod.get_current_user_id
-    user_mod.get_current_user_id = lambda req=None: "test_user_123"
+    async def mock_get_current_user_id(req=None):
+        result = "test_user_123"
+        return result
+    user_mod.get_current_user_id = mock_get_current_user_id
 
     # Mock JWT decode
     original_jwt_decode = spotify_mod._jwt_decode
@@ -26,9 +29,12 @@ def test_spotify_flow_with_mocking():
         "sid": "test_session_456",
     }
 
-    # Mock token exchange
-    original_exchange_code = spotify_mod.exchange_code
+    # Mock JWT secret
+    original_jwt_secret = spotify_mod._jwt_secret
+    spotify_mod._jwt_secret = lambda: "test_secret"
 
+    # Mock other functions for complete flow
+    original_exchange_code = spotify_mod.exchange_code
     async def mock_exchange_code(code, code_verifier):
         return {
             "access_token": "mock_access_token",
@@ -39,6 +45,26 @@ def test_spotify_flow_with_mocking():
         }
 
     spotify_mod.exchange_code = mock_exchange_code
+
+    # Mock token persistence
+    original_upsert_token = spotify_mod.upsert_token
+    async def mock_upsert_token(token):
+        return None
+
+    spotify_mod.upsert_token = mock_upsert_token
+
+    # Mock PKCE lookup
+    original_get_pkce = spotify_mod.get_pkce_challenge_by_state
+    def mock_get_pkce(sid, state):
+        from app.api.spotify import SpotifyPKCE
+        return SpotifyPKCE(
+            verifier="mock_verifier",
+            challenge="mock_challenge",
+            state=state,
+            created_at=time.time(),
+        )
+
+    spotify_mod.get_pkce_challenge_by_state = mock_get_pkce
 
     # Mock token persistence
     original_upsert_token = spotify_mod.upsert_token
@@ -100,7 +126,7 @@ def test_spotify_flow_with_mocking():
         callback_url = f"http://localhost:8000/v1/spotify/callback?code=mock_auth_code&state={state}"
 
         callback_response = requests.get(
-            callback_url, cookies=callback_cookies, follow_redirects=False
+            callback_url, cookies=callback_cookies, allow_redirects=False
         )
         print(f"Callback status: {callback_response.status_code}")
         assert (

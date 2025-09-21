@@ -32,7 +32,8 @@ export default function SessionBadge() {
     }, [s?.is_authenticated, s?.session_ready, s?.source, s?.user_id, s?.whoamiOk, s?.version]);
 
     const bg = !authed ? 'bg-rose-600' : (ready ? 'bg-emerald-600' : 'bg-yellow-600');
-    const label = !authed ? 'auth:none' : (userId ? `auth:${String(userId).slice(0, 6)}` : 'auth:pending');
+    const demo = s?.demo;
+    const label = !authed ? 'auth:none' : (userId ? `auth:${String(userId).slice(0, 6)}${demo ? '(demo)' : ''}` : 'auth:pending');
 
     return (
         <div className={`px-2 py-0.5 rounded text-xs text-white ${bg}`} title={`is_authenticated=${String(authed)} session_ready=${String(ready)} user_id=${userId || 'null'}`} data-testid="session-badge">

@@ -195,6 +195,14 @@ export default function Header() {
                                 </div>
                             )}
                         </ClientOnly>
+                        <ClientOnly>
+                            {authState.demo && (
+                                <div className="flex items-center gap-1 text-xs text-purple-600">
+                                    <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+                                    Demo Mode
+                                </div>
+                            )}
+                        </ClientOnly>
                     </nav>
                 </div>
             </div>

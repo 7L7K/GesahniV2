@@ -1,6 +1,6 @@
 def test_devices_returns_empty_list(client):
     """Test that devices endpoint returns empty list when Spotify provider is disabled."""
-    # In test environment, PROVIDER_SPOTIFY is disabled, so we get empty devices list
+    # In test environment, Spotify provider defaults to disabled, so we get empty devices list
     res = client.get("/v1/music/devices", headers={"Authorization": "Bearer VALID"})
     assert res.status_code == 200
     body = res.json()

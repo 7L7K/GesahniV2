@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import os
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -155,8 +156,6 @@ import asyncio
 import hashlib
 import inspect
 import json
-import logging
-import os
 import time
 from dataclasses import asdict
 from datetime import datetime
@@ -170,6 +169,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from app.models.common import OkResponse as CommonOkResponse
 
 from ..deps.user import get_current_user_id
+from ..env_helpers import env_flag
 
 # Use unified Spotify client that reads/writes tokens via auth_store_tokens
 from ..integrations.spotify.client import SpotifyAuthError, SpotifyClient
@@ -270,27 +270,21 @@ _TEST_MODE = (
     in {"1", "true", "yes", "on"}
 )
 
+MUSIC_FEATURE_ENABLED = env_flag("GSNH_ENABLE_MUSIC", default=True)
+
 if _TEST_MODE:
     PROVIDER_SPOTIFY = False
 else:
-    PROVIDER_SPOTIFY = os.getenv("PROVIDER_SPOTIFY", "true").strip().lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-MUSIC_FALLBACK_RADIO = os.getenv("MUSIC_FALLBACK_RADIO", "false").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
-EXPLICIT_DEFAULT = os.getenv("EXPLICIT_DEFAULT", "true").strip().lower() in {
-    "1",
-    "true",
-    "yes",
-    "on",
-}
+    PROVIDER_SPOTIFY = env_flag(
+        "GSNH_ENABLE_SPOTIFY",
+        default=True,
+        legacy=("PROVIDER_SPOTIFY", "SPOTIFY_ENABLED"),
+    )
+
+PROVIDER_SPOTIFY = PROVIDER_SPOTIFY and MUSIC_FEATURE_ENABLED
+
+MUSIC_FALLBACK_RADIO = env_flag("MUSIC_FALLBACK_RADIO", default=False)
+EXPLICIT_DEFAULT = env_flag("EXPLICIT_DEFAULT", default=True)
 
 QUIET_START = os.getenv("QUIET_HOURS_START", "22:00")
 QUIET_END = os.getenv("QUIET_HOURS_END", "07:00")
@@ -1044,9 +1038,9 @@ async def _get_state_impl(request: Request, response: Response, user_id: str):
 
 
 # System state endpoint - provides app/system level state, not music state
-@system_router.get("/state", dependencies=[Depends(require_scope("chat:read"))])
+@system_router.get("/system/state", dependencies=[Depends(require_scope("chat:read"))])
 async def get_system_state():
-    """Get system/app state at /v1/state"""
+    """Get system/app state at /v1/system/state"""
     import os
     import time
     from datetime import UTC, datetime

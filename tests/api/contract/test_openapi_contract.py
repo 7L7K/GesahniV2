@@ -36,7 +36,8 @@ def test_ci_schema_contains_critical_paths(monkeypatch):
     matters for CI: health, auth, ask, minimal integrations discovery.
     """
     monkeypatch.setenv("CI", "1")
-    monkeypatch.delenv("SPOTIFY_ENABLED", raising=False)
+    monkeypatch.delenv("GSNH_ENABLE_SPOTIFY", raising=False)
+    monkeypatch.delenv("GSNH_ENABLE_MUSIC", raising=False)
     monkeypatch.delenv("APPLE_OAUTH_ENABLED", raising=False)
     monkeypatch.delenv("DEVICE_AUTH_ENABLED", raising=False)
 
@@ -71,7 +72,8 @@ def test_ci_schema_contains_critical_paths(monkeypatch):
 def test_dev_min_schema_contains_critical_paths(monkeypatch):
     """Dev (no optionals): assert critical routes exist."""
     monkeypatch.delenv("CI", raising=False)
-    monkeypatch.delenv("SPOTIFY_ENABLED", raising=False)
+    monkeypatch.delenv("GSNH_ENABLE_SPOTIFY", raising=False)
+    monkeypatch.delenv("GSNH_ENABLE_MUSIC", raising=False)
     monkeypatch.delenv("APPLE_OAUTH_ENABLED", raising=False)
     monkeypatch.delenv("DEVICE_AUTH_ENABLED", raising=False)
 
@@ -93,7 +95,8 @@ def test_dev_min_schema_contains_critical_paths(monkeypatch):
 def test_prod_min_schema_contains_critical_paths(monkeypatch):
     """Prod min: assert critical routes exist and health endpoints remain."""
     monkeypatch.delenv("CI", raising=False)
-    monkeypatch.delenv("SPOTIFY_ENABLED", raising=False)
+    monkeypatch.delenv("GSNH_ENABLE_SPOTIFY", raising=False)
+    monkeypatch.delenv("GSNH_ENABLE_MUSIC", raising=False)
     monkeypatch.delenv("APPLE_OAUTH_ENABLED", raising=False)
     monkeypatch.delenv("DEVICE_AUTH_ENABLED", raising=False)
     monkeypatch.setenv("ENV", "prod")
@@ -110,7 +113,8 @@ def test_prod_min_schema_contains_critical_paths(monkeypatch):
 def test_dev_with_spotify_contains_integrations_status(monkeypatch):
     """Dev with Spotify: integration status route exists."""
     monkeypatch.delenv("CI", raising=False)
-    monkeypatch.setenv("SPOTIFY_ENABLED", "1")
+    monkeypatch.setenv("GSNH_ENABLE_SPOTIFY", "1")
+    monkeypatch.setenv("GSNH_ENABLE_MUSIC", "1")
     monkeypatch.delenv("APPLE_OAUTH_ENABLED", raising=False)
     monkeypatch.delenv("DEVICE_AUTH_ENABLED", raising=False)
 

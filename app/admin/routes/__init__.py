@@ -57,7 +57,7 @@ async def retrieval_trace(
         # Prefer resolve_user_id for internal/non-FastAPI call sites
         from app.deps.user import resolve_user_id
 
-        user_id = resolve_user_id(request=request)
+        user_id = await resolve_user_id(request=request)
         if user_id == "anon" and not _is_test_mode():
             # If resolution failed and we are not in test mode, raise to preserve previous behavior
             raise Exception("unauthenticated")

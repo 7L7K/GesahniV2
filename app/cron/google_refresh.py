@@ -69,11 +69,14 @@ async def _refresh_for_user(user_id: str, provider: str) -> None:
         attempt += 1
         try:
             # Fetch latest token row by user_id
+            from app.util.ids import to_uuid
+            
             async with get_async_db() as session:
+                db_user_id = str(to_uuid(user_id))
                 stmt = (
                     select(ThirdPartyToken)
                     .where(
-                        ThirdPartyToken.user_id == user_id,
+                        ThirdPartyToken.user_id == db_user_id,
                         ThirdPartyToken.provider == provider,
                     )
                     .order_by(ThirdPartyToken.updated_at.desc())

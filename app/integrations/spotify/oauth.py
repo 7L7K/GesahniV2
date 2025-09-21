@@ -471,8 +471,9 @@ async def exchange_code(code: str, code_verifier: str) -> ThirdPartyToken:
     now = int(time.time())
     expires_at = int(td.get("expires_at", now + int(td.get("expires_in", 3600))))
 
+    import uuid
     token_data = ThirdPartyToken(
-        id=f"spotify:{secrets.token_hex(8)}",
+        id=str(uuid.uuid4()),
         user_id="<set by caller>",
         provider="spotify",
         access_token=td.get("access_token", ""),

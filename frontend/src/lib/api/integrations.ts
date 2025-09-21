@@ -5,13 +5,13 @@ import { toast } from '@/lib/toast';
 
 export async function disconnectSpotify(): Promise<void> {
   console.log('🎵 SPOTIFY INTEGRATIONS: Starting disconnect process', {
-    endpoint: '/v1/spotify/disconnect',
-    method: 'DELETE',
+    endpoint: '/v1/auth/spotify/disconnect',
+    method: 'POST',
     timestamp: new Date().toISOString()
   });
 
-  const res = await apiFetch("/v1/spotify/disconnect", {
-    method: "DELETE",
+  const res = await apiFetch("/v1/auth/spotify/disconnect", {
+    method: "POST",
     auth: true,
     credentials: "include",
   });
@@ -37,6 +37,85 @@ export async function disconnectSpotify(): Promise<void> {
   console.log('🎵 SPOTIFY INTEGRATIONS: Disconnect successful', {
     timestamp: new Date().toISOString()
   });
+}
+
+export async function getSpotifyStatus() {
+  console.log('🎵 SPOTIFY INTEGRATIONS: Getting Spotify status', {
+    endpoint: '/v1/auth/spotify/status',
+    timestamp: new Date().toISOString()
+  });
+
+  const res = await apiFetch('/v1/auth/spotify/status', {
+    method: 'GET',
+    credentials: 'include',
+    auth: true
+  });
+
+  console.log('🎵 SPOTIFY INTEGRATIONS: Status API response', {
+    status: res.status,
+    statusText: res.statusText,
+    ok: res.ok,
+    timestamp: new Date().toISOString()
+  });
+
+  if (!res.ok) {
+    console.error('🎵 SPOTIFY INTEGRATIONS: Failed to fetch Spotify status', {
+      status: res.status,
+      statusText: res.statusText,
+      timestamp: new Date().toISOString()
+    });
+    throw new Error('Failed to fetch Spotify status');
+  }
+
+  const data = await res.json();
+  console.log('🎵 SPOTIFY INTEGRATIONS: Status data received', {
+    data: data,
+    timestamp: new Date().toISOString()
+  });
+
+  return data;
+}
+
+export async function connectSpotify(next: string = '/settings#spotify=connected'): Promise<{ authorize_url?: string } | null> {
+  console.log('🎵 SPOTIFY INTEGRATIONS: Starting Spotify connect', {
+    next: next,
+    timestamp: new Date().toISOString()
+  });
+
+  const res = await apiFetch('/v1/auth/spotify/login_url', {
+    method: 'GET',
+    credentials: 'include',
+    auth: true
+  });
+
+  console.log('🎵 SPOTIFY INTEGRATIONS: Connect API response', {
+    status: res.status,
+    statusText: res.statusText,
+    ok: res.ok,
+    timestamp: new Date().toISOString()
+  });
+
+  if (!res.ok) {
+    console.error('🎵 SPOTIFY INTEGRATIONS: Failed to get Spotify auth URL', {
+      status: res.status,
+      statusText: res.statusText,
+      timestamp: new Date().toISOString()
+    });
+    throw new Error('Failed to get Spotify authorization URL');
+  }
+
+  const authUrl = await res.text();
+  console.log('🎵 SPOTIFY INTEGRATIONS: Spotify auth URL obtained', {
+    hasAuthUrl: !!authUrl,
+    authUrlLength: authUrl?.length || 0,
+    authUrlPreview: authUrl?.substring(0, 100) + '...',
+    timestamp: new Date().toISOString()
+  });
+
+  const result = { authorize_url: authUrl };
+  console.log('🎵 SPOTIFY INTEGRATIONS: Returning result:', JSON.stringify(result, null, 2));
+
+  return result;
 }
 
 export async function getIntegrationsStatus() {

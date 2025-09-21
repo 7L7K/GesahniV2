@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 from app.application.config import TAGS_METADATA, derive_version, load_openapi_config
 from app.application.diagnostics import build_diagnostics_router, prepare_snapshots
 from app.env_utils import load_env
+from app.settings import spotify_enabled
 from app.startup import lifespan
 
 logger = logging.getLogger(__name__)
@@ -143,8 +144,13 @@ def _include_spotify_routers(app: FastAPI) -> None:
     try:
         from app.api.spotify import integrations_router as spotify_integrations_router
         from app.api.spotify import router as spotify_router
+        from app.api import oauth_spotify as spotify_oauth
     except Exception as exc:
         logger.warning("Failed to import Spotify routers: %s", exc)
+        return
+
+    enable_spotify = spotify_enabled()
+    if not enable_spotify:
         return
 
     if getattr(app.state, "spotify_mounted", False):
@@ -161,8 +167,9 @@ def _include_spotify_routers(app: FastAPI) -> None:
     try:
         app.include_router(spotify_router, prefix="/v1")
         app.include_router(spotify_integrations_router, prefix="/v1")
+        app.include_router(spotify_oauth.router, prefix="/v1/auth/spotify", tags=["spotify-auth"])
         logger.debug(
-            "✅ Spotify routers mounted at /v1/spotify and /v1/integrations/spotify"
+            "✅ Spotify routers mounted at /v1/spotify, /v1/integrations/spotify, and /v1/auth/spotify"
         )
         app.state.spotify_mounted = True
     except Exception as exc:
