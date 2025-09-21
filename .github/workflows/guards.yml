@@ -1,0 +1,15 @@
+name: Repo Guards
+on:
+  pull_request:
+    branches: [ "**" ]
+  push:
+    branches: [ main ]
+jobs:
+  cookie-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+      - name: Cookie guard
+        run: bash scripts/check_cookie_calls.sh
